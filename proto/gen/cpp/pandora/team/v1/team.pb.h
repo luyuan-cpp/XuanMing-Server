@@ -1343,7 +1343,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetReadyRequest final : public ::go
   // accessors -------------------------------------------------------
   enum : int {
     kTeamIdFieldNumber = 1,
-    kPlayerIdFieldNumber = 2,
     kReadyFieldNumber = 3,
     kHeroIdFieldNumber = 4,
   };
@@ -1355,16 +1354,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetReadyRequest final : public ::go
   private:
   ::uint64_t _internal_team_id() const;
   void _internal_set_team_id(::uint64_t value);
-
-  public:
-  // uint64 player_id = 2 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
 
   public:
   // bool ready = 3 [json_name = "ready"];
@@ -1391,7 +1380,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetReadyRequest final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1421,7 +1410,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetReadyRequest final : public ::go
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t team_id_;
-    ::uint64_t player_id_;
     bool ready_;
     ::uint32_t hero_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -1955,7 +1943,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveTeamRequest final : public ::g
   // accessors -------------------------------------------------------
   enum : int {
     kTeamIdFieldNumber = 1,
-    kPlayerIdFieldNumber = 2,
   };
   // uint64 team_id = 1 [json_name = "teamId"];
   void clear_team_id() ;
@@ -1967,21 +1954,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveTeamRequest final : public ::g
   void _internal_set_team_id(::uint64_t value);
 
   public:
-  // uint64 player_id = 2 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:pandora.team.v1.LeaveTeamRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2011,7 +1988,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveTeamRequest final : public ::g
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t team_id_;
-    ::uint64_t player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2168,7 +2144,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickRequest final : public ::google
   // accessors -------------------------------------------------------
   enum : int {
     kTeamIdFieldNumber = 1,
-    kCaptainIdFieldNumber = 2,
     kTargetPlayerIdFieldNumber = 3,
   };
   // uint64 team_id = 1 [json_name = "teamId"];
@@ -2179,16 +2154,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickRequest final : public ::google
   private:
   ::uint64_t _internal_team_id() const;
   void _internal_set_team_id(::uint64_t value);
-
-  public:
-  // uint64 captain_id = 2 [json_name = "captainId"];
-  void clear_captain_id() ;
-  [[nodiscard]] ::uint64_t captain_id() const;
-  void set_captain_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_captain_id() const;
-  void _internal_set_captain_id(::uint64_t value);
 
   public:
   // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
@@ -2205,7 +2170,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickRequest final : public ::google
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2235,7 +2200,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickRequest final : public ::google
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t team_id_;
-    ::uint64_t captain_id_;
     ::uint64_t target_player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2393,7 +2357,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InviteRequest final : public ::goog
   // accessors -------------------------------------------------------
   enum : int {
     kTeamIdFieldNumber = 1,
-    kInviterIdFieldNumber = 2,
     kTargetPlayerIdFieldNumber = 3,
   };
   // uint64 team_id = 1 [json_name = "teamId"];
@@ -2404,16 +2367,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InviteRequest final : public ::goog
   private:
   ::uint64_t _internal_team_id() const;
   void _internal_set_team_id(::uint64_t value);
-
-  public:
-  // uint64 inviter_id = 2 [json_name = "inviterId"];
-  void clear_inviter_id() ;
-  [[nodiscard]] ::uint64_t inviter_id() const;
-  void set_inviter_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_inviter_id() const;
-  void _internal_set_inviter_id(::uint64_t value);
 
   public:
   // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
@@ -2430,7 +2383,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InviteRequest final : public ::goog
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2460,7 +2413,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InviteRequest final : public ::goog
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t team_id_;
-    ::uint64_t inviter_id_;
     ::uint64_t target_player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3094,20 +3046,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AcceptInviteRequest final : public 
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kTeamIdFieldNumber = 2,
     kInviteIdFieldNumber = 3,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 team_id = 2 [json_name = "teamId"];
   void clear_team_id() ;
   [[nodiscard]] ::uint64_t team_id() const;
@@ -3132,7 +3073,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AcceptInviteRequest final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3161,7 +3102,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AcceptInviteRequest final : public 
         const AcceptInviteRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t team_id_;
     ::uint64_t invite_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -6921,35 +6861,11 @@ inline void InviteRequest::_internal_set_team_id(::uint64_t value) {
   _impl_.team_id_ = value;
 }
 
-// uint64 inviter_id = 2 [json_name = "inviterId"];
-inline void InviteRequest::clear_inviter_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.inviter_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t InviteRequest::inviter_id() const {
-  // @@protoc_insertion_point(field_get:pandora.team.v1.InviteRequest.inviter_id)
-  return _internal_inviter_id();
-}
-inline void InviteRequest::set_inviter_id(::uint64_t value) {
-  _internal_set_inviter_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:pandora.team.v1.InviteRequest.inviter_id)
-}
-inline ::uint64_t InviteRequest::_internal_inviter_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.inviter_id_;
-}
-inline void InviteRequest::_internal_set_inviter_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.inviter_id_ = value;
-}
-
 // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
 inline void InviteRequest::clear_target_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t InviteRequest::target_player_id() const {
   // @@protoc_insertion_point(field_get:pandora.team.v1.InviteRequest.target_player_id)
@@ -6957,7 +6873,7 @@ inline ::uint64_t InviteRequest::target_player_id() const {
 }
 inline void InviteRequest::set_target_player_id(::uint64_t value) {
   _internal_set_target_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.team.v1.InviteRequest.target_player_id)
 }
 inline ::uint64_t InviteRequest::_internal_target_player_id() const {
@@ -7147,35 +7063,11 @@ inline void InviteResponse::_internal_set_expires_at_ms(::int64_t value) {
 
 // AcceptInviteRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void AcceptInviteRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t AcceptInviteRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.team.v1.AcceptInviteRequest.player_id)
-  return _internal_player_id();
-}
-inline void AcceptInviteRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.team.v1.AcceptInviteRequest.player_id)
-}
-inline ::uint64_t AcceptInviteRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void AcceptInviteRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 team_id = 2 [json_name = "teamId"];
 inline void AcceptInviteRequest::clear_team_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t AcceptInviteRequest::team_id() const {
   // @@protoc_insertion_point(field_get:pandora.team.v1.AcceptInviteRequest.team_id)
@@ -7183,7 +7075,7 @@ inline ::uint64_t AcceptInviteRequest::team_id() const {
 }
 inline void AcceptInviteRequest::set_team_id(::uint64_t value) {
   _internal_set_team_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.team.v1.AcceptInviteRequest.team_id)
 }
 inline ::uint64_t AcceptInviteRequest::_internal_team_id() const {
@@ -7199,7 +7091,7 @@ inline void AcceptInviteRequest::_internal_set_team_id(::uint64_t value) {
 inline void AcceptInviteRequest::clear_invite_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.invite_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t AcceptInviteRequest::invite_id() const {
   // @@protoc_insertion_point(field_get:pandora.team.v1.AcceptInviteRequest.invite_id)
@@ -7207,7 +7099,7 @@ inline ::uint64_t AcceptInviteRequest::invite_id() const {
 }
 inline void AcceptInviteRequest::set_invite_id(::uint64_t value) {
   _internal_set_invite_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.team.v1.AcceptInviteRequest.invite_id)
 }
 inline ::uint64_t AcceptInviteRequest::_internal_invite_id() const {
@@ -7373,30 +7265,6 @@ inline void LeaveTeamRequest::_internal_set_team_id(::uint64_t value) {
   _impl_.team_id_ = value;
 }
 
-// uint64 player_id = 2 [json_name = "playerId"];
-inline void LeaveTeamRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t LeaveTeamRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.team.v1.LeaveTeamRequest.player_id)
-  return _internal_player_id();
-}
-inline void LeaveTeamRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:pandora.team.v1.LeaveTeamRequest.player_id)
-}
-inline ::uint64_t LeaveTeamRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void LeaveTeamRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // -------------------------------------------------------------------
 
 // LeaveTeamResponse
@@ -7551,35 +7419,11 @@ inline void KickRequest::_internal_set_team_id(::uint64_t value) {
   _impl_.team_id_ = value;
 }
 
-// uint64 captain_id = 2 [json_name = "captainId"];
-inline void KickRequest::clear_captain_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.captain_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t KickRequest::captain_id() const {
-  // @@protoc_insertion_point(field_get:pandora.team.v1.KickRequest.captain_id)
-  return _internal_captain_id();
-}
-inline void KickRequest::set_captain_id(::uint64_t value) {
-  _internal_set_captain_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:pandora.team.v1.KickRequest.captain_id)
-}
-inline ::uint64_t KickRequest::_internal_captain_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.captain_id_;
-}
-inline void KickRequest::_internal_set_captain_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.captain_id_ = value;
-}
-
 // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
 inline void KickRequest::clear_target_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t KickRequest::target_player_id() const {
   // @@protoc_insertion_point(field_get:pandora.team.v1.KickRequest.target_player_id)
@@ -7587,7 +7431,7 @@ inline ::uint64_t KickRequest::target_player_id() const {
 }
 inline void KickRequest::set_target_player_id(::uint64_t value) {
   _internal_set_target_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.team.v1.KickRequest.target_player_id)
 }
 inline ::uint64_t KickRequest::_internal_target_player_id() const {
@@ -7753,35 +7597,11 @@ inline void SetReadyRequest::_internal_set_team_id(::uint64_t value) {
   _impl_.team_id_ = value;
 }
 
-// uint64 player_id = 2 [json_name = "playerId"];
-inline void SetReadyRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t SetReadyRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.team.v1.SetReadyRequest.player_id)
-  return _internal_player_id();
-}
-inline void SetReadyRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:pandora.team.v1.SetReadyRequest.player_id)
-}
-inline ::uint64_t SetReadyRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void SetReadyRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // bool ready = 3 [json_name = "ready"];
 inline void SetReadyRequest::clear_ready() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ready_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline bool SetReadyRequest::ready() const {
   // @@protoc_insertion_point(field_get:pandora.team.v1.SetReadyRequest.ready)
@@ -7789,7 +7609,7 @@ inline bool SetReadyRequest::ready() const {
 }
 inline void SetReadyRequest::set_ready(bool value) {
   _internal_set_ready(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.team.v1.SetReadyRequest.ready)
 }
 inline bool SetReadyRequest::_internal_ready() const {
@@ -7805,7 +7625,7 @@ inline void SetReadyRequest::_internal_set_ready(bool value) {
 inline void SetReadyRequest::clear_hero_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hero_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t SetReadyRequest::hero_id() const {
   // @@protoc_insertion_point(field_get:pandora.team.v1.SetReadyRequest.hero_id)
@@ -7813,7 +7633,7 @@ inline ::uint32_t SetReadyRequest::hero_id() const {
 }
 inline void SetReadyRequest::set_hero_id(::uint32_t value) {
   _internal_set_hero_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:pandora.team.v1.SetReadyRequest.hero_id)
 }
 inline ::uint32_t SetReadyRequest::_internal_hero_id() const {

@@ -7,7 +7,7 @@
 //
 // 通用机制:邮箱频道(channel)+ 游标。系统 / 公会只是 channel 的两个实例,
 //   核心逻辑 (channel_id, mail_id>cursor, now∈[start,end]) → 推进游标。
-// 附件领取复用 inventory ledger 幂等(player_mail_claim);附件 = item_config_id + count。
+// 附件领取复用 inventory ledger 幂等(player_mail_claim);附件形态见 MailAttachment(oneof)。
 //
 // 数据落地:pandora_social 库(sys_mail / guild_mail / player_mail /
 //   player_mail_cursor / player_mail_claim)。客户端只拿 Mail / MailAttachment 视图(§14)。
@@ -33,13 +33,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MailService_ListMail_FullMethodName         = "/pandora.mail.v1.MailService/ListMail"
-	MailService_ReadMail_FullMethodName         = "/pandora.mail.v1.MailService/ReadMail"
-	MailService_ClaimMail_FullMethodName        = "/pandora.mail.v1.MailService/ClaimMail"
-	MailService_DeleteMail_FullMethodName       = "/pandora.mail.v1.MailService/DeleteMail"
-	MailService_SendSystemMail_FullMethodName   = "/pandora.mail.v1.MailService/SendSystemMail"
-	MailService_SendGuildMail_FullMethodName    = "/pandora.mail.v1.MailService/SendGuildMail"
-	MailService_SendPersonalMail_FullMethodName = "/pandora.mail.v1.MailService/SendPersonalMail"
+	MailService_ListMail_FullMethodName                = "/pandora.mail.v1.MailService/ListMail"
+	MailService_ReadMail_FullMethodName                = "/pandora.mail.v1.MailService/ReadMail"
+	MailService_ClaimMail_FullMethodName               = "/pandora.mail.v1.MailService/ClaimMail"
+	MailService_DeleteMail_FullMethodName              = "/pandora.mail.v1.MailService/DeleteMail"
+	MailService_SendSystemMail_FullMethodName          = "/pandora.mail.v1.MailService/SendSystemMail"
+	MailService_SendGuildMail_FullMethodName           = "/pandora.mail.v1.MailService/SendGuildMail"
+	MailService_SendPersonalMail_FullMethodName        = "/pandora.mail.v1.MailService/SendPersonalMail"
+	MailService_GetClaimableAttachments_FullMethodName = "/pandora.mail.v1.MailService/GetClaimableAttachments"
+	MailService_MarkMailClaimed_FullMethodName         = "/pandora.mail.v1.MailService/MarkMailClaimed"
 )
 
 // MailServiceClient is the client API for MailService service.
@@ -60,6 +62,16 @@ type MailServiceClient interface {
 	SendGuildMail(ctx context.Context, in *SendGuildMailRequest, opts ...grpc.CallOption) (*SendGuildMailResponse, error)
 	// SendPersonalMail 定点发个人邮件(战利品/补偿/互发,离线可达)。
 	SendPersonalMail(ctx context.Context, in *SendPersonalMailRequest, opts ...grpc.CallOption) (*SendPersonalMailResponse, error)
+	// GetClaimableAttachments 取(或幂等重取)一封邮件的领取意图:
+	//   - 附件展开为 BagItem 列表并**持久化**(instance 形态在此一次性铸 instance_id,
+	//     重放返回同一批 ID;transfer 形态原样透传托管快照);
+	//   - 已终态领取 → already_claimed=true(items 空,DS 直接刷新 UI);
+	//   - 意图创建后本邮件的旧直连领取链(ClaimMail)被互斥拒(ERR_MAIL_CLAIM_IN_PROGRESS)。
+	GetClaimableAttachments(ctx context.Context, in *GetClaimableAttachmentsRequest, opts ...grpc.CallOption) (*GetClaimableAttachmentsResponse, error)
+	// MarkMailClaimed 终结领取(journal 已 ACK 后调):transfer 附件消对应托管行
+	// (inventory.ConsumeTransferEscrow,资产已经 journal 入包,托管行只删不再物化)→
+	// 置 claimed 终态。幂等:已终态 no-op 成功;无意图且未领取 → ERR_INVALID_ARG。
+	MarkMailClaimed(ctx context.Context, in *MarkMailClaimedRequest, opts ...grpc.CallOption) (*MarkMailClaimedResponse, error)
 }
 
 type mailServiceClient struct {
@@ -140,6 +152,26 @@ func (c *mailServiceClient) SendPersonalMail(ctx context.Context, in *SendPerson
 	return out, nil
 }
 
+func (c *mailServiceClient) GetClaimableAttachments(ctx context.Context, in *GetClaimableAttachmentsRequest, opts ...grpc.CallOption) (*GetClaimableAttachmentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetClaimableAttachmentsResponse)
+	err := c.cc.Invoke(ctx, MailService_GetClaimableAttachments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mailServiceClient) MarkMailClaimed(ctx context.Context, in *MarkMailClaimedRequest, opts ...grpc.CallOption) (*MarkMailClaimedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MarkMailClaimedResponse)
+	err := c.cc.Invoke(ctx, MailService_MarkMailClaimed_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MailServiceServer is the server API for MailService service.
 // All implementations should embed UnimplementedMailServiceServer
 // for forward compatibility.
@@ -158,6 +190,16 @@ type MailServiceServer interface {
 	SendGuildMail(context.Context, *SendGuildMailRequest) (*SendGuildMailResponse, error)
 	// SendPersonalMail 定点发个人邮件(战利品/补偿/互发,离线可达)。
 	SendPersonalMail(context.Context, *SendPersonalMailRequest) (*SendPersonalMailResponse, error)
+	// GetClaimableAttachments 取(或幂等重取)一封邮件的领取意图:
+	//   - 附件展开为 BagItem 列表并**持久化**(instance 形态在此一次性铸 instance_id,
+	//     重放返回同一批 ID;transfer 形态原样透传托管快照);
+	//   - 已终态领取 → already_claimed=true(items 空,DS 直接刷新 UI);
+	//   - 意图创建后本邮件的旧直连领取链(ClaimMail)被互斥拒(ERR_MAIL_CLAIM_IN_PROGRESS)。
+	GetClaimableAttachments(context.Context, *GetClaimableAttachmentsRequest) (*GetClaimableAttachmentsResponse, error)
+	// MarkMailClaimed 终结领取(journal 已 ACK 后调):transfer 附件消对应托管行
+	// (inventory.ConsumeTransferEscrow,资产已经 journal 入包,托管行只删不再物化)→
+	// 置 claimed 终态。幂等:已终态 no-op 成功;无意图且未领取 → ERR_INVALID_ARG。
+	MarkMailClaimed(context.Context, *MarkMailClaimedRequest) (*MarkMailClaimedResponse, error)
 }
 
 // UnimplementedMailServiceServer should be embedded to have
@@ -187,6 +229,12 @@ func (UnimplementedMailServiceServer) SendGuildMail(context.Context, *SendGuildM
 }
 func (UnimplementedMailServiceServer) SendPersonalMail(context.Context, *SendPersonalMailRequest) (*SendPersonalMailResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendPersonalMail not implemented")
+}
+func (UnimplementedMailServiceServer) GetClaimableAttachments(context.Context, *GetClaimableAttachmentsRequest) (*GetClaimableAttachmentsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetClaimableAttachments not implemented")
+}
+func (UnimplementedMailServiceServer) MarkMailClaimed(context.Context, *MarkMailClaimedRequest) (*MarkMailClaimedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MarkMailClaimed not implemented")
 }
 func (UnimplementedMailServiceServer) testEmbeddedByValue() {}
 
@@ -334,6 +382,42 @@ func _MailService_SendPersonalMail_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MailService_GetClaimableAttachments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetClaimableAttachmentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MailServiceServer).GetClaimableAttachments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MailService_GetClaimableAttachments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MailServiceServer).GetClaimableAttachments(ctx, req.(*GetClaimableAttachmentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MailService_MarkMailClaimed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkMailClaimedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MailServiceServer).MarkMailClaimed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MailService_MarkMailClaimed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MailServiceServer).MarkMailClaimed(ctx, req.(*MarkMailClaimedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MailService_ServiceDesc is the grpc.ServiceDesc for MailService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -368,6 +452,14 @@ var MailService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendPersonalMail",
 			Handler:    _MailService_SendPersonalMail_Handler,
+		},
+		{
+			MethodName: "GetClaimableAttachments",
+			Handler:    _MailService_GetClaimableAttachments_Handler,
+		},
+		{
+			MethodName: "MarkMailClaimed",
+			Handler:    _MailService_MarkMailClaimed_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -228,11 +228,11 @@ constexpr TransferOwnerRequest::ParseTableT_ TransferOwnerRequest::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      3, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967289,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -242,28 +242,21 @@ constexpr TransferOwnerRequest::ParseTableT_ TransferOwnerRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::group::v1::TransferOwnerRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TransferOwnerRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.player_id_)}},
       // uint64 group_id = 2 [json_name = "groupId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TransferOwnerRequest, _impl_.group_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TransferOwnerRequest, _impl_.group_id_), 0>(),
+       {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.group_id_)}},
       // uint64 target_id = 3 [json_name = "targetId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TransferOwnerRequest, _impl_.target_id_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TransferOwnerRequest, _impl_.target_id_), 1>(),
+       {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.target_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 group_id = 2 [json_name = "groupId"];
-      {PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 target_id = 3 [json_name = "targetId"];
-      {PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.target_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.target_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -276,7 +269,6 @@ inline constexpr TransferOwnerRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}},
         group_id_{::uint64_t{0u}},
         target_id_{::uint64_t{0u}} {}
 
@@ -374,21 +366,19 @@ const ::_pbi::ClassData* TransferOwnerRequest_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 class ListMyGroupsRequest::_Internal {
  public:
-  using HasBits = decltype(::std::declval<ListMyGroupsRequest>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(ListMyGroupsRequest, _impl_._has_bits_);
 };
 
 constexpr ListMyGroupsRequest::ParseTableT_ ListMyGroupsRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
-      PROTOBUF_FIELD_OFFSET(ListMyGroupsRequest, _impl_._has_bits_),
+      PROTOBUF_FIELD_OFFSET(ListMyGroupsRequest,
+                            _impl_._cached_size_),  // no hasbits
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      0, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      4294967295,  // skipmap
+      offsetof(ParseTableT_, field_names),  // no field_entries
+      0,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -398,38 +388,23 @@ constexpr ListMyGroupsRequest::ParseTableT_ ListMyGroupsRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::group::v1::ListMyGroupsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ListMyGroupsRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(ListMyGroupsRequest, _impl_.player_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
-    }}, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(ListMyGroupsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-    }},
-    // no aux_entries
+    }}, // no field_entries, or aux_entries
     {{
     }},
   };
 }
 
-
-inline constexpr ListMyGroupsRequest::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        player_id_{::uint64_t{0u}} {}
-
 template <typename>
 constexpr ListMyGroupsRequest::ListMyGroupsRequest(::_pbi::ConstantInitialized,
                        const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
+    : ::google::protobuf::internal::ZeroFieldsBase(
 #if defined(PROTOBUF_CUSTOM_VTABLE)
           class_data
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+      ) {
 }
 inline void* PROTOBUF_NONNULL ListMyGroupsRequest::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
@@ -452,10 +427,10 @@ constexpr auto ListMyGroupsRequest::InternalGenerateClassData_(
 #endif
           nullptr,  // IsInitialized
           &ListMyGroupsRequest::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<ListMyGroupsRequest>(),
+          ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<ListMyGroupsRequest>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
           &ListMyGroupsRequest::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<ListMyGroupsRequest>(), &ListMyGroupsRequest::ByteSizeLong,
+          ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<ListMyGroupsRequest>(), &ListMyGroupsRequest::ByteSizeLong,
               &ListMyGroupsRequest::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
           PROTOBUF_FIELD_OFFSET(ListMyGroupsRequest, _impl_._cached_size_),
@@ -807,11 +782,11 @@ constexpr LeaveGroupRequest::ParseTableT_ LeaveGroupRequest::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(LeaveGroupRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      2, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967293,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      1,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -822,20 +797,14 @@ constexpr LeaveGroupRequest::ParseTableT_ LeaveGroupRequest::InternalGeneratePar
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       // uint64 group_id = 2 [json_name = "groupId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LeaveGroupRequest, _impl_.group_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LeaveGroupRequest, _impl_.group_id_), 0>(),
+       {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(LeaveGroupRequest, _impl_.group_id_)}},
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LeaveGroupRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(LeaveGroupRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(LeaveGroupRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 group_id = 2 [json_name = "groupId"];
-      {PROTOBUF_FIELD_OFFSET(LeaveGroupRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(LeaveGroupRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -848,7 +817,6 @@ inline constexpr LeaveGroupRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}},
         group_id_{::uint64_t{0u}} {}
 
 template <typename>
@@ -1096,11 +1064,11 @@ constexpr KickFromGroupRequest::ParseTableT_ KickFromGroupRequest::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      3, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967289,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1110,28 +1078,21 @@ constexpr KickFromGroupRequest::ParseTableT_ KickFromGroupRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::group::v1::KickFromGroupRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickFromGroupRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.player_id_)}},
       // uint64 group_id = 2 [json_name = "groupId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickFromGroupRequest, _impl_.group_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickFromGroupRequest, _impl_.group_id_), 0>(),
+       {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.group_id_)}},
       // uint64 target_id = 3 [json_name = "targetId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickFromGroupRequest, _impl_.target_id_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickFromGroupRequest, _impl_.target_id_), 1>(),
+       {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.target_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 group_id = 2 [json_name = "groupId"];
-      {PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 target_id = 3 [json_name = "targetId"];
-      {PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.target_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.target_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1144,7 +1105,6 @@ inline constexpr KickFromGroupRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}},
         group_id_{::uint64_t{0u}},
         target_id_{::uint64_t{0u}} {}
 
@@ -1393,11 +1353,11 @@ constexpr InviteToGroupRequest::ParseTableT_ InviteToGroupRequest::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      3, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967289,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1407,28 +1367,21 @@ constexpr InviteToGroupRequest::ParseTableT_ InviteToGroupRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::group::v1::InviteToGroupRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteToGroupRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.player_id_)}},
       // uint64 group_id = 2 [json_name = "groupId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteToGroupRequest, _impl_.group_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteToGroupRequest, _impl_.group_id_), 0>(),
+       {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.group_id_)}},
       // uint64 target_id = 3 [json_name = "targetId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteToGroupRequest, _impl_.target_id_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteToGroupRequest, _impl_.target_id_), 1>(),
+       {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.target_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 group_id = 2 [json_name = "groupId"];
-      {PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 target_id = 3 [json_name = "targetId"];
-      {PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.target_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.target_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1441,7 +1394,6 @@ inline constexpr InviteToGroupRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}},
         group_id_{::uint64_t{0u}},
         target_id_{::uint64_t{0u}} {}
 
@@ -2181,11 +2133,11 @@ constexpr DisbandGroupRequest::ParseTableT_ DisbandGroupRequest::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(DisbandGroupRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      2, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967293,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      1,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2196,20 +2148,14 @@ constexpr DisbandGroupRequest::ParseTableT_ DisbandGroupRequest::InternalGenerat
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       // uint64 group_id = 2 [json_name = "groupId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DisbandGroupRequest, _impl_.group_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DisbandGroupRequest, _impl_.group_id_), 0>(),
+       {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(DisbandGroupRequest, _impl_.group_id_)}},
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DisbandGroupRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(DisbandGroupRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(DisbandGroupRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 group_id = 2 [json_name = "groupId"];
-      {PROTOBUF_FIELD_OFFSET(DisbandGroupRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(DisbandGroupRequest, _impl_.group_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -2222,7 +2168,6 @@ inline constexpr DisbandGroupRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}},
         group_id_{::uint64_t{0u}} {}
 
 template <typename>
@@ -2477,11 +2422,11 @@ constexpr CreateGroupRequest::ParseTableT_ CreateGroupRequest::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(CreateGroupRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      3, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967289,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2491,11 +2436,6 @@ constexpr CreateGroupRequest::ParseTableT_ CreateGroupRequest::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::group::v1::CreateGroupRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateGroupRequest, _impl_.player_id_), 2>(),
-       {8, 2, 0,
-        PROTOBUF_FIELD_OFFSET(CreateGroupRequest, _impl_.player_id_)}},
       // string name = 2 [json_name = "name"];
       {::_pbi::TcParser::FastUS1,
        {18, 1, 0,
@@ -2507,8 +2447,6 @@ constexpr CreateGroupRequest::ParseTableT_ CreateGroupRequest::InternalGenerateP
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(CreateGroupRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string name = 2 [json_name = "name"];
       {PROTOBUF_FIELD_OFFSET(CreateGroupRequest, _impl_.name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // repeated uint64 member_ids = 3 [json_name = "memberIds"];
@@ -2516,7 +2454,7 @@ constexpr CreateGroupRequest::ParseTableT_ CreateGroupRequest::InternalGenerateP
     }},
     // no aux_entries
     {{
-      "\43\0\4\0\0\0\0\0"
+      "\43\4\0\0\0\0\0\0"
       "pandora.group.v1.CreateGroupRequest"
       "name"
     }},
@@ -2536,8 +2474,7 @@ inline constexpr CreateGroupRequest::Impl_::Impl_(
         _member_ids_cached_byte_size_{0},
         name_(
             &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        player_id_{::uint64_t{0u}} {}
+            ::_pbi::ConstantInitialized()) {}
 
 template <typename>
 constexpr CreateGroupRequest::CreateGroupRequest(::_pbi::ConstantInitialized,
@@ -3139,11 +3076,9 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::CreateGroupRequest, _impl_._has_bits_),
-        6, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::group::v1::CreateGroupRequest, _impl_.player_id_),
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::CreateGroupRequest, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::CreateGroupRequest, _impl_.member_ids_),
-        2,
         1,
         0,
         0x081, // bitmap
@@ -3155,13 +3090,11 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::InviteToGroupRequest, _impl_._has_bits_),
-        6, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::group::v1::InviteToGroupRequest, _impl_.player_id_),
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::InviteToGroupRequest, _impl_.group_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::InviteToGroupRequest, _impl_.target_id_),
         0,
         1,
-        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::InviteToGroupResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -3169,11 +3102,9 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::LeaveGroupRequest, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::group::v1::LeaveGroupRequest, _impl_.player_id_),
+        4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::LeaveGroupRequest, _impl_.group_id_),
         0,
-        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::LeaveGroupResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -3181,13 +3112,11 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::KickFromGroupRequest, _impl_._has_bits_),
-        6, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::group::v1::KickFromGroupRequest, _impl_.player_id_),
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::KickFromGroupRequest, _impl_.group_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::KickFromGroupRequest, _impl_.target_id_),
         0,
         1,
-        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::KickFromGroupResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -3195,11 +3124,9 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::DisbandGroupRequest, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::group::v1::DisbandGroupRequest, _impl_.player_id_),
+        4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::DisbandGroupRequest, _impl_.group_id_),
         0,
-        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::DisbandGroupResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -3207,13 +3134,11 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::TransferOwnerRequest, _impl_._has_bits_),
-        6, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::group::v1::TransferOwnerRequest, _impl_.player_id_),
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::TransferOwnerRequest, _impl_.group_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::TransferOwnerRequest, _impl_.target_id_),
         0,
         1,
-        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::TransferOwnerResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -3243,11 +3168,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::ListGroupMembersResponse, _impl_.members_),
         1,
         0,
-        0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::pandora::group::v1::ListMyGroupsRequest, _impl_._has_bits_),
-        4, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::group::v1::ListMyGroupsRequest, _impl_.player_id_),
-        0,
+        0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::group::v1::ListMyGroupsResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -3262,23 +3183,23 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::pandora::group::v1::GroupMember)},
         {11, sizeof(::pandora::group::v1::Group)},
         {26, sizeof(::pandora::group::v1::CreateGroupRequest)},
-        {35, sizeof(::pandora::group::v1::CreateGroupResponse)},
-        {42, sizeof(::pandora::group::v1::InviteToGroupRequest)},
-        {51, sizeof(::pandora::group::v1::InviteToGroupResponse)},
-        {56, sizeof(::pandora::group::v1::LeaveGroupRequest)},
-        {63, sizeof(::pandora::group::v1::LeaveGroupResponse)},
-        {68, sizeof(::pandora::group::v1::KickFromGroupRequest)},
-        {77, sizeof(::pandora::group::v1::KickFromGroupResponse)},
-        {82, sizeof(::pandora::group::v1::DisbandGroupRequest)},
-        {89, sizeof(::pandora::group::v1::DisbandGroupResponse)},
-        {94, sizeof(::pandora::group::v1::TransferOwnerRequest)},
-        {103, sizeof(::pandora::group::v1::TransferOwnerResponse)},
-        {108, sizeof(::pandora::group::v1::GetGroupRequest)},
-        {113, sizeof(::pandora::group::v1::GetGroupResponse)},
-        {120, sizeof(::pandora::group::v1::ListGroupMembersRequest)},
-        {125, sizeof(::pandora::group::v1::ListGroupMembersResponse)},
-        {132, sizeof(::pandora::group::v1::ListMyGroupsRequest)},
-        {137, sizeof(::pandora::group::v1::ListMyGroupsResponse)},
+        {33, sizeof(::pandora::group::v1::CreateGroupResponse)},
+        {40, sizeof(::pandora::group::v1::InviteToGroupRequest)},
+        {47, sizeof(::pandora::group::v1::InviteToGroupResponse)},
+        {52, sizeof(::pandora::group::v1::LeaveGroupRequest)},
+        {57, sizeof(::pandora::group::v1::LeaveGroupResponse)},
+        {62, sizeof(::pandora::group::v1::KickFromGroupRequest)},
+        {69, sizeof(::pandora::group::v1::KickFromGroupResponse)},
+        {74, sizeof(::pandora::group::v1::DisbandGroupRequest)},
+        {79, sizeof(::pandora::group::v1::DisbandGroupResponse)},
+        {84, sizeof(::pandora::group::v1::TransferOwnerRequest)},
+        {91, sizeof(::pandora::group::v1::TransferOwnerResponse)},
+        {96, sizeof(::pandora::group::v1::GetGroupRequest)},
+        {101, sizeof(::pandora::group::v1::GetGroupResponse)},
+        {108, sizeof(::pandora::group::v1::ListGroupMembersRequest)},
+        {113, sizeof(::pandora::group::v1::ListGroupMembersResponse)},
+        {120, sizeof(::pandora::group::v1::ListMyGroupsRequest)},
+        {121, sizeof(::pandora::group::v1::ListMyGroupsResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3315,70 +3236,68 @@ const char descriptor_table_protodef_pandora_2fgroup_2fv1_2fgroup_2eproto[] ABSL
     "\001(\tR\004name\022\031\n\010owner_id\030\003 \001(\004R\007ownerId\022!\n\014"
     "member_count\030\004 \001(\005R\013memberCount\022\037\n\013max_m"
     "embers\030\005 \001(\005R\nmaxMembers\022\035\n\ncreated_ms\030\006"
-    " \001(\003R\tcreatedMs\"d\n\022CreateGroupRequest\022\033\n"
-    "\tplayer_id\030\001 \001(\004R\010playerId\022\022\n\004name\030\002 \001(\t"
-    "R\004name\022\035\n\nmember_ids\030\003 \003(\004R\tmemberIds\"`\n"
-    "\023CreateGroupResponse\022.\n\004code\030\001 \001(\0162\032.pan"
-    "dora.common.v1.ErrCodeR\004code\022\031\n\010group_id"
-    "\030\002 \001(\004R\007groupId\"k\n\024InviteToGroupRequest\022"
-    "\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031\n\010group_id"
-    "\030\002 \001(\004R\007groupId\022\033\n\ttarget_id\030\003 \001(\004R\010targ"
-    "etId\"G\n\025InviteToGroupResponse\022.\n\004code\030\001 "
-    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\"K\n"
-    "\021LeaveGroupRequest\022\033\n\tplayer_id\030\001 \001(\004R\010p"
-    "layerId\022\031\n\010group_id\030\002 \001(\004R\007groupId\"D\n\022Le"
-    "aveGroupResponse\022.\n\004code\030\001 \001(\0162\032.pandora"
-    ".common.v1.ErrCodeR\004code\"k\n\024KickFromGrou"
-    "pRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031\n"
-    "\010group_id\030\002 \001(\004R\007groupId\022\033\n\ttarget_id\030\003 "
-    "\001(\004R\010targetId\"G\n\025KickFromGroupResponse\022."
-    "\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCode"
-    "R\004code\"M\n\023DisbandGroupRequest\022\033\n\tplayer_"
-    "id\030\001 \001(\004R\010playerId\022\031\n\010group_id\030\002 \001(\004R\007gr"
-    "oupId\"F\n\024DisbandGroupResponse\022.\n\004code\030\001 "
-    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\"k\n"
-    "\024TransferOwnerRequest\022\033\n\tplayer_id\030\001 \001(\004"
-    "R\010playerId\022\031\n\010group_id\030\002 \001(\004R\007groupId\022\033\n"
-    "\ttarget_id\030\003 \001(\004R\010targetId\"G\n\025TransferOw"
-    "nerResponse\022.\n\004code\030\001 \001(\0162\032.pandora.comm"
-    "on.v1.ErrCodeR\004code\",\n\017GetGroupRequest\022\031"
-    "\n\010group_id\030\001 \001(\004R\007groupId\"q\n\020GetGroupRes"
+    " \001(\003R\tcreatedMs\"X\n\022CreateGroupRequest\022\022\n"
+    "\004name\030\002 \001(\tR\004name\022\035\n\nmember_ids\030\003 \003(\004R\tm"
+    "emberIdsJ\004\010\001\020\002R\tplayer_id\"`\n\023CreateGroup"
+    "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
+    "v1.ErrCodeR\004code\022\031\n\010group_id\030\002 \001(\004R\007grou"
+    "pId\"_\n\024InviteToGroupRequest\022\031\n\010group_id\030"
+    "\002 \001(\004R\007groupId\022\033\n\ttarget_id\030\003 \001(\004R\010targe"
+    "tIdJ\004\010\001\020\002R\tplayer_id\"G\n\025InviteToGroupRes"
     "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCodeR\004code\022-\n\005group\030\002 \001(\0132\027.pandora.g"
-    "roup.v1.GroupR\005group\"4\n\027ListGroupMembers"
-    "Request\022\031\n\010group_id\030\001 \001(\004R\007groupId\"\203\001\n\030L"
-    "istGroupMembersResponse\022.\n\004code\030\001 \001(\0162\032."
-    "pandora.common.v1.ErrCodeR\004code\0227\n\007membe"
-    "rs\030\002 \003(\0132\035.pandora.group.v1.GroupMemberR"
-    "\007members\"2\n\023ListMyGroupsRequest\022\033\n\tplaye"
-    "r_id\030\001 \001(\004R\010playerId\"w\n\024ListMyGroupsResp"
-    "onse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.E"
-    "rrCodeR\004code\022/\n\006groups\030\002 \003(\0132\027.pandora.g"
-    "roup.v1.GroupR\006groups*T\n\tGroupRole\022\032\n\026GR"
-    "OUP_ROLE_UNSPECIFIED\020\000\022\024\n\020GROUP_ROLE_OWN"
-    "ER\020\001\022\025\n\021GROUP_ROLE_MEMBER\020\0022\345\006\n\014GroupSer"
-    "vice\022Z\n\013CreateGroup\022$.pandora.group.v1.C"
-    "reateGroupRequest\032%.pandora.group.v1.Cre"
-    "ateGroupResponse\022`\n\rInviteToGroup\022&.pand"
-    "ora.group.v1.InviteToGroupRequest\032\'.pand"
-    "ora.group.v1.InviteToGroupResponse\022W\n\nLe"
-    "aveGroup\022#.pandora.group.v1.LeaveGroupRe"
-    "quest\032$.pandora.group.v1.LeaveGroupRespo"
-    "nse\022`\n\rKickFromGroup\022&.pandora.group.v1."
-    "KickFromGroupRequest\032\'.pandora.group.v1."
-    "KickFromGroupResponse\022]\n\014DisbandGroup\022%."
-    "pandora.group.v1.DisbandGroupRequest\032&.p"
-    "andora.group.v1.DisbandGroupResponse\022`\n\r"
-    "TransferOwner\022&.pandora.group.v1.Transfe"
-    "rOwnerRequest\032\'.pandora.group.v1.Transfe"
-    "rOwnerResponse\022Q\n\010GetGroup\022!.pandora.gro"
-    "up.v1.GetGroupRequest\032\".pandora.group.v1"
-    ".GetGroupResponse\022i\n\020ListGroupMembers\022)."
-    "pandora.group.v1.ListGroupMembersRequest"
-    "\032*.pandora.group.v1.ListGroupMembersResp"
-    "onse\022]\n\014ListMyGroups\022%.pandora.group.v1."
-    "ListMyGroupsRequest\032&.pandora.group.v1.L"
-    "istMyGroupsResponseb\006proto3"
+    "ErrCodeR\004code\"\?\n\021LeaveGroupRequest\022\031\n\010gr"
+    "oup_id\030\002 \001(\004R\007groupIdJ\004\010\001\020\002R\tplayer_id\"D"
+    "\n\022LeaveGroupResponse\022.\n\004code\030\001 \001(\0162\032.pan"
+    "dora.common.v1.ErrCodeR\004code\"_\n\024KickFrom"
+    "GroupRequest\022\031\n\010group_id\030\002 \001(\004R\007groupId\022"
+    "\033\n\ttarget_id\030\003 \001(\004R\010targetIdJ\004\010\001\020\002R\tplay"
+    "er_id\"G\n\025KickFromGroupResponse\022.\n\004code\030\001"
+    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\"A"
+    "\n\023DisbandGroupRequest\022\031\n\010group_id\030\002 \001(\004R"
+    "\007groupIdJ\004\010\001\020\002R\tplayer_id\"F\n\024DisbandGrou"
+    "pResponse\022.\n\004code\030\001 \001(\0162\032.pandora.common"
+    ".v1.ErrCodeR\004code\"_\n\024TransferOwnerReques"
+    "t\022\031\n\010group_id\030\002 \001(\004R\007groupId\022\033\n\ttarget_i"
+    "d\030\003 \001(\004R\010targetIdJ\004\010\001\020\002R\tplayer_id\"G\n\025Tr"
+    "ansferOwnerResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\",\n\017GetGroupR"
+    "equest\022\031\n\010group_id\030\001 \001(\004R\007groupId\"q\n\020Get"
+    "GroupResponse\022.\n\004code\030\001 \001(\0162\032.pandora.co"
+    "mmon.v1.ErrCodeR\004code\022-\n\005group\030\002 \001(\0132\027.p"
+    "andora.group.v1.GroupR\005group\"4\n\027ListGrou"
+    "pMembersRequest\022\031\n\010group_id\030\001 \001(\004R\007group"
+    "Id\"\203\001\n\030ListGroupMembersResponse\022.\n\004code\030"
+    "\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022"
+    "7\n\007members\030\002 \003(\0132\035.pandora.group.v1.Grou"
+    "pMemberR\007members\"&\n\023ListMyGroupsRequestJ"
+    "\004\010\001\020\002R\tplayer_id\"w\n\024ListMyGroupsResponse"
+    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
+    "deR\004code\022/\n\006groups\030\002 \003(\0132\027.pandora.group"
+    ".v1.GroupR\006groups*T\n\tGroupRole\022\032\n\026GROUP_"
+    "ROLE_UNSPECIFIED\020\000\022\024\n\020GROUP_ROLE_OWNER\020\001"
+    "\022\025\n\021GROUP_ROLE_MEMBER\020\0022\345\006\n\014GroupService"
+    "\022Z\n\013CreateGroup\022$.pandora.group.v1.Creat"
+    "eGroupRequest\032%.pandora.group.v1.CreateG"
+    "roupResponse\022`\n\rInviteToGroup\022&.pandora."
+    "group.v1.InviteToGroupRequest\032\'.pandora."
+    "group.v1.InviteToGroupResponse\022W\n\nLeaveG"
+    "roup\022#.pandora.group.v1.LeaveGroupReques"
+    "t\032$.pandora.group.v1.LeaveGroupResponse\022"
+    "`\n\rKickFromGroup\022&.pandora.group.v1.Kick"
+    "FromGroupRequest\032\'.pandora.group.v1.Kick"
+    "FromGroupResponse\022]\n\014DisbandGroup\022%.pand"
+    "ora.group.v1.DisbandGroupRequest\032&.pando"
+    "ra.group.v1.DisbandGroupResponse\022`\n\rTran"
+    "sferOwner\022&.pandora.group.v1.TransferOwn"
+    "erRequest\032\'.pandora.group.v1.TransferOwn"
+    "erResponse\022Q\n\010GetGroup\022!.pandora.group.v"
+    "1.GetGroupRequest\032\".pandora.group.v1.Get"
+    "GroupResponse\022i\n\020ListGroupMembers\022).pand"
+    "ora.group.v1.ListGroupMembersRequest\032*.p"
+    "andora.group.v1.ListGroupMembersResponse"
+    "\022]\n\014ListMyGroups\022%.pandora.group.v1.List"
+    "MyGroupsRequest\032&.pandora.group.v1.ListM"
+    "yGroupsResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fgroup_2fv1_2fgroup_2eproto_deps[1] = {
@@ -3388,7 +3307,7 @@ static ::absl::once_flag descriptor_table_pandora_2fgroup_2fv1_2fgroup_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fgroup_2fv1_2fgroup_2eproto = {
     false,
     false,
-    2947,
+    2863,
     descriptor_table_protodef_pandora_2fgroup_2fv1_2fgroup_2eproto,
     "pandora/group/v1/group.proto",
     &descriptor_table_pandora_2fgroup_2fv1_2fgroup_2eproto_once,
@@ -4102,7 +4021,6 @@ CreateGroupRequest::CreateGroupRequest(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.player_id_ = from._impl_.player_id_;
 
   // @@protoc_insertion_point(copy_constructor:pandora.group.v1.CreateGroupRequest)
 }
@@ -4120,7 +4038,6 @@ PROTOBUF_NDEBUG_INLINE CreateGroupRequest::Impl_::Impl_(
 
 inline void CreateGroupRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.player_id_ = {};
 }
 CreateGroupRequest::~CreateGroupRequest() {
   // @@protoc_insertion_point(destructor:pandora.group.v1.CreateGroupRequest)
@@ -4179,7 +4096,6 @@ PROTOBUF_NOINLINE void CreateGroupRequest::Clear() {
       _impl_.name_.ClearNonDefaultToEmpty();
     }
   }
-  _impl_.player_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -4203,15 +4119,6 @@ PROTOBUF_NOINLINE void CreateGroupRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // string name = 2 [json_name = "name"];
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_name().empty()) {
@@ -4258,7 +4165,7 @@ PROTOBUF_NOINLINE void CreateGroupRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // repeated uint64 member_ids = 3 [json_name = "memberIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -4271,13 +4178,6 @@ PROTOBUF_NOINLINE void CreateGroupRequest::Clear() {
       if (!this_._internal_name().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_name());
-      }
-    }
-    // uint64 player_id = 1 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
       }
     }
   }
@@ -4298,7 +4198,7 @@ void CreateGroupRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_member_ids()->MergeFrom(from._internal_member_ids());
     }
@@ -4309,11 +4209,6 @@ void CreateGroupRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         if (_this->_impl_.name_.IsDefault()) {
           _this->_internal_set_name("");
         }
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
   }
@@ -4338,7 +4233,6 @@ void CreateGroupRequest::InternalSwap(CreateGroupRequest* PROTOBUF_RESTRICT PROT
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.member_ids_.InternalSwap(&other->_impl_.member_ids_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
-  swap(_impl_.player_id_, other->_impl_.player_id_);
 }
 
 ::google::protobuf::Metadata CreateGroupRequest::GetMetadata() const {
@@ -4602,10 +4496,10 @@ PROTOBUF_NDEBUG_INLINE InviteToGroupRequest::Impl_::Impl_(
 inline void InviteToGroupRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
+               offsetof(Impl_, group_id_),
            0,
            offsetof(Impl_, target_id_) -
-               offsetof(Impl_, player_id_) +
+               offsetof(Impl_, group_id_) +
                sizeof(Impl_::target_id_));
 }
 InviteToGroupRequest::~InviteToGroupRequest() {
@@ -4656,10 +4550,10 @@ PROTOBUF_NOINLINE void InviteToGroupRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.group_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.target_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.target_id_));
+        reinterpret_cast<char*>(&_impl_.group_id_)) + sizeof(_impl_.target_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -4684,17 +4578,8 @@ PROTOBUF_NOINLINE void InviteToGroupRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // uint64 group_id = 2 [json_name = "groupId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_group_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4703,7 +4588,7 @@ PROTOBUF_NOINLINE void InviteToGroupRequest::Clear() {
   }
 
   // uint64 target_id = 3 [json_name = "targetId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_target_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4736,23 +4621,16 @@ PROTOBUF_NOINLINE void InviteToGroupRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // uint64 player_id = 1 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint64 group_id = 2 [json_name = "groupId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_group_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_group_id());
       }
     }
     // uint64 target_id = 3 [json_name = "targetId"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_target_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_target_id());
@@ -4776,18 +4654,13 @@ void InviteToGroupRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_group_id() != 0) {
         _this->_impl_.group_id_ = from._impl_.group_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_target_id() != 0) {
         _this->_impl_.target_id_ = from._impl_.target_id_;
       }
@@ -4813,9 +4686,9 @@ void InviteToGroupRequest::InternalSwap(InviteToGroupRequest* PROTOBUF_RESTRICT 
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.target_id_)
       + sizeof(InviteToGroupRequest::_impl_.target_id_)
-      - PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
+      - PROTOBUF_FIELD_OFFSET(InviteToGroupRequest, _impl_.group_id_)>(
+          reinterpret_cast<char*>(&_impl_.group_id_),
+          reinterpret_cast<char*>(&other->_impl_.group_id_));
 }
 
 ::google::protobuf::Metadata InviteToGroupRequest::GetMetadata() const {
@@ -5039,12 +4912,7 @@ PROTOBUF_NDEBUG_INLINE LeaveGroupRequest::Impl_::Impl_(
 
 inline void LeaveGroupRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
-           0,
-           offsetof(Impl_, group_id_) -
-               offsetof(Impl_, player_id_) +
-               sizeof(Impl_::group_id_));
+  _impl_.group_id_ = {};
 }
 LeaveGroupRequest::~LeaveGroupRequest() {
   // @@protoc_insertion_point(destructor:pandora.group.v1.LeaveGroupRequest)
@@ -5093,12 +4961,7 @@ PROTOBUF_NOINLINE void LeaveGroupRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.group_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.group_id_));
-  }
+  _impl_.group_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -5122,17 +4985,8 @@ PROTOBUF_NOINLINE void LeaveGroupRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // uint64 group_id = 2 [json_name = "groupId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_group_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -5163,18 +5017,10 @@ PROTOBUF_NOINLINE void LeaveGroupRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 player_id = 1 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
+   {
     // uint64 group_id = 2 [json_name = "groupId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_group_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_group_id());
@@ -5198,16 +5044,9 @@ void LeaveGroupRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_group_id() != 0) {
-        _this->_impl_.group_id_ = from._impl_.group_id_;
-      }
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_group_id() != 0) {
+      _this->_impl_.group_id_ = from._impl_.group_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -5227,12 +5066,7 @@ void LeaveGroupRequest::InternalSwap(LeaveGroupRequest* PROTOBUF_RESTRICT PROTOB
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(LeaveGroupRequest, _impl_.group_id_)
-      + sizeof(LeaveGroupRequest::_impl_.group_id_)
-      - PROTOBUF_FIELD_OFFSET(LeaveGroupRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
+  swap(_impl_.group_id_, other->_impl_.group_id_);
 }
 
 ::google::protobuf::Metadata LeaveGroupRequest::GetMetadata() const {
@@ -5457,10 +5291,10 @@ PROTOBUF_NDEBUG_INLINE KickFromGroupRequest::Impl_::Impl_(
 inline void KickFromGroupRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
+               offsetof(Impl_, group_id_),
            0,
            offsetof(Impl_, target_id_) -
-               offsetof(Impl_, player_id_) +
+               offsetof(Impl_, group_id_) +
                sizeof(Impl_::target_id_));
 }
 KickFromGroupRequest::~KickFromGroupRequest() {
@@ -5511,10 +5345,10 @@ PROTOBUF_NOINLINE void KickFromGroupRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.group_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.target_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.target_id_));
+        reinterpret_cast<char*>(&_impl_.group_id_)) + sizeof(_impl_.target_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5539,17 +5373,8 @@ PROTOBUF_NOINLINE void KickFromGroupRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // uint64 group_id = 2 [json_name = "groupId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_group_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -5558,7 +5383,7 @@ PROTOBUF_NOINLINE void KickFromGroupRequest::Clear() {
   }
 
   // uint64 target_id = 3 [json_name = "targetId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_target_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -5591,23 +5416,16 @@ PROTOBUF_NOINLINE void KickFromGroupRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // uint64 player_id = 1 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint64 group_id = 2 [json_name = "groupId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_group_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_group_id());
       }
     }
     // uint64 target_id = 3 [json_name = "targetId"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_target_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_target_id());
@@ -5631,18 +5449,13 @@ void KickFromGroupRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_group_id() != 0) {
         _this->_impl_.group_id_ = from._impl_.group_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_target_id() != 0) {
         _this->_impl_.target_id_ = from._impl_.target_id_;
       }
@@ -5668,9 +5481,9 @@ void KickFromGroupRequest::InternalSwap(KickFromGroupRequest* PROTOBUF_RESTRICT 
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.target_id_)
       + sizeof(KickFromGroupRequest::_impl_.target_id_)
-      - PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
+      - PROTOBUF_FIELD_OFFSET(KickFromGroupRequest, _impl_.group_id_)>(
+          reinterpret_cast<char*>(&_impl_.group_id_),
+          reinterpret_cast<char*>(&other->_impl_.group_id_));
 }
 
 ::google::protobuf::Metadata KickFromGroupRequest::GetMetadata() const {
@@ -5894,12 +5707,7 @@ PROTOBUF_NDEBUG_INLINE DisbandGroupRequest::Impl_::Impl_(
 
 inline void DisbandGroupRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
-           0,
-           offsetof(Impl_, group_id_) -
-               offsetof(Impl_, player_id_) +
-               sizeof(Impl_::group_id_));
+  _impl_.group_id_ = {};
 }
 DisbandGroupRequest::~DisbandGroupRequest() {
   // @@protoc_insertion_point(destructor:pandora.group.v1.DisbandGroupRequest)
@@ -5948,12 +5756,7 @@ PROTOBUF_NOINLINE void DisbandGroupRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.group_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.group_id_));
-  }
+  _impl_.group_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -5977,17 +5780,8 @@ PROTOBUF_NOINLINE void DisbandGroupRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // uint64 group_id = 2 [json_name = "groupId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_group_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6018,18 +5812,10 @@ PROTOBUF_NOINLINE void DisbandGroupRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 player_id = 1 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
+   {
     // uint64 group_id = 2 [json_name = "groupId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_group_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_group_id());
@@ -6053,16 +5839,9 @@ void DisbandGroupRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_group_id() != 0) {
-        _this->_impl_.group_id_ = from._impl_.group_id_;
-      }
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_group_id() != 0) {
+      _this->_impl_.group_id_ = from._impl_.group_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -6082,12 +5861,7 @@ void DisbandGroupRequest::InternalSwap(DisbandGroupRequest* PROTOBUF_RESTRICT PR
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(DisbandGroupRequest, _impl_.group_id_)
-      + sizeof(DisbandGroupRequest::_impl_.group_id_)
-      - PROTOBUF_FIELD_OFFSET(DisbandGroupRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
+  swap(_impl_.group_id_, other->_impl_.group_id_);
 }
 
 ::google::protobuf::Metadata DisbandGroupRequest::GetMetadata() const {
@@ -6312,10 +6086,10 @@ PROTOBUF_NDEBUG_INLINE TransferOwnerRequest::Impl_::Impl_(
 inline void TransferOwnerRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
+               offsetof(Impl_, group_id_),
            0,
            offsetof(Impl_, target_id_) -
-               offsetof(Impl_, player_id_) +
+               offsetof(Impl_, group_id_) +
                sizeof(Impl_::target_id_));
 }
 TransferOwnerRequest::~TransferOwnerRequest() {
@@ -6366,10 +6140,10 @@ PROTOBUF_NOINLINE void TransferOwnerRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.group_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.target_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.target_id_));
+        reinterpret_cast<char*>(&_impl_.group_id_)) + sizeof(_impl_.target_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6394,17 +6168,8 @@ PROTOBUF_NOINLINE void TransferOwnerRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // uint64 group_id = 2 [json_name = "groupId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_group_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6413,7 +6178,7 @@ PROTOBUF_NOINLINE void TransferOwnerRequest::Clear() {
   }
 
   // uint64 target_id = 3 [json_name = "targetId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_target_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6446,23 +6211,16 @@ PROTOBUF_NOINLINE void TransferOwnerRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // uint64 player_id = 1 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint64 group_id = 2 [json_name = "groupId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_group_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_group_id());
       }
     }
     // uint64 target_id = 3 [json_name = "targetId"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_target_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_target_id());
@@ -6486,18 +6244,13 @@ void TransferOwnerRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_group_id() != 0) {
         _this->_impl_.group_id_ = from._impl_.group_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_target_id() != 0) {
         _this->_impl_.target_id_ = from._impl_.target_id_;
       }
@@ -6523,9 +6276,9 @@ void TransferOwnerRequest::InternalSwap(TransferOwnerRequest* PROTOBUF_RESTRICT 
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.target_id_)
       + sizeof(TransferOwnerRequest::_impl_.target_id_)
-      - PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
+      - PROTOBUF_FIELD_OFFSET(TransferOwnerRequest, _impl_.group_id_)>(
+          reinterpret_cast<char*>(&_impl_.group_id_),
+          reinterpret_cast<char*>(&other->_impl_.group_id_));
 }
 
 ::google::protobuf::Metadata TransferOwnerRequest::GetMetadata() const {
@@ -7598,45 +7351,27 @@ void ListGroupMembersResponse::InternalSwap(ListGroupMembersResponse* PROTOBUF_R
 
 ListMyGroupsRequest::ListMyGroupsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, ListMyGroupsRequest_get_class_data()) {
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, ListMyGroupsRequest_get_class_data()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena) {
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:pandora.group.v1.ListMyGroupsRequest)
 }
 ListMyGroupsRequest::ListMyGroupsRequest(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListMyGroupsRequest& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ListMyGroupsRequest& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, ListMyGroupsRequest_get_class_data()),
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, ListMyGroupsRequest_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  ListMyGroupsRequest* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
-}
-PROTOBUF_NDEBUG_INLINE ListMyGroupsRequest::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
 
-inline void ListMyGroupsRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
-  new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.player_id_ = {};
-}
-ListMyGroupsRequest::~ListMyGroupsRequest() {
-  // @@protoc_insertion_point(destructor:pandora.group.v1.ListMyGroupsRequest)
-  SharedDtor(*this);
-}
-inline void ListMyGroupsRequest::SharedDtor(MessageLite& self) {
-  ListMyGroupsRequest& this_ = static_cast<ListMyGroupsRequest&>(self);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
-  ABSL_DCHECK(this_.GetArena() == nullptr);
-  this_._impl_.~Impl_();
+  // @@protoc_insertion_point(copy_constructor:pandora.group.v1.ListMyGroupsRequest)
 }
 
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -7665,123 +7400,15 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ListMyGroupsRequest::ParseTableT_
     ListMyGroupsRequest::_table_ =
         ListMyGroupsRequest::InternalGenerateParseTable_(ListMyGroupsRequest_class_data_.base());
 #endif  // !PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_NOINLINE void ListMyGroupsRequest::Clear() {
-// @@protoc_insertion_point(message_clear_start:pandora.group.v1.ListMyGroupsRequest)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  _impl_.player_id_ = ::uint64_t{0u};
-  _impl_._has_bits_.Clear();
-  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL ListMyGroupsRequest::_InternalSerialize(
-    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const ListMyGroupsRequest& this_ = static_cast<const ListMyGroupsRequest&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL ListMyGroupsRequest::_InternalSerialize(
-    ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const ListMyGroupsRequest& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(serialize_to_array_start:pandora.group.v1.ListMyGroupsRequest)
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
-  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
-    target =
-        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
-            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:pandora.group.v1.ListMyGroupsRequest)
-  return target;
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t ListMyGroupsRequest::ByteSizeLong(const MessageLite& base) {
-  const ListMyGroupsRequest& this_ = static_cast<const ListMyGroupsRequest&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::size_t ListMyGroupsRequest::ByteSizeLong() const {
-  const ListMyGroupsRequest& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:pandora.group.v1.ListMyGroupsRequest)
-  ::size_t total_size = 0;
-
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void)cached_has_bits;
-
-   {
-    // uint64 player_id = 1 [json_name = "playerId"];
-    cached_has_bits = this_._impl_._has_bits_[0];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
-  }
-  return this_.MaybeComputeUnknownFieldsSize(total_size,
-                                             &this_._impl_._cached_size_);
-}
-
-void ListMyGroupsRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
-                      const ::google::protobuf::MessageLite& from_msg) {
-   auto* const _this = static_cast<ListMyGroupsRequest*>(&to_msg);
-  auto& from = static_cast<const ListMyGroupsRequest&>(from_msg);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    from.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.group.v1.ListMyGroupsRequest)
-  ABSL_DCHECK_NE(&from, _this);
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_player_id() != 0) {
-      _this->_impl_.player_id_ = from._impl_.player_id_;
-    }
-  }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
-  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-}
-
-void ListMyGroupsRequest::CopyFrom(const ListMyGroupsRequest& from) {
-  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.group.v1.ListMyGroupsRequest)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
 
 
-void ListMyGroupsRequest::InternalSwap(ListMyGroupsRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
-  using ::std::swap;
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.player_id_, other->_impl_.player_id_);
-}
+
+
+
+
 
 ::google::protobuf::Metadata ListMyGroupsRequest::GetMetadata() const {
-  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
 

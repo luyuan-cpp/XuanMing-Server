@@ -49,9 +49,25 @@ type SubscribeRequest struct {
 	// session_token 是 JWT,Envoy 已通过 jwt_authn filter 校验。
 	// push 服务可冗余校验一次(用于 stream 中途 token 过期检测)。
 	SessionToken string `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
-	// last_seen_ms 用于断线重连补推:客户端记得最后收到的 PushFrame.ts_ms,
-	// 重连时传过来,server 从 redis ZSET 查 score > last_seen_ms 的离线消息补推。
-	// 首次连接传 0(不补推)。
+	// last_seen_ms = 客户端断点续传游标(2026-07-22 审计 v2):定向帧的 PushFrame.ts_ms
+	// 已被服务端重铸为**每玩家严格递增且唯一的投递游标**(Redis 单点定序;原始事件时间
+	// 由业务 payload 自带,客户端不得把 ts_ms 当事件时间)。客户端**按玩家隔离**保存收到
+	// 的最大 ts_ms(切换账号/角色必须切换游标存储,不得共用进程级单值),重连时传回,
+	// 服务端补推投递缓冲中游标严格大于 last_seen_ms 的帧。广播帧 ts_ms 恒为 0,不参与
+	// 游标推进。传 0(首连/无历史)时同样会补推缓冲窗口内的现存帧(登录→订阅窗口不漏)。
+	//
+	// 交付语义 = **at-least-once**:每帧先入投递缓冲、后实时转发、最后才 ack 上游;
+	// kafka 重投 / 存储结果不确定时,同一业务事件会以新游标再次投递——**客户端可能重复
+	// 收到同一业务事件**,业务事件必须幂等或按业务 ID 判重(chat 用 message_id;状态类
+	// 推送以最新为准天然幂等)。游标保证不漏与每玩家有序,不保证不重。缓冲窗口
+	// (默认 5min / 512 帧)外的超长离线走各业务全量拉取兜底。
+	//
+	// resync 信号(R4 gap 闭环):带游标重连时,若服务端确证 last_seen_ms 之后已有帧
+	// 被修剪/滑出保留窗(补推无法闭合),会在补推之前先下发一条合成帧
+	// topic = "pandora.push.resync"(payload 空,ts_ms=0,不推进游标)。客户端收到后
+	// 必须把增量推送视为不完整,对推送驱动的各业务域回源全量拉取权威态(邮件列表、
+	// 好友申请、公会事件等),不得只依赖后续增量。该 topic 不是 kafka topic,仅存在于
+	// Subscribe 下行。
 	LastSeenMs    int64 `protobuf:"varint,2,opt,name=last_seen_ms,json=lastSeenMs,proto3" json:"last_seen_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -111,8 +127,12 @@ type PushFrame struct {
 	// 例:topic=pandora.team.update, event_type=0 → payload=TeamUpdateEvent serialized bytes
 	// 客户端按 (topic, event_type) 选对应 message 反序列化。
 	Payload []byte `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
-	// ts_ms 是事件生产时间(业务服 produce kafka 时打的时间戳),
-	// 客户端按 ts_ms 去重(应对 kafka at-least-once 重复)。
+	// ts_ms(2026-07-22 审计 v2,语义变更):**定向帧 = 服务端投递游标**(每玩家严格
+	// 递增且唯一,Redis 定序;不是事件时间——原始事件时间由业务 payload 自带,客户端
+	// 不得用 ts_ms 做时间显示)。客户端按玩家隔离记录最大 ts_ms 作断点续传游标
+	// (SubscribeRequest.last_seen_ms)。**广播帧恒为 0**(不参与游标)。
+	// ts_ms 不能作业务去重键:kafka 重投会给同一业务事件分配新游标(at-least-once),
+	// 业务事件需幂等或按业务 ID(如 chat message_id)判重。
 	TsMs int64 `protobuf:"varint,3,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"`
 	// trace_id 跟业务 RPC 的 trace_id 同源,用于全链路排查。
 	TraceId string `protobuf:"bytes,4,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`

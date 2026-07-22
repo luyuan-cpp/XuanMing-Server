@@ -286,19 +286,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartDialogueRequest final : public
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kNpcIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint32 npc_id = 2 [json_name = "npcId"];
   void clear_npc_id() ;
   [[nodiscard]] ::uint32_t npc_id() const;
@@ -313,7 +302,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartDialogueRequest final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -342,7 +331,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartDialogueRequest final : public
         const StartDialogueRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint32_t npc_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -700,19 +688,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EndDialogueRequest final : public :
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kDialogueIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 dialogue_id = 2 [json_name = "dialogueId"];
   void clear_dialogue_id() ;
   [[nodiscard]] ::uint64_t dialogue_id() const;
@@ -727,7 +704,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EndDialogueRequest final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -756,7 +733,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EndDialogueRequest final : public :
         const EndDialogueRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t dialogue_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -1149,7 +1125,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChooseOptionRequest final : public 
   // accessors -------------------------------------------------------
   enum : int {
     kOptionIdFieldNumber = 3,
-    kPlayerIdFieldNumber = 1,
     kDialogueIdFieldNumber = 2,
   };
   // string option_id = 3 [json_name = "optionId"];
@@ -1167,16 +1142,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChooseOptionRequest final : public 
   ::std::string* PROTOBUF_NONNULL _internal_mutable_option_id();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 dialogue_id = 2 [json_name = "dialogueId"];
   void clear_dialogue_id() ;
   [[nodiscard]] ::uint64_t dialogue_id() const;
@@ -1191,7 +1156,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChooseOptionRequest final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 57,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1221,7 +1186,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChooseOptionRequest final : public 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr option_id_;
-    ::uint64_t player_id_;
     ::uint64_t dialogue_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2461,35 +2425,11 @@ inline void DialogueState::_internal_set_ended(bool value) {
 
 // StartDialogueRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void StartDialogueRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t StartDialogueRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.dialogue.v1.StartDialogueRequest.player_id)
-  return _internal_player_id();
-}
-inline void StartDialogueRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.dialogue.v1.StartDialogueRequest.player_id)
-}
-inline ::uint64_t StartDialogueRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void StartDialogueRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint32 npc_id = 2 [json_name = "npcId"];
 inline void StartDialogueRequest::clear_npc_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.npc_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint32_t StartDialogueRequest::npc_id() const {
   // @@protoc_insertion_point(field_get:pandora.dialogue.v1.StartDialogueRequest.npc_id)
@@ -2497,7 +2437,7 @@ inline ::uint32_t StartDialogueRequest::npc_id() const {
 }
 inline void StartDialogueRequest::set_npc_id(::uint32_t value) {
   _internal_set_npc_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.dialogue.v1.StartDialogueRequest.npc_id)
 }
 inline ::uint32_t StartDialogueRequest::_internal_npc_id() const {
@@ -2639,35 +2579,11 @@ inline void StartDialogueResponse::set_allocated_state(::pandora::dialogue::v1::
 
 // ChooseOptionRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void ChooseOptionRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t ChooseOptionRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.dialogue.v1.ChooseOptionRequest.player_id)
-  return _internal_player_id();
-}
-inline void ChooseOptionRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:pandora.dialogue.v1.ChooseOptionRequest.player_id)
-}
-inline ::uint64_t ChooseOptionRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void ChooseOptionRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 dialogue_id = 2 [json_name = "dialogueId"];
 inline void ChooseOptionRequest::clear_dialogue_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.dialogue_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t ChooseOptionRequest::dialogue_id() const {
   // @@protoc_insertion_point(field_get:pandora.dialogue.v1.ChooseOptionRequest.dialogue_id)
@@ -2675,7 +2591,7 @@ inline ::uint64_t ChooseOptionRequest::dialogue_id() const {
 }
 inline void ChooseOptionRequest::set_dialogue_id(::uint64_t value) {
   _internal_set_dialogue_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.dialogue.v1.ChooseOptionRequest.dialogue_id)
 }
 inline ::uint64_t ChooseOptionRequest::_internal_dialogue_id() const {
@@ -2881,35 +2797,11 @@ inline void ChooseOptionResponse::set_allocated_state(::pandora::dialogue::v1::D
 
 // EndDialogueRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void EndDialogueRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t EndDialogueRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.dialogue.v1.EndDialogueRequest.player_id)
-  return _internal_player_id();
-}
-inline void EndDialogueRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.dialogue.v1.EndDialogueRequest.player_id)
-}
-inline ::uint64_t EndDialogueRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void EndDialogueRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 dialogue_id = 2 [json_name = "dialogueId"];
 inline void EndDialogueRequest::clear_dialogue_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.dialogue_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t EndDialogueRequest::dialogue_id() const {
   // @@protoc_insertion_point(field_get:pandora.dialogue.v1.EndDialogueRequest.dialogue_id)
@@ -2917,7 +2809,7 @@ inline ::uint64_t EndDialogueRequest::dialogue_id() const {
 }
 inline void EndDialogueRequest::set_dialogue_id(::uint64_t value) {
   _internal_set_dialogue_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.dialogue.v1.EndDialogueRequest.dialogue_id)
 }
 inline ::uint64_t EndDialogueRequest::_internal_dialogue_id() const {

@@ -64,6 +64,9 @@ message BoardOptions {
   int64 max_size          = 2;  // > 0:截断只保留 Top-N(内存控制);0=不限
   bool  tie_break_by_time = 3;  // true:同分「先达到者靠前」(时间 tie-break)
   bool  ascending         = 4;  // true:升序榜(分低在前,如最快用时);默认降序(分高在前)
+  // 榜外名次区间估算的分数桶宽(直方图桶 = floor(score/width))。0=用服务端默认;
+  // 建榜后不可变(否则直方图桶宽混用)。按榜的分数量纲选:MMR 类 25~50,累计伤害类取更大值。
+  int64 estimate_bucket_width = 5;
 }
 
 // LeaderboardEntry 是客户端可见的排行项(最小视图,不含 packed / 内部字段,不变量 §14)。
@@ -124,6 +127,11 @@ message GetRankResponse {
   pandora.common.v1.ErrCode code = 1;
   bool found              = 2;
   LeaderboardEntry entry  = 3;
+  // true=entity 未进精确榜(被 max_size 截断),entry.rank 是分数直方图的区间估算值(约值),
+  // entry.updated_at_ms 恒 0。客户端展示估算名次时应做粗粒度文案(如「约 25 万名」/ 百分位),不展示假精度。
+  bool  estimated         = 4;
+  // 参与过该榜的总人数(直方图口径,含精确榜内玩家;仅 estimated=true 时填,供百分位展示 rank/total)。
+  int64 total_submitters  = 5;
 }
 
 message GetRangeRequest {

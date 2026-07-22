@@ -1,0 +1,133 @@
+// Pandora Owner Authority 协议(pandora.owner.v1,CLAUDE.md §9.22 落地,
+// docs/design/owner-authority.md,2026-07-21)。
+//
+// 职责:每玩家 owner 权威——单调 owner_epoch、owner 类型、exact DS 实例身份、
+// 稳定 operation_id、实例租约绑定、admit_not_before 迁移屏障、PENDING/ADMITTED 两阶段;
+// 全部状态处于同一线性一致事务域(生产 TiDB)。
+//
+// 边界:
+//   - 本服务不对客户端暴露(Envoy 一律 403;调用方 = login / allocator / DS 回调链等内部服务);
+//   - Login/matchmaker/allocator/DS 只能查询或提交绑定 operation_id 的命令,
+//     不得绕过本 API 直写存储(§9.22"不得各自 raw CAS");
+//   - player_locator 仍是 presence 投影,不因本服务改变职责;
+//   - 续租是**实例级**(allocator 心跳代写),不是玩家级。
+//
+// 错误语义:
+//   - ERR_OWNER_EPOCH_CONFLICT:expect_epoch 不等于当前(响应携带当前记录,调用方重查再决策);
+//   - ERR_OWNER_BARRIER_NOT_OPEN:now < admit_not_before(响应带剩余毫秒,调用方退避重试,
+//     对应 §9.23 的 WAIT 语义);
+//   - ERR_OWNER_IDENTITY_MISMATCH:operation/实例四元组与记录不一致(fail-closed);
+//   - 查询/事务失败:调用方一律按 UNKNOWN 处理并重试或 fail-closed,禁冒充 OFFLINE/空闲(§9.22)。
+
+syntax = "proto3";
+
+package pandora.owner.v1;
+
+import "pandora/common/v1/errcode.proto";
+
+service OwnerService {
+  // QueryOwner 读当前 owner 记录(无记录返回 epoch=0/none;§9.23 统一入口的 query-first 依据)。
+  rpc QueryOwner(QueryOwnerRequest) returns (QueryOwnerResponse);
+
+  // BeginTransition 发起 owner 迁移:CAS expect_epoch → epoch+1/PENDING/new target,
+  // 同事务读旧实例租约计算 admit_not_before。同 (player_id, operation_id) 幂等重放。
+  rpc BeginTransition(BeginTransitionRequest) returns (BeginTransitionResponse);
+
+  // Admit 准入提交:屏障已开 + epoch/operation/实例四元组全等 → PENDING→ADMITTED。
+  // 已 ADMITTED 幂等重放(Admission 回包丢失不再分配、不创建第二 owner)。
+  rpc Admit(AdmitRequest) returns (AdmitResponse);
+
+  // RenewInstanceLease 实例租约续期(allocator 处理 DS 业务心跳时代写;deadline 只前进,
+  // lease_seconds 服务端钳制 ≤ placement.DSFenceLeaseMaxSeconds)。
+  rpc RenewInstanceLease(RenewInstanceLeaseRequest) returns (RenewInstanceLeaseResponse);
+
+  // ReleaseOwner 显式释放(登出/终局清理):epoch+operation 匹配才置 none(epoch 保留单调);
+  // 旧 epoch 迟到调用幂等 no-op 返回当前记录(迟到 Logout 只能 compare-delete 自己)。
+  rpc ReleaseOwner(ReleaseOwnerRequest) returns (ReleaseOwnerResponse);
+}
+
+// OwnerType owner 类型。
+enum OwnerType {
+  OWNER_TYPE_NONE   = 0;  // 无 owner(未进场 / 已释放)
+  OWNER_TYPE_HUB    = 1;
+  OWNER_TYPE_BATTLE = 2;
+}
+
+// OwnerPhase 迁移阶段(§9.22:最多两阶段)。
+enum OwnerPhase {
+  OWNER_PHASE_UNSPECIFIED = 0;
+  OWNER_PHASE_PENDING     = 1;  // 已 CAS 占位,屏障可能未开;新 DS 只可预载资源
+  OWNER_PHASE_ADMITTED    = 2;  // 准入完成,该实例是玩家唯一可操作 DS
+}
+
+// OwnerTarget exact DS 实例身份(对齐 pkg/placement.Target;同名换实例不相等)。
+message OwnerTarget {
+  string pod_name       = 1;
+  string instance_uid   = 2;
+  uint32 instance_epoch = 3;
+  // assignment_id(hub)或 allocation_id(battle),按 owner_type 二选一填。
+  string assignment_or_allocation_id = 4;
+  string release_track  = 5;
+}
+
+// OwnerRecord 当前 owner 权威记录(内部服务可见;不下发客户端)。
+message OwnerRecord {
+  uint64 player_id           = 1;
+  uint64 owner_epoch         = 2;
+  OwnerType owner_type       = 3;
+  OwnerPhase phase           = 4;   // owner_type=none 时无意义
+  OwnerTarget target         = 5;
+  string operation_id        = 6;   // 本次迁移的稳定 operation(UUIDv4)
+  int64 admit_not_before_ms  = 7;   // 迁移屏障(UTC ms)
+  int64 lease_deadline_ms    = 8;   // 派生:target 实例租约截止(同事务读;无租约行 = 0)
+  int64 updated_at_ms        = 9;
+}
+
+message QueryOwnerRequest  { uint64 player_id = 1; }
+message QueryOwnerResponse {
+  pandora.common.v1.ErrCode code = 1;
+  OwnerRecord record             = 2;
+}
+
+message BeginTransitionRequest {
+  uint64 player_id     = 1;
+  uint64 expect_epoch  = 2;  // 调用方 query-first 观察到的当前 epoch(CAS 期望值)
+  string operation_id  = 3;  // UUIDv4;整条进场链稳定复用(§9.23)
+  OwnerType owner_type = 4;  // 目标类型(HUB/BATTLE;NONE 非法,释放走 ReleaseOwner)
+  OwnerTarget target   = 5;
+}
+message BeginTransitionResponse {
+  pandora.common.v1.ErrCode code = 1;
+  OwnerRecord record             = 2;  // 成功=新记录;EPOCH_CONFLICT=当前记录(供重查决策)
+}
+
+message AdmitRequest {
+  uint64 player_id    = 1;
+  uint64 owner_epoch  = 2;
+  string operation_id = 3;
+  OwnerTarget target  = 4;  // exact 四元组全等校验
+}
+message AdmitResponse {
+  pandora.common.v1.ErrCode code = 1;
+  OwnerRecord record             = 2;
+  int64 retry_after_ms           = 3;  // BARRIER_NOT_OPEN 时的剩余等待(调用方退避重试)
+}
+
+message RenewInstanceLeaseRequest {
+  OwnerTarget target   = 1;  // assignment_or_allocation_id 可空(租约是实例级)
+  uint32 lease_seconds = 2;  // 服务端钳制 ≤ DSFenceLeaseMaxSeconds
+}
+message RenewInstanceLeaseResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int64 lease_deadline_ms        = 2;  // 续期后的截止(只前进)
+}
+
+message ReleaseOwnerRequest {
+  uint64 player_id    = 1;
+  uint64 owner_epoch  = 2;
+  string operation_id = 3;
+}
+message ReleaseOwnerResponse {
+  pandora.common.v1.ErrCode code = 1;
+  OwnerRecord record             = 2;  // 释放后(或迟到 no-op 时的当前)记录
+}

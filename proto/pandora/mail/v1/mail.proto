@@ -7,7 +7,7 @@
 //
 // 通用机制:邮箱频道(channel)+ 游标。系统 / 公会只是 channel 的两个实例,
 //   核心逻辑 (channel_id, mail_id>cursor, now∈[start,end]) → 推进游标。
-// 附件领取复用 inventory ledger 幂等(player_mail_claim);附件 = item_config_id + count。
+// 附件领取复用 inventory ledger 幂等(player_mail_claim);附件形态见 MailAttachment(oneof)。
 //
 // 数据落地:pandora_social 库(sys_mail / guild_mail / player_mail /
 //   player_mail_cursor / player_mail_claim)。客户端只拿 Mail / MailAttachment 视图(§14)。
@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package pandora.mail.v1;
 
+import "pandora/bag/v1/bag.proto";
 import "pandora/common/v1/errcode.proto";
 
 service MailService {
@@ -33,6 +34,26 @@ service MailService {
   rpc SendGuildMail(SendGuildMailRequest) returns (SendGuildMailResponse);
   // SendPersonalMail 定点发个人邮件(战利品/补偿/互发,离线可达)。
   rpc SendPersonalMail(SendPersonalMailRequest) returns (SendPersonalMailResponse);
+
+  // ── DS 领取三段式(bag 域 phase 2,2026-07-22;bag-domain.md §7)──────────
+  //
+  // 玩家在线时领取由 owner DS 驱动:①GetClaimableAttachments 取稳定展开(意图落库,
+  // 重放逐字节一致)→ ②DS 预留容量 + bag.AppendJournal(op=mail_claim,幂等键=claim_key,
+  // 单条批)→ ③MarkMailClaimed 终结。恰好一次:任一步崩溃后重走 ①,journal 靠幂等键
+  // 去重、Mark 幂等,物品不重发不丢失。
+  // 两个 RPC 均为系统接口(owner DS 内网直连;带玩家 JWT 一律拒,Envoy 不暴露)。
+
+  // GetClaimableAttachments 取(或幂等重取)一封邮件的领取意图:
+  //   - 附件展开为 BagItem 列表并**持久化**(instance 形态在此一次性铸 instance_id,
+  //     重放返回同一批 ID;transfer 形态原样透传托管快照);
+  //   - 已终态领取 → already_claimed=true(items 空,DS 直接刷新 UI);
+  //   - 意图创建后本邮件的旧直连领取链(ClaimMail)被互斥拒(ERR_MAIL_CLAIM_IN_PROGRESS)。
+  rpc GetClaimableAttachments(GetClaimableAttachmentsRequest) returns (GetClaimableAttachmentsResponse);
+
+  // MarkMailClaimed 终结领取(journal 已 ACK 后调):transfer 附件消对应托管行
+  // (inventory.ConsumeTransferEscrow,资产已经 journal 入包,托管行只删不再物化)→
+  // 置 claimed 终态。幂等:已终态 no-op 成功;无意图且未领取 → ERR_INVALID_ARG。
+  rpc MarkMailClaimed(MarkMailClaimedRequest) returns (MarkMailClaimedResponse);
 }
 
 // 邮件来源频道(enum 底层 int32,不属 ID 规则,CLAUDE.md §5.7)。
@@ -51,14 +72,59 @@ enum MailStatus {
   MAIL_STATUS_CLAIMED     = 3;  // 附件已领
 }
 
-// MailAttachment 是一件附件(item_config_id 静态表 ID uint32,§5.6;count 数量)。
+// MailAttachment 是一件附件,按领取语义单选(oneof)分形态:
+//   - stack:无唯一 ID 的可堆叠物品,按 config_id+count 计数入账(inventory.GrantItems)。
+//   - instance:**铸造凭证**——发"新"的有唯一 ID 物品/装备,领取时按 count 逐件铸造独立实例
+//     (inventory.GrantInstances;实例唯一 ID = 雪花 uint64,由 inventory 领取时生成;
+//     铸出默认未鉴定,随机词条在玩家鉴定 IdentifyItem 时才掷)。
+//     战斗装备掉落背包满转邮件走此形态,保持"装备=唯一实例"不变量。
+//     ⚠️ 它只能用于"发放新物品";"既存物品换主人"必须走 transfer,误用 = 收到另一件东西。
+//   - transfer:**既存实例托管转移**(2026-07-22,bag-domain.md §7)——只改归属,
+//     实例身份与全部实例数据逐字节原样,详见 TransferAttachment 注释。
+// 演进:将来新增形态(货币等)加新分支新编号,不复用旧编号。
+// body 未设置/未识别(滚更共存窗口旧端读到新分支,§9.21)时:
+// 发送侧拒收(ERR_INVALID_ARG);领取侧整封 fail-closed 返回
+// ERR_MAIL_ATTACHMENT_UNSUPPORTED 且邮件保持未领取,禁止静默跳过或标记已领。
 message MailAttachment {
+  oneof body {
+    StackAttachment    stack    = 1;
+    InstanceAttachment instance = 2;
+    TransferAttachment transfer = 3;
+  }
+}
+
+// StackAttachment 无唯一 ID 的可堆叠物品附件(item_config_id 静态表 ID uint32,§5.6)。
+message StackAttachment {
   uint32 item_config_id = 1;
   uint32 count          = 2;
-  // as_instance=true:该附件是"装备实例"型,领取时按 count 份逐件铸造独立实例
-  //(inventory.GrantInstances,含随机词条),而非可堆叠计数(GrantItems)。
-  // 战斗装备掉落背包满转邮件用此路径,保持装备实例语义(不变量:装备=唯一实例)。
-  bool   as_instance    = 3;
+}
+
+// InstanceAttachment 有唯一 ID 的物品/装备附件(铸造凭证):领取时按 count 逐件铸造
+// 独立实例,唯一 ID(雪花 uint64)由 inventory 领取时生成,不在附件里预存。
+message InstanceAttachment {
+  uint32 item_config_id = 1;
+  uint32 count          = 2;
+}
+
+// TransferAttachment 既存实例托管转移附件(2026-07-22 拍板,bag-domain.md §7):
+// **只改归属**——实例身份(instance_id)与全部实例数据(鉴定态/词条等)逐字节原样交付,
+// 领取侧禁止重铸/重 roll/改写任何字段。对一切实例类物品通用(装备及未来带唯一 ID 的品类,
+// 机制只认 instance_id + 快照,不认品类)。
+//
+// 三不变量(2026-07-22 已接线,经济域托管闭环;bag-domain.md §7.1):
+//   1. **同一 instance 全局唯一**:创建本附件必须先经 inventory.EscrowOutInstances 从原归属
+//      同一事务扣出并托管(player_item_instance 与 mail_transfer_escrow 互斥持有),
+//      托管期间实例不存在于任何玩家背包;
+//   2. **领取 = 归属变更**:mail ClaimMail → inventory.ClaimTransferInstances 把托管行
+//      逐字节原样搬进领取人实例表(同一事务;零重铸零重 roll)。item 快照仅供展示,
+//      领取侧只认托管行(escrow 权威),伪造附件必然 fail-closed;phase 2 背包域写权威
+//      切换后本路径迁 bag 域 mail_claim journal op 透传 BagItem,托管语义不变;
+//   3. **约束**:仅允许个人邮件携带(系统/公会邮件多人可领,与单实例矛盾,发送侧拒收);
+//      未托管先发 = 领取必失败且整封保持未领取(ERR_INVENTORY_ITEM_NOT_FOUND 上抛)。
+//      发送 saga:EscrowOut → SendPersonalMail,失败补偿 ReleaseTransferEscrow 归还源玩家。
+message TransferAttachment {
+  pandora.bag.v1.BagItem item = 1;  // 实例快照(instance_id 必填,count 恒 1,每件一条附件)
+  uint64 source_player_id     = 2;  // 托管扣出来源(审计;系统托管 = 0)
 }
 
 // Mail 是客户端可见的邮件视图(CLAUDE.md §5.8 / §14)。
@@ -75,7 +141,9 @@ message Mail {
 }
 
 message ListMailRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖(R5)
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 cursor    = 2;  // 上页末个人邮件 mail_id;0=首页(含系统/公会 watermark)
   int32  limit     = 3;  // 0=服务端默认 50,>100 收敛
 }
@@ -87,7 +155,9 @@ message ListMailResponse {
 }
 
 message ReadMailRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 mail_id   = 2;
 }
 
@@ -96,7 +166,9 @@ message ReadMailResponse {
 }
 
 message ClaimMailRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 mail_id   = 2;
 }
 
@@ -106,7 +178,9 @@ message ClaimMailResponse {
 }
 
 message DeleteMailRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 mail_id   = 2;
 }
 
@@ -147,7 +221,7 @@ message SendPersonalMailRequest {
   string                  body         = 3;
   repeated MailAttachment attachments  = 4;
   int64                   expire_ms    = 5;  // 0 = 永不过期
-  // instance_grant_key 装备实例发放幂等键(可选):非空时领取 as_instance 附件走
+  // instance_grant_key 实例发放幂等键(可选):非空时领取 instance 形态附件走
   // GrantInstances 用此键去重。战斗装备掉落背包满转邮件时传与直发相同的源键
   //(battle_drop:{match}:{player}),使直发与邮件领取两条发放链共享幂等键 → 至多一次。
   string                  instance_grant_key = 6;
@@ -163,9 +237,39 @@ message MailContentStorageRecord {
   string                  title       = 1;
   string                  body        = 2;
   repeated MailAttachment attachments = 3;
-  // instance_grant_key 领取 as_instance 附件时 GrantInstances 的幂等键(空=默认 mail_inst:{mail}:{player})。
+  // instance_grant_key 领取 instance 形态附件时 GrantInstances 的幂等键(空=默认 mail_inst:{mail}:{player})。
   // 战斗装备掉落转邮件时存源键 battle_drop:{match}:{player},与直发链共享 → 至多一次。
   string                  instance_grant_key = 4;
+}
+
+// MailClaimIntentStorageRecord DS 领取意图快照(player_mail_claim.intent_payload blob;
+// phase 2 三段式领取的稳定展开:重放必须逐字节一致,bag journal 指纹去重的前提)。
+message MailClaimIntentStorageRecord {
+  repeated pandora.bag.v1.BagItem items = 1;  // 附件展开(instance 已铸 ID;transfer 原样)
+  repeated uint64 transfer_instance_ids = 2;  // transfer 形态的实例 ID(Mark 时消托管行)
+}
+
+// ── DS 领取三段式出入参(系统接口)─────────────────────────────────────
+
+message GetClaimableAttachmentsRequest {
+  uint64 player_id = 1;
+  uint64 mail_id   = 2;
+}
+
+message GetClaimableAttachmentsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated pandora.bag.v1.BagItem items = 2;  // 稳定展开(重放同内容;already_claimed 时空)
+  string claim_key               = 3;         // journal 幂等键 mail_claim:{mail}:{player}
+  bool   already_claimed         = 4;         // 已终态领取(DS 直接刷新 UI,不再 journal)
+}
+
+message MarkMailClaimedRequest {
+  uint64 player_id = 1;
+  uint64 mail_id   = 2;
+}
+
+message MarkMailClaimedResponse {
+  pandora.common.v1.ErrCode code = 1;
 }
 
 // ===== 预留:域内推送事件类型判别键(当前无 push 通道)=====

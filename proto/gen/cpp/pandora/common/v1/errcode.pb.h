@@ -144,6 +144,7 @@ enum ErrCode : int {
   ERR_INVENTORY_IDEMPOTENCY_CONFLICT = 7015,
   ERR_INVENTORY_CAPACITY_FULL = 7016,
   ERR_INVENTORY_SLOT_OCCUPIED = 7017,
+  ERR_INVENTORY_INSTANCE_BOUND = 7018,
   ERR_DIALOGUE_NOT_FOUND = 8001,
   ERR_DIALOGUE_OPTION_INVALID = 8002,
   ERR_CHAT_CHANNEL_INVALID = 9001,
@@ -179,6 +180,8 @@ enum ErrCode : int {
   ERR_MAIL_NO_ATTACHMENT = 9603,
   ERR_MAIL_ALREADY_CLAIMED = 9604,
   ERR_MAIL_BOX_FULL = 9605,
+  ERR_MAIL_ATTACHMENT_UNSUPPORTED = 9606,
+  ERR_MAIL_CLAIM_IN_PROGRESS = 9607,
   ERR_DATA_VERSION_MISMATCH = 10001,
   ERR_DATA_LOCK_TIMEOUT = 10002,
   ERR_DATA_MIGRATE = 10003,
@@ -194,6 +197,21 @@ enum ErrCode : int {
   ERR_LEADERBOARD_INVALID_BOARD = 13003,
   ERR_LEADERBOARD_SETTLE_CONFLICT = 13004,
   ERR_LEADERBOARD_REWARD_FAILED = 13005,
+  ERR_BAG_EPOCH_FENCED = 14001,
+  ERR_BAG_GENERATION_MISMATCH = 14002,
+  ERR_BAG_SEQ_CONFLICT = 14003,
+  ERR_BAG_CAPACITY_FULL = 14004,
+  ERR_BAG_QUOTA_EXCEEDED = 14005,
+  ERR_BAG_IDEMPOTENCY_CONFLICT = 14006,
+  ERR_BAG_ITEM_NOT_FOUND = 14007,
+  ERR_BAG_CHECKPOINT_STALE = 14008,
+  ERR_BAG_SECTION_NOT_ALLOWED = 14009,
+  ERR_BAG_CAPACITY_MAXED = 14010,
+  ERR_OWNER_EPOCH_CONFLICT = 15001,
+  ERR_OWNER_BARRIER_NOT_OPEN = 15002,
+  ERR_OWNER_IDENTITY_MISMATCH = 15003,
+  ERR_OWNER_LEASE_REGRESSED = 15004,
+  ERR_OWNER_INVALID_OPERATION = 15005,
   ErrCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   ErrCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -204,11 +222,11 @@ extern const uint32_t ErrCode_internal_data_[];
 inline constexpr ErrCode ErrCode_MIN =
     static_cast<ErrCode>(0);
 inline constexpr ErrCode ErrCode_MAX =
-    static_cast<ErrCode>(13005);
+    static_cast<ErrCode>(15005);
 [[nodiscard]] inline bool ErrCode_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, ErrCode_internal_data_);
 }
-inline constexpr int ErrCode_ARRAYSIZE = 13005 + 1;
+inline constexpr int ErrCode_ARRAYSIZE = 15005 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 ErrCode_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(ErrCode) {

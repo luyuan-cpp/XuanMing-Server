@@ -17,6 +17,7 @@ syntax = "proto3";
 package pandora.inventory.v1;
 
 import "pandora/common/v1/errcode.proto";
+import "pandora/bag/v1/bag.proto";
 
 service InventoryService {
   // GetInventory 读玩家背包(货币 + 道具堆叠);客户端可见结构,不下发存储字段。
@@ -94,6 +95,42 @@ service InventoryService {
   // 幂等键 = order_id,重复退还只生效一次(escrow status=closed 后再调为 no-op)。
   // 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
   rpc ReleaseEscrow(ReleaseEscrowRequest) returns (ReleaseEscrowResponse);
+
+  // ── 邮件 transfer 附件实例托管(2026-07-22,bag-domain.md §7.1 三不变量落地)──
+  //
+  // 既存装备实例"只改归属"的托管转移链(拍卖成交到账 / 玩家转赠 / 活动补发已鉴定物):
+  //   ① EscrowOutInstances:从源玩家原子扣出实例并托管(同一 MySQL 事务,托管期间实例
+  //      不存在于任何玩家背包,player_item_instance 与 mail_transfer_escrow 互斥持有);
+  //   ② 调用方(受信内部服务)把返回的 BagItem 快照装进 mail TransferAttachment 发个人邮件;
+  //   ③ mail ClaimMail → ClaimTransferInstances:托管行逐字节原样搬进领取人实例表
+  //      (同一事务;零重铸零重 roll,instance_id 与鉴定态/词条全保留);
+  //   ④ 邮件发送失败时调用方补偿 ReleaseTransferEscrow 归还源玩家(saga)。
+  // 领取侧只认托管行(escrow 权威),伪造附件(声称托管但未扣出)在 ③ 必然 fail-closed。
+  // phase 2 背包域写权威切换后,本组 RPC 的领取入包路径迁 bag journal(mail_claim op),
+  // 托管扣出/互斥持有语义不变。
+
+  // EscrowOutInstances 邮件 transfer 托管扣出(系统接口,仅后端内部直连)。
+  // 幂等键 = escrow_key(inventory_ledger uk,指纹含 instance_ids+to_player);
+  // 实例不存在/非源玩家持有 → ERR_INVENTORY_ITEM_NOT_FOUND;绑定实例 → ERR_INVENTORY_INSTANCE_BOUND。
+  // 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+  rpc EscrowOutInstances(EscrowOutInstancesRequest) returns (EscrowOutInstancesResponse);
+
+  // ClaimTransferInstances 领取托管实例(mail ClaimMail 专用;系统接口,仅后端内部直连)。
+  // 幂等键 = idempotency_key(mail 侧 mail_xfer:{mail}:{player});重放命中直接成功。
+  // 托管行缺失 / to_player 不符 / config 漂移 → ERR_INVENTORY_ITEM_NOT_FOUND(整批拒,
+  // 邮件保持未领取);领取人实例背包满 → ERR_INVENTORY_CAPACITY_FULL(重领可重试)。
+  rpc ClaimTransferInstances(ClaimTransferInstancesRequest) returns (ClaimTransferInstancesResponse);
+
+  // ReleaseTransferEscrow 托管释放回源玩家(发信 saga 失败补偿;系统接口,仅后端内部直连)。
+  // 幂等由托管行存在性承担:行已被领取/已释放 → no-op 成功(资产只落一处)。
+  // 释放不设容量闸(资产归还优先):无空闲格时以未分配格(slot NULL)入包。
+  rpc ReleaseTransferEscrow(ReleaseTransferEscrowRequest) returns (ReleaseTransferEscrowResponse);
+
+  // ConsumeTransferEscrow 消托管行不物化(bag phase 2 DS 领取链;mail.MarkMailClaimed 调):
+  // transfer 附件已经 bag journal 原样入包(bag 域),经济域托管行只删不再物化,
+  // 防"bag 域已入 + 托管行残留被释放/领取"造成实例双持。行必须 destined to 该玩家;
+  // 行缺失 = 已消费,no-op 幂等。系统接口,仅后端内部直连。
+  rpc ConsumeTransferEscrow(ConsumeTransferEscrowRequest) returns (ConsumeTransferEscrowResponse);
 }
 
 // EscrowSide 冻结方向(对齐 auction OrderSide:SELL=1 冻道具 / BUY=2 冻金币)。
@@ -322,5 +359,58 @@ message MoveInstanceRequest {
 }
 
 message MoveInstanceResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// ── 邮件 transfer 附件实例托管消息(2026-07-22)──
+
+// EscrowOutInstancesRequest 托管扣出:source_player_id 必填(>0,当前持有人);
+// to_player_id 是预期领取人(领取侧校验,防其它邮件冒领);escrow_key 是幂等键
+// (建议 = 业务源操作键,如 auction_deliver:<match_id> / gift:<order_id>)。
+message EscrowOutInstancesRequest {
+  uint64 source_player_id      = 1;
+  uint64 to_player_id          = 2;
+  repeated uint64 instance_ids = 3;  // 非空,无重复
+  string escrow_key            = 4;
+}
+
+// EscrowOutInstancesResponse items 是托管快照(BagItem:instance_id/config/鉴定态/词条,
+// count 恒 1),调用方原样装进 mail TransferAttachment.item,不得改写任何字段。
+message EscrowOutInstancesResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated pandora.bag.v1.BagItem items = 2;
+}
+
+// TransferClaimItem 领取核对项:instance_id 定位托管行,item_config_id 交叉核对
+// (与托管行不符 = 附件漂移/伪造,整批拒)。
+message TransferClaimItem {
+  uint64 instance_id    = 1;
+  uint32 item_config_id = 2;
+}
+
+message ClaimTransferInstancesRequest {
+  uint64 to_player_id             = 1;  // 领取人(须与托管行 to_player_id 一致)
+  repeated TransferClaimItem items = 2;  // 非空,无重复
+  string idempotency_key          = 3;  // mail 侧 mail_xfer:{mail}:{player}
+}
+
+message ClaimTransferInstancesResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message ReleaseTransferEscrowRequest {
+  repeated uint64 instance_ids = 1;  // 非空;逐行按托管行 source_player_id 归还
+}
+
+message ReleaseTransferEscrowResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message ConsumeTransferEscrowRequest {
+  uint64 to_player_id          = 1;  // 领取人(托管行 to_player_id 必须一致,否则整批拒)
+  repeated uint64 instance_ids = 2;  // 非空,无重复
+}
+
+message ConsumeTransferEscrowResponse {
   pandora.common.v1.ErrCode code = 1;
 }

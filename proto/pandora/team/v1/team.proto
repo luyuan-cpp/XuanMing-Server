@@ -101,7 +101,9 @@ message CreateTeamResponse {
 
 message InviteRequest {
   uint64 team_id          = 1;
-  uint64 inviter_id       = 2;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
+  // inviter_id 已删:邀请人以 JWT x-pandora-player-id 为准;字段号 2 勿复用(老客户端仍会发)。
+  reserved 2;
+  reserved "inviter_id";
   uint64 target_player_id = 3;
 }
 
@@ -113,7 +115,9 @@ message InviteResponse {
 }
 
 message AcceptInviteRequest {
-  uint64 player_id = 1;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 team_id   = 2;
   uint64 invite_id = 3;  // 可选;传入时服务端校验未过期/未取消;不传时仅校验 team_id
 }
@@ -125,7 +129,9 @@ message AcceptInviteResponse {
 
 message LeaveTeamRequest {
   uint64 team_id   = 1;
-  uint64 player_id = 2;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准;字段号 2 勿复用(老客户端仍会发)。
+  reserved 2;
+  reserved "player_id";
 }
 
 message LeaveTeamResponse {
@@ -135,7 +141,9 @@ message LeaveTeamResponse {
 
 message KickRequest {
   uint64 team_id           = 1;
-  uint64 captain_id        = 2;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
+  // captain_id 已删:队长以 JWT x-pandora-player-id 为准;字段号 2 勿复用(老客户端仍会发)。
+  reserved 2;
+  reserved "captain_id";
   uint64 target_player_id  = 3;
 }
 
@@ -146,7 +154,9 @@ message KickResponse {
 
 message SetReadyRequest {
   uint64 team_id   = 1;
-  uint64 player_id = 2;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准;字段号 2 勿复用(老客户端仍会发)。
+  reserved 2;
+  reserved "player_id";
   bool   ready     = 3;
   uint32 hero_id   = 4;  // 0=不改 hero 只切 ready 状态;≥1=设英雄并 ready(选英雄一并设置)
 }

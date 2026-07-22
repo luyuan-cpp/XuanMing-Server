@@ -102,7 +102,9 @@ message CancelMatchResponse {
 }
 
 message ConfirmMatchRequest {
-  uint64 player_id = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 match_id  = 2;
   bool   accept    = 3;  // false = 拒绝
 }

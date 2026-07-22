@@ -33,19 +33,23 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InventoryService_GetInventory_FullMethodName        = "/pandora.inventory.v1.InventoryService/GetInventory"
-	InventoryService_GrantItems_FullMethodName          = "/pandora.inventory.v1.InventoryService/GrantItems"
-	InventoryService_UseItem_FullMethodName             = "/pandora.inventory.v1.InventoryService/UseItem"
-	InventoryService_SellItem_FullMethodName            = "/pandora.inventory.v1.InventoryService/SellItem"
-	InventoryService_GrantInstances_FullMethodName      = "/pandora.inventory.v1.InventoryService/GrantInstances"
-	InventoryService_IdentifyItem_FullMethodName        = "/pandora.inventory.v1.InventoryService/IdentifyItem"
-	InventoryService_DiscardInstance_FullMethodName     = "/pandora.inventory.v1.InventoryService/DiscardInstance"
-	InventoryService_MoveInstance_FullMethodName        = "/pandora.inventory.v1.InventoryService/MoveInstance"
-	InventoryService_FreezeForOrder_FullMethodName      = "/pandora.inventory.v1.InventoryService/FreezeForOrder"
-	InventoryService_EnsureAuctionEscrow_FullMethodName = "/pandora.inventory.v1.InventoryService/EnsureAuctionEscrow"
-	InventoryService_SettleAuctionMatch_FullMethodName  = "/pandora.inventory.v1.InventoryService/SettleAuctionMatch"
-	InventoryService_SettlePlayerTrade_FullMethodName   = "/pandora.inventory.v1.InventoryService/SettlePlayerTrade"
-	InventoryService_ReleaseEscrow_FullMethodName       = "/pandora.inventory.v1.InventoryService/ReleaseEscrow"
+	InventoryService_GetInventory_FullMethodName           = "/pandora.inventory.v1.InventoryService/GetInventory"
+	InventoryService_GrantItems_FullMethodName             = "/pandora.inventory.v1.InventoryService/GrantItems"
+	InventoryService_UseItem_FullMethodName                = "/pandora.inventory.v1.InventoryService/UseItem"
+	InventoryService_SellItem_FullMethodName               = "/pandora.inventory.v1.InventoryService/SellItem"
+	InventoryService_GrantInstances_FullMethodName         = "/pandora.inventory.v1.InventoryService/GrantInstances"
+	InventoryService_IdentifyItem_FullMethodName           = "/pandora.inventory.v1.InventoryService/IdentifyItem"
+	InventoryService_DiscardInstance_FullMethodName        = "/pandora.inventory.v1.InventoryService/DiscardInstance"
+	InventoryService_MoveInstance_FullMethodName           = "/pandora.inventory.v1.InventoryService/MoveInstance"
+	InventoryService_FreezeForOrder_FullMethodName         = "/pandora.inventory.v1.InventoryService/FreezeForOrder"
+	InventoryService_EnsureAuctionEscrow_FullMethodName    = "/pandora.inventory.v1.InventoryService/EnsureAuctionEscrow"
+	InventoryService_SettleAuctionMatch_FullMethodName     = "/pandora.inventory.v1.InventoryService/SettleAuctionMatch"
+	InventoryService_SettlePlayerTrade_FullMethodName      = "/pandora.inventory.v1.InventoryService/SettlePlayerTrade"
+	InventoryService_ReleaseEscrow_FullMethodName          = "/pandora.inventory.v1.InventoryService/ReleaseEscrow"
+	InventoryService_EscrowOutInstances_FullMethodName     = "/pandora.inventory.v1.InventoryService/EscrowOutInstances"
+	InventoryService_ClaimTransferInstances_FullMethodName = "/pandora.inventory.v1.InventoryService/ClaimTransferInstances"
+	InventoryService_ReleaseTransferEscrow_FullMethodName  = "/pandora.inventory.v1.InventoryService/ReleaseTransferEscrow"
+	InventoryService_ConsumeTransferEscrow_FullMethodName  = "/pandora.inventory.v1.InventoryService/ConsumeTransferEscrow"
 )
 
 // InventoryServiceClient is the client API for InventoryService service.
@@ -119,6 +123,25 @@ type InventoryServiceClient interface {
 	// 幂等键 = order_id,重复退还只生效一次(escrow status=closed 后再调为 no-op)。
 	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
 	ReleaseEscrow(ctx context.Context, in *ReleaseEscrowRequest, opts ...grpc.CallOption) (*ReleaseEscrowResponse, error)
+	// EscrowOutInstances 邮件 transfer 托管扣出(系统接口,仅后端内部直连)。
+	// 幂等键 = escrow_key(inventory_ledger uk,指纹含 instance_ids+to_player);
+	// 实例不存在/非源玩家持有 → ERR_INVENTORY_ITEM_NOT_FOUND;绑定实例 → ERR_INVENTORY_INSTANCE_BOUND。
+	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+	EscrowOutInstances(ctx context.Context, in *EscrowOutInstancesRequest, opts ...grpc.CallOption) (*EscrowOutInstancesResponse, error)
+	// ClaimTransferInstances 领取托管实例(mail ClaimMail 专用;系统接口,仅后端内部直连)。
+	// 幂等键 = idempotency_key(mail 侧 mail_xfer:{mail}:{player});重放命中直接成功。
+	// 托管行缺失 / to_player 不符 / config 漂移 → ERR_INVENTORY_ITEM_NOT_FOUND(整批拒,
+	// 邮件保持未领取);领取人实例背包满 → ERR_INVENTORY_CAPACITY_FULL(重领可重试)。
+	ClaimTransferInstances(ctx context.Context, in *ClaimTransferInstancesRequest, opts ...grpc.CallOption) (*ClaimTransferInstancesResponse, error)
+	// ReleaseTransferEscrow 托管释放回源玩家(发信 saga 失败补偿;系统接口,仅后端内部直连)。
+	// 幂等由托管行存在性承担:行已被领取/已释放 → no-op 成功(资产只落一处)。
+	// 释放不设容量闸(资产归还优先):无空闲格时以未分配格(slot NULL)入包。
+	ReleaseTransferEscrow(ctx context.Context, in *ReleaseTransferEscrowRequest, opts ...grpc.CallOption) (*ReleaseTransferEscrowResponse, error)
+	// ConsumeTransferEscrow 消托管行不物化(bag phase 2 DS 领取链;mail.MarkMailClaimed 调):
+	// transfer 附件已经 bag journal 原样入包(bag 域),经济域托管行只删不再物化,
+	// 防"bag 域已入 + 托管行残留被释放/领取"造成实例双持。行必须 destined to 该玩家;
+	// 行缺失 = 已消费,no-op 幂等。系统接口,仅后端内部直连。
+	ConsumeTransferEscrow(ctx context.Context, in *ConsumeTransferEscrowRequest, opts ...grpc.CallOption) (*ConsumeTransferEscrowResponse, error)
 }
 
 type inventoryServiceClient struct {
@@ -259,6 +282,46 @@ func (c *inventoryServiceClient) ReleaseEscrow(ctx context.Context, in *ReleaseE
 	return out, nil
 }
 
+func (c *inventoryServiceClient) EscrowOutInstances(ctx context.Context, in *EscrowOutInstancesRequest, opts ...grpc.CallOption) (*EscrowOutInstancesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EscrowOutInstancesResponse)
+	err := c.cc.Invoke(ctx, InventoryService_EscrowOutInstances_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) ClaimTransferInstances(ctx context.Context, in *ClaimTransferInstancesRequest, opts ...grpc.CallOption) (*ClaimTransferInstancesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimTransferInstancesResponse)
+	err := c.cc.Invoke(ctx, InventoryService_ClaimTransferInstances_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) ReleaseTransferEscrow(ctx context.Context, in *ReleaseTransferEscrowRequest, opts ...grpc.CallOption) (*ReleaseTransferEscrowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseTransferEscrowResponse)
+	err := c.cc.Invoke(ctx, InventoryService_ReleaseTransferEscrow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) ConsumeTransferEscrow(ctx context.Context, in *ConsumeTransferEscrowRequest, opts ...grpc.CallOption) (*ConsumeTransferEscrowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConsumeTransferEscrowResponse)
+	err := c.cc.Invoke(ctx, InventoryService_ConsumeTransferEscrow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InventoryServiceServer is the server API for InventoryService service.
 // All implementations should embed UnimplementedInventoryServiceServer
 // for forward compatibility.
@@ -330,6 +393,25 @@ type InventoryServiceServer interface {
 	// 幂等键 = order_id,重复退还只生效一次(escrow status=closed 后再调为 no-op)。
 	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
 	ReleaseEscrow(context.Context, *ReleaseEscrowRequest) (*ReleaseEscrowResponse, error)
+	// EscrowOutInstances 邮件 transfer 托管扣出(系统接口,仅后端内部直连)。
+	// 幂等键 = escrow_key(inventory_ledger uk,指纹含 instance_ids+to_player);
+	// 实例不存在/非源玩家持有 → ERR_INVENTORY_ITEM_NOT_FOUND;绑定实例 → ERR_INVENTORY_INSTANCE_BOUND。
+	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+	EscrowOutInstances(context.Context, *EscrowOutInstancesRequest) (*EscrowOutInstancesResponse, error)
+	// ClaimTransferInstances 领取托管实例(mail ClaimMail 专用;系统接口,仅后端内部直连)。
+	// 幂等键 = idempotency_key(mail 侧 mail_xfer:{mail}:{player});重放命中直接成功。
+	// 托管行缺失 / to_player 不符 / config 漂移 → ERR_INVENTORY_ITEM_NOT_FOUND(整批拒,
+	// 邮件保持未领取);领取人实例背包满 → ERR_INVENTORY_CAPACITY_FULL(重领可重试)。
+	ClaimTransferInstances(context.Context, *ClaimTransferInstancesRequest) (*ClaimTransferInstancesResponse, error)
+	// ReleaseTransferEscrow 托管释放回源玩家(发信 saga 失败补偿;系统接口,仅后端内部直连)。
+	// 幂等由托管行存在性承担:行已被领取/已释放 → no-op 成功(资产只落一处)。
+	// 释放不设容量闸(资产归还优先):无空闲格时以未分配格(slot NULL)入包。
+	ReleaseTransferEscrow(context.Context, *ReleaseTransferEscrowRequest) (*ReleaseTransferEscrowResponse, error)
+	// ConsumeTransferEscrow 消托管行不物化(bag phase 2 DS 领取链;mail.MarkMailClaimed 调):
+	// transfer 附件已经 bag journal 原样入包(bag 域),经济域托管行只删不再物化,
+	// 防"bag 域已入 + 托管行残留被释放/领取"造成实例双持。行必须 destined to 该玩家;
+	// 行缺失 = 已消费,no-op 幂等。系统接口,仅后端内部直连。
+	ConsumeTransferEscrow(context.Context, *ConsumeTransferEscrowRequest) (*ConsumeTransferEscrowResponse, error)
 }
 
 // UnimplementedInventoryServiceServer should be embedded to have
@@ -377,6 +459,18 @@ func (UnimplementedInventoryServiceServer) SettlePlayerTrade(context.Context, *S
 }
 func (UnimplementedInventoryServiceServer) ReleaseEscrow(context.Context, *ReleaseEscrowRequest) (*ReleaseEscrowResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReleaseEscrow not implemented")
+}
+func (UnimplementedInventoryServiceServer) EscrowOutInstances(context.Context, *EscrowOutInstancesRequest) (*EscrowOutInstancesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EscrowOutInstances not implemented")
+}
+func (UnimplementedInventoryServiceServer) ClaimTransferInstances(context.Context, *ClaimTransferInstancesRequest) (*ClaimTransferInstancesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClaimTransferInstances not implemented")
+}
+func (UnimplementedInventoryServiceServer) ReleaseTransferEscrow(context.Context, *ReleaseTransferEscrowRequest) (*ReleaseTransferEscrowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReleaseTransferEscrow not implemented")
+}
+func (UnimplementedInventoryServiceServer) ConsumeTransferEscrow(context.Context, *ConsumeTransferEscrowRequest) (*ConsumeTransferEscrowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConsumeTransferEscrow not implemented")
 }
 func (UnimplementedInventoryServiceServer) testEmbeddedByValue() {}
 
@@ -632,6 +726,78 @@ func _InventoryService_ReleaseEscrow_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_EscrowOutInstances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EscrowOutInstancesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).EscrowOutInstances(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_EscrowOutInstances_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).EscrowOutInstances(ctx, req.(*EscrowOutInstancesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_ClaimTransferInstances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimTransferInstancesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).ClaimTransferInstances(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_ClaimTransferInstances_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).ClaimTransferInstances(ctx, req.(*ClaimTransferInstancesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_ReleaseTransferEscrow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseTransferEscrowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).ReleaseTransferEscrow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_ReleaseTransferEscrow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).ReleaseTransferEscrow(ctx, req.(*ReleaseTransferEscrowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_ConsumeTransferEscrow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConsumeTransferEscrowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).ConsumeTransferEscrow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_ConsumeTransferEscrow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).ConsumeTransferEscrow(ctx, req.(*ConsumeTransferEscrowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InventoryService_ServiceDesc is the grpc.ServiceDesc for InventoryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -690,6 +856,22 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReleaseEscrow",
 			Handler:    _InventoryService_ReleaseEscrow_Handler,
+		},
+		{
+			MethodName: "EscrowOutInstances",
+			Handler:    _InventoryService_EscrowOutInstances_Handler,
+		},
+		{
+			MethodName: "ClaimTransferInstances",
+			Handler:    _InventoryService_ClaimTransferInstances_Handler,
+		},
+		{
+			MethodName: "ReleaseTransferEscrow",
+			Handler:    _InventoryService_ReleaseTransferEscrow_Handler,
+		},
+		{
+			MethodName: "ConsumeTransferEscrow",
+			Handler:    _InventoryService_ConsumeTransferEscrow_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

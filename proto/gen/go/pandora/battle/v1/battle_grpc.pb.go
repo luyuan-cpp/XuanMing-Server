@@ -52,8 +52,26 @@ type BattleResultServiceClient interface {
 	//   - 服务端按 battle_progress_stream 水位去重:seq <= last_applied_seq 的事件跳过,
 	//     水位推进与 progress 出箱写入同一 MySQL 事务(at-least-once 重放零副作用)。
 	//   - 响应 acked_seq = 服务端已应用水位,DS 据此清本地缓冲。
-	//   - 对局已结算(正常 / ABANDONED)后本 RPC 一律拒(ERR_INVALID_STATE),
-	//     DS 收到不可重试错误应丢弃该批并告警,不得无限重试。
+	//
+	// 错误语义(DS 侧行为契约,与服务端 biz/progress.go 同步维护):
+	//   - ERR_UNAVAILABLE(水位竞争 / DB 瞬时)→ DS 原批重试;
+	//   - ERR_INVALID_ARG / ERR_UNAUTHORIZED(坏批 / 越权)→ DS 丢批告警,继续后续批;
+	//   - ERR_INVALID_STATE(对局已结算 / 通道关闭 / 已停流 / **服务端不认识批内事实类型**)
+	//     → DS 停流,不得无限重试。**DS 侧动作在所有 INVALID_STATE 场景一致**:停止上报、
+	//     释放未确认拾取认领走战斗背包回退——无需区分子场景;后果差异(通道从未开流 →
+	//     掉落走局后结算 vs 已开流停流 → 结算发放保持抑制)由服务端按水位行自动裁决,
+	//     不依赖 DS 行为分叉。**停流后果(2026-07-22 审计明示)**:已 ACK 部分保持有效;
+	//     本场水位>0 时结算路径掉落发放保持抑制(单一权威路径),停流之后的拾取 / 经验
+	//     **不结算兜底,本场剩余实时奖励永久丢失**,服务端以
+	//     progress_unknown_fact_stream_stopped 错误日志告警留证,并**持久化停流标记**
+	//     (后续任何批——包括只含已知事实的批——一律拒,禁止重新开流;标记写失败返回
+	//     ERR_UNAVAILABLE 原批重试,直到标记落库才给终态)。**丢失语义仅适用于已开流
+	//     (水位>0)的场**:首批即停流(零实时入账,水位=0)与通道关闭拒开流的场没有
+	//     抑制,结算路径正常发放全部产出(零双发面)。通道关闭拒开流同样持久化标记
+	//     (固化本场 legacy 结算模式,对局中途重新开启配置也不得晚开流)。该场景只该出现在
+	//     违反发布纪律时:新 DS 携带新事实类型必须先全 fleet 升级 battle_result
+	//     (Go 先行,DS 后行);旧 Go 收到未知事实按停流处理,绝不"跳过发放但推进水位"
+	//     静默丢事实,也不因丢批语义造成逐批永久丢失。
 	//
 	// DS 不可信:DS 只报事实(杀了什么怪 / 拾了什么白名单物品),经验换算与发放全在后端。
 	ReportProgress(ctx context.Context, in *ReportProgressRequest, opts ...grpc.CallOption) (*ReportProgressResponse, error)
@@ -125,8 +143,26 @@ type BattleResultServiceServer interface {
 	//   - 服务端按 battle_progress_stream 水位去重:seq <= last_applied_seq 的事件跳过,
 	//     水位推进与 progress 出箱写入同一 MySQL 事务(at-least-once 重放零副作用)。
 	//   - 响应 acked_seq = 服务端已应用水位,DS 据此清本地缓冲。
-	//   - 对局已结算(正常 / ABANDONED)后本 RPC 一律拒(ERR_INVALID_STATE),
-	//     DS 收到不可重试错误应丢弃该批并告警,不得无限重试。
+	//
+	// 错误语义(DS 侧行为契约,与服务端 biz/progress.go 同步维护):
+	//   - ERR_UNAVAILABLE(水位竞争 / DB 瞬时)→ DS 原批重试;
+	//   - ERR_INVALID_ARG / ERR_UNAUTHORIZED(坏批 / 越权)→ DS 丢批告警,继续后续批;
+	//   - ERR_INVALID_STATE(对局已结算 / 通道关闭 / 已停流 / **服务端不认识批内事实类型**)
+	//     → DS 停流,不得无限重试。**DS 侧动作在所有 INVALID_STATE 场景一致**:停止上报、
+	//     释放未确认拾取认领走战斗背包回退——无需区分子场景;后果差异(通道从未开流 →
+	//     掉落走局后结算 vs 已开流停流 → 结算发放保持抑制)由服务端按水位行自动裁决,
+	//     不依赖 DS 行为分叉。**停流后果(2026-07-22 审计明示)**:已 ACK 部分保持有效;
+	//     本场水位>0 时结算路径掉落发放保持抑制(单一权威路径),停流之后的拾取 / 经验
+	//     **不结算兜底,本场剩余实时奖励永久丢失**,服务端以
+	//     progress_unknown_fact_stream_stopped 错误日志告警留证,并**持久化停流标记**
+	//     (后续任何批——包括只含已知事实的批——一律拒,禁止重新开流;标记写失败返回
+	//     ERR_UNAVAILABLE 原批重试,直到标记落库才给终态)。**丢失语义仅适用于已开流
+	//     (水位>0)的场**:首批即停流(零实时入账,水位=0)与通道关闭拒开流的场没有
+	//     抑制,结算路径正常发放全部产出(零双发面)。通道关闭拒开流同样持久化标记
+	//     (固化本场 legacy 结算模式,对局中途重新开启配置也不得晚开流)。该场景只该出现在
+	//     违反发布纪律时:新 DS 携带新事实类型必须先全 fleet 升级 battle_result
+	//     (Go 先行,DS 后行);旧 Go 收到未知事实按停流处理,绝不"跳过发放但推进水位"
+	//     静默丢事实,也不因丢批语义造成逐批永久丢失。
 	//
 	// DS 不可信:DS 只报事实(杀了什么怪 / 拾了什么白名单物品),经验换算与发放全在后端。
 	ReportProgress(context.Context, *ReportProgressRequest) (*ReportProgressResponse, error)

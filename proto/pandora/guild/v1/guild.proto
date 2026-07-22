@@ -76,8 +76,9 @@ message GuildJoinRequest {
 }
 
 message CreateGuildRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   string name      = 2;
 }
 
@@ -87,7 +88,9 @@ message CreateGuildResponse {
 }
 
 message ApplyJoinRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 guild_id  = 2;
 }
 
@@ -97,7 +100,9 @@ message ApplyJoinResponse {
 }
 
 message ApproveJoinRequest {
-  uint64 player_id  = 1;  // 审批人(JWT ctx 覆盖),须 LEADER / OFFICER
+  // player_id 已删:审批人以 JWT ctx 为准(须 LEADER / OFFICER);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 request_id = 2;
 }
 
@@ -106,7 +111,9 @@ message ApproveJoinResponse {
 }
 
 message RejectJoinRequest {
-  uint64 player_id  = 1;  // 审批人(JWT ctx 覆盖)
+  // player_id 已删:审批人以 JWT ctx 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 request_id = 2;
 }
 
@@ -115,7 +122,9 @@ message RejectJoinResponse {
 }
 
 message LeaveGuildRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖;LEADER 退会须先转让或解散
+  // player_id 已删:身份以 JWT ctx 为准(LEADER 退会须先转让或解散);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
 }
 
 message LeaveGuildResponse {
@@ -123,7 +132,9 @@ message LeaveGuildResponse {
 }
 
 message KickMemberRequest {
-  uint64 player_id = 1;  // 操作人(JWT ctx 覆盖)
+  // player_id 已删:操作人以 JWT ctx 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 target_id = 2;  // 被踢成员
 }
 
@@ -132,7 +143,9 @@ message KickMemberResponse {
 }
 
 message DisbandGuildRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖;仅 LEADER
+  // player_id 已删:身份以 JWT ctx 为准(仅 LEADER);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
 }
 
 message DisbandGuildResponse {
@@ -140,7 +153,9 @@ message DisbandGuildResponse {
 }
 
 message TransferLeaderRequest {
-  uint64 player_id = 1;  // 现任会长(JWT ctx 覆盖)
+  // player_id 已删:现任会长以 JWT ctx 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 target_id = 2;  // 新会长(须为本公会成员)
 }
 
@@ -149,7 +164,9 @@ message TransferLeaderResponse {
 }
 
 message SetOfficerRequest {
-  uint64 player_id  = 1;  // 会长(JWT ctx 覆盖)
+  // player_id 已删:会长以 JWT ctx 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 target_id  = 2;  // 目标成员
   bool   is_officer = 3;  // true 任命 OFFICER,false 降回 MEMBER
 }
@@ -168,7 +185,9 @@ message GetGuildResponse {
 }
 
 message GetMyGuildRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖
+  // player_id 已删:身份以 JWT ctx 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
 }
 
 message GetMyGuildResponse {
@@ -189,7 +208,9 @@ message ListMembersResponse {
 }
 
 message ListJoinRequestsRequest {
-  uint64 player_id = 1;  // 会长 / 官员(JWT ctx 覆盖),查自己公会的挂起申请
+  // player_id 已删:会长 / 官员以 JWT ctx 为准,查自己公会的挂起申请;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 cursor    = 2;  // 上页末 request_id;0=首页
   int32  limit     = 3;  // 0=服务端默认 50,>100 收敛
 }

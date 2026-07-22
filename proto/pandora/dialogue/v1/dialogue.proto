@@ -37,7 +37,9 @@ message DialogueState {
 }
 
 message StartDialogueRequest {
-  uint64 player_id = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint32 npc_id    = 2;
 }
 
@@ -47,7 +49,9 @@ message StartDialogueResponse {
 }
 
 message ChooseOptionRequest {
-  uint64 player_id   = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 dialogue_id = 2;
   string option_id   = 3;
 }
@@ -58,7 +62,9 @@ message ChooseOptionResponse {
 }
 
 message EndDialogueRequest {
-  uint64 player_id   = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 dialogue_id = 2;
 }
 

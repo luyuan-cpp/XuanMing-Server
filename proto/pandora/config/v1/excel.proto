@@ -25,6 +25,10 @@ extend google.protobuf.MessageOptions {
   // 稳定性由状态文件 configtable/bitindex_state/<name>.json 保证:
   // 新 ID 追加分配、删除的 ID 保留占位永不复用,已落库位图不因改表而错位。
   bool excel_bit_index = 51506;
+
+  // excel_data_start_row 指定数据区起始 Excel 行号(1 基)。
+  // 未设置时沿用 Pandora 通用版式第 5 行；仅源表版式不同且无法调整时显式覆盖。
+  uint32 excel_data_start_row = 51510;
 }
 
 extend google.protobuf.FieldOptions {

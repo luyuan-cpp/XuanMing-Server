@@ -32,9 +32,14 @@ const (
 type OrderState int32
 
 const (
-	OrderState_ORDER_STATE_UNSPECIFIED      OrderState = 0
-	OrderState_ORDER_STATE_PENDING          OrderState = 1
-	OrderState_ORDER_STATE_BUYER_CONFIRMED  OrderState = 2
+	OrderState_ORDER_STATE_UNSPECIFIED     OrderState = 0
+	OrderState_ORDER_STATE_PENDING         OrderState = 1
+	OrderState_ORDER_STATE_BUYER_CONFIRMED OrderState = 2
+	// SELLER_CONFIRMED = 结算意图已原子落库(结算围栏,INC-20260722-001):
+	// 资产结算(不可回滚的跨服务转移)只在该状态提交成功后执行。此状态下
+	// CancelOrder / 过期一律拒(ERR_TRADE_WRONG_STATE),订单只向 COMPLETED / FAILED
+	// 收敛;结算瞬时失败或响应丢失时任一方重试 ConfirmOrder 幂等驱动收敛。
+	// 客户端把该状态渲染为"结算中",不提供取消入口。
 	OrderState_ORDER_STATE_SELLER_CONFIRMED OrderState = 3
 	OrderState_ORDER_STATE_COMPLETED        OrderState = 4
 	OrderState_ORDER_STATE_FAILED           OrderState = 5

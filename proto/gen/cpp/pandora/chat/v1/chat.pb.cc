@@ -207,11 +207,11 @@ constexpr SendMessageRequest::ParseTableT_ SendMessageRequest::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      5, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967265,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      4,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -221,19 +221,6 @@ constexpr SendMessageRequest::ParseTableT_ SendMessageRequest::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::chat::v1::SendMessageRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 sender_id = 1 [json_name = "senderId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMessageRequest, _impl_.sender_id_), 2>(),
-       {8, 2, 0,
-        PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.sender_id_)}},
-      // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SendMessageRequest, _impl_.channel_), 4>(),
-       {16, 4, 0,
-        PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.channel_)}},
-      // uint64 target_id = 3 [json_name = "targetId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMessageRequest, _impl_.target_id_), 3>(),
-       {24, 3, 0,
-        PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.target_id_)}},
       // string content = 4 [json_name = "content"];
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
@@ -242,17 +229,21 @@ constexpr SendMessageRequest::ParseTableT_ SendMessageRequest::InternalGenerateP
       {::_pbi::TcParser::FastUS1,
        {42, 1, 0,
         PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.request_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SendMessageRequest, _impl_.channel_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.channel_)}},
+      // uint64 target_id = 3 [json_name = "targetId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMessageRequest, _impl_.target_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.target_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 sender_id = 1 [json_name = "senderId"];
-      {PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.sender_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
-      {PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.channel_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.channel_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint64 target_id = 3 [json_name = "targetId"];
-      {PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.target_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.target_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string content = 4 [json_name = "content"];
       {PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.content_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string request_id = 5 [json_name = "requestId"];
@@ -260,7 +251,7 @@ constexpr SendMessageRequest::ParseTableT_ SendMessageRequest::InternalGenerateP
     }},
     // no aux_entries
     {{
-      "\42\0\0\0\7\12\0\0"
+      "\42\0\0\7\12\0\0\0"
       "pandora.chat.v1.SendMessageRequest"
       "content"
       "request_id"
@@ -279,7 +270,6 @@ inline constexpr SendMessageRequest::Impl_::Impl_(
         request_id_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        sender_id_{::uint64_t{0u}},
         target_id_{::uint64_t{0u}},
         channel_{static_cast< ::pandora::chat::v1::ChatChannel >(0)} {}
 
@@ -387,11 +377,11 @@ constexpr PullHistoryRequest::ParseTableT_ PullHistoryRequest::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      5, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967265,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      4,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -401,42 +391,33 @@ constexpr PullHistoryRequest::ParseTableT_ PullHistoryRequest::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::chat::v1::PullHistoryRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PullHistoryRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.player_id_)}},
-      // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PullHistoryRequest, _impl_.channel_), 2>(),
-       {16, 2, 0,
-        PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.channel_)}},
-      // uint64 peer_id = 3 [json_name = "peerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PullHistoryRequest, _impl_.peer_id_), 1>(),
-       {24, 1, 0,
-        PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.peer_id_)}},
       // int32 limit = 4 [json_name = "limit"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PullHistoryRequest, _impl_.limit_), 3>(),
-       {32, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PullHistoryRequest, _impl_.limit_), 2>(),
+       {32, 2, 0,
         PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.limit_)}},
       // int64 before_ms = 5 [json_name = "beforeMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PullHistoryRequest, _impl_.before_ms_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PullHistoryRequest, _impl_.before_ms_), 3>(),
+       {40, 3, 0,
         PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.before_ms_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PullHistoryRequest, _impl_.channel_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.channel_)}},
+      // uint64 peer_id = 3 [json_name = "peerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PullHistoryRequest, _impl_.peer_id_), 0>(),
+       {24, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.peer_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
-      {PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.channel_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.channel_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint64 peer_id = 3 [json_name = "peerId"];
-      {PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.peer_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.peer_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // int32 limit = 4 [json_name = "limit"];
-      {PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.limit_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      {PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.limit_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
       // int64 before_ms = 5 [json_name = "beforeMs"];
-      {PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.before_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.before_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
     {{
@@ -449,7 +430,6 @@ inline constexpr PullHistoryRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}},
         peer_id_{::uint64_t{0u}},
         channel_{static_cast< ::pandora::chat::v1::ChatChannel >(0)},
         limit_{0},
@@ -1080,15 +1060,13 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::SendMessageRequest, _impl_._has_bits_),
-        8, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::SendMessageRequest, _impl_.sender_id_),
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::SendMessageRequest, _impl_.channel_),
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::SendMessageRequest, _impl_.target_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::SendMessageRequest, _impl_.content_),
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::SendMessageRequest, _impl_.request_id_),
-        2,
-        4,
         3,
+        2,
         0,
         1,
         0x081, // bitmap
@@ -1100,17 +1078,15 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::PullHistoryRequest, _impl_._has_bits_),
-        8, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::PullHistoryRequest, _impl_.player_id_),
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::PullHistoryRequest, _impl_.channel_),
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::PullHistoryRequest, _impl_.peer_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::PullHistoryRequest, _impl_.limit_),
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::PullHistoryRequest, _impl_.before_ms_),
+        1,
         0,
         2,
-        1,
         3,
-        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::chat::v1::PullHistoryResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -1131,10 +1107,10 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::chat::v1::ChatMessage)},
         {17, sizeof(::pandora::chat::v1::SendMessageRequest)},
-        {30, sizeof(::pandora::chat::v1::SendMessageResponse)},
-        {37, sizeof(::pandora::chat::v1::PullHistoryRequest)},
-        {50, sizeof(::pandora::chat::v1::PullHistoryResponse)},
-        {57, sizeof(::pandora::chat::v1::ChatPushEvent)},
+        {28, sizeof(::pandora::chat::v1::SendMessageResponse)},
+        {35, sizeof(::pandora::chat::v1::PullHistoryRequest)},
+        {46, sizeof(::pandora::chat::v1::PullHistoryResponse)},
+        {53, sizeof(::pandora::chat::v1::ChatPushEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1155,35 +1131,34 @@ const char descriptor_table_protodef_pandora_2fchat_2fv1_2fchat_2eproto[] ABSL_A
     "hannel\030\004 \001(\0162\034.pandora.chat.v1.ChatChann"
     "elR\007channel\022\033\n\ttarget_id\030\005 \001(\004R\010targetId"
     "\022\030\n\007content\030\006 \001(\tR\007content\022 \n\014send_time_"
-    "ms\030\007 \001(\003R\nsendTimeMsJ\004\010\010\020\n\"\277\001\n\022SendMessa"
-    "geRequest\022\033\n\tsender_id\030\001 \001(\004R\010senderId\0226"
-    "\n\007channel\030\002 \001(\0162\034.pandora.chat.v1.ChatCh"
-    "annelR\007channel\022\033\n\ttarget_id\030\003 \001(\004R\010targe"
-    "tId\022\030\n\007content\030\004 \001(\tR\007content\022\035\n\nrequest"
-    "_id\030\005 \001(\tR\trequestId\"d\n\023SendMessageRespo"
-    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
-    "rCodeR\004code\022\035\n\nmessage_id\030\002 \001(\004R\tmessage"
-    "Id\"\265\001\n\022PullHistoryRequest\022\033\n\tplayer_id\030\001"
-    " \001(\004R\010playerId\0226\n\007channel\030\002 \001(\0162\034.pandor"
-    "a.chat.v1.ChatChannelR\007channel\022\027\n\007peer_i"
-    "d\030\003 \001(\004R\006peerId\022\024\n\005limit\030\004 \001(\005R\005limit\022\033\n"
-    "\tbefore_ms\030\005 \001(\003R\010beforeMs\"\177\n\023PullHistor"
-    "yResponse\022.\n\004code\030\001 \001(\0162\032.pandora.common"
-    ".v1.ErrCodeR\004code\0228\n\010messages\030\002 \003(\0132\034.pa"
-    "ndora.chat.v1.ChatMessageR\010messages\"o\n\rC"
-    "hatPushEvent\0226\n\007message\030\001 \001(\0132\034.pandora."
-    "chat.v1.ChatMessageR\007message\022 \n\014to_playe"
-    "r_id\030\002 \001(\004R\ntoPlayerIdJ\004\010\003\020\n*\275\001\n\013ChatCha"
-    "nnel\022\034\n\030CHAT_CHANNEL_UNSPECIFIED\020\000\022\026\n\022CH"
-    "AT_CHANNEL_WORLD\020\001\022\025\n\021CHAT_CHANNEL_TEAM\020"
-    "\002\022\030\n\024CHAT_CHANNEL_PRIVATE\020\003\022\027\n\023CHAT_CHAN"
-    "NEL_SYSTEM\020\004\022\026\n\022CHAT_CHANNEL_GUILD\020\005\022\026\n\022"
-    "CHAT_CHANNEL_GROUP\020\0062\301\001\n\013ChatService\022X\n\013"
-    "SendMessage\022#.pandora.chat.v1.SendMessag"
-    "eRequest\032$.pandora.chat.v1.SendMessageRe"
-    "sponse\022X\n\013PullHistory\022#.pandora.chat.v1."
-    "PullHistoryRequest\032$.pandora.chat.v1.Pul"
-    "lHistoryResponseb\006proto3"
+    "ms\030\007 \001(\003R\nsendTimeMsJ\004\010\010\020\n\"\263\001\n\022SendMessa"
+    "geRequest\0226\n\007channel\030\002 \001(\0162\034.pandora.cha"
+    "t.v1.ChatChannelR\007channel\022\033\n\ttarget_id\030\003"
+    " \001(\004R\010targetId\022\030\n\007content\030\004 \001(\tR\007content"
+    "\022\035\n\nrequest_id\030\005 \001(\tR\trequestIdJ\004\010\001\020\002R\ts"
+    "ender_id\"d\n\023SendMessageResponse\022.\n\004code\030"
+    "\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022"
+    "\035\n\nmessage_id\030\002 \001(\004R\tmessageId\"\251\001\n\022PullH"
+    "istoryRequest\0226\n\007channel\030\002 \001(\0162\034.pandora"
+    ".chat.v1.ChatChannelR\007channel\022\027\n\007peer_id"
+    "\030\003 \001(\004R\006peerId\022\024\n\005limit\030\004 \001(\005R\005limit\022\033\n\t"
+    "before_ms\030\005 \001(\003R\010beforeMsJ\004\010\001\020\002R\tplayer_"
+    "id\"\177\n\023PullHistoryResponse\022.\n\004code\030\001 \001(\0162"
+    "\032.pandora.common.v1.ErrCodeR\004code\0228\n\010mes"
+    "sages\030\002 \003(\0132\034.pandora.chat.v1.ChatMessag"
+    "eR\010messages\"o\n\rChatPushEvent\0226\n\007message\030"
+    "\001 \001(\0132\034.pandora.chat.v1.ChatMessageR\007mes"
+    "sage\022 \n\014to_player_id\030\002 \001(\004R\ntoPlayerIdJ\004"
+    "\010\003\020\n*\275\001\n\013ChatChannel\022\034\n\030CHAT_CHANNEL_UNS"
+    "PECIFIED\020\000\022\026\n\022CHAT_CHANNEL_WORLD\020\001\022\025\n\021CH"
+    "AT_CHANNEL_TEAM\020\002\022\030\n\024CHAT_CHANNEL_PRIVAT"
+    "E\020\003\022\027\n\023CHAT_CHANNEL_SYSTEM\020\004\022\026\n\022CHAT_CHA"
+    "NNEL_GUILD\020\005\022\026\n\022CHAT_CHANNEL_GROUP\020\0062\301\001\n"
+    "\013ChatService\022X\n\013SendMessage\022#.pandora.ch"
+    "at.v1.SendMessageRequest\032$.pandora.chat."
+    "v1.SendMessageResponse\022X\n\013PullHistory\022#."
+    "pandora.chat.v1.PullHistoryRequest\032$.pan"
+    "dora.chat.v1.PullHistoryResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fchat_2fv1_2fchat_2eproto_deps[1] = {
@@ -1193,7 +1168,7 @@ static ::absl::once_flag descriptor_table_pandora_2fchat_2fv1_2fchat_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fchat_2fv1_2fchat_2eproto = {
     false,
     false,
-    1464,
+    1440,
     descriptor_table_protodef_pandora_2fchat_2fv1_2fchat_2eproto,
     "pandora/chat/v1/chat.proto",
     &descriptor_table_pandora_2fchat_2fv1_2fchat_2eproto_once,
@@ -1632,11 +1607,11 @@ SendMessageRequest::SendMessageRequest(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, sender_id_),
+               offsetof(Impl_, target_id_),
            reinterpret_cast<const char*>(&from._impl_) +
-               offsetof(Impl_, sender_id_),
+               offsetof(Impl_, target_id_),
            offsetof(Impl_, channel_) -
-               offsetof(Impl_, sender_id_) +
+               offsetof(Impl_, target_id_) +
                sizeof(Impl_::channel_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.chat.v1.SendMessageRequest)
@@ -1651,10 +1626,10 @@ PROTOBUF_NDEBUG_INLINE SendMessageRequest::Impl_::Impl_(
 inline void SendMessageRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, sender_id_),
+               offsetof(Impl_, target_id_),
            0,
            offsetof(Impl_, channel_) -
-               offsetof(Impl_, sender_id_) +
+               offsetof(Impl_, target_id_) +
                sizeof(Impl_::channel_));
 }
 SendMessageRequest::~SendMessageRequest() {
@@ -1715,10 +1690,10 @@ PROTOBUF_NOINLINE void SendMessageRequest::Clear() {
       _impl_.request_id_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
-    ::memset(&_impl_.sender_id_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+    ::memset(&_impl_.target_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.channel_) -
-        reinterpret_cast<char*>(&_impl_.sender_id_)) + sizeof(_impl_.channel_));
+        reinterpret_cast<char*>(&_impl_.target_id_)) + sizeof(_impl_.channel_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1743,17 +1718,8 @@ PROTOBUF_NOINLINE void SendMessageRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 sender_id = 1 [json_name = "senderId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-    if (this_._internal_sender_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_sender_id(), target);
-    }
-  }
-
   // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_channel() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -1762,7 +1728,7 @@ PROTOBUF_NOINLINE void SendMessageRequest::Clear() {
   }
 
   // uint64 target_id = 3 [json_name = "targetId"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_target_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1815,7 +1781,7 @@ PROTOBUF_NOINLINE void SendMessageRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // string content = 4 [json_name = "content"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_content().empty()) {
@@ -1830,22 +1796,15 @@ PROTOBUF_NOINLINE void SendMessageRequest::Clear() {
                                         this_._internal_request_id());
       }
     }
-    // uint64 sender_id = 1 [json_name = "senderId"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_sender_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_sender_id());
-      }
-    }
     // uint64 target_id = 3 [json_name = "targetId"];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_target_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_target_id());
       }
     }
     // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_channel() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_channel());
@@ -1869,7 +1828,7 @@ void SendMessageRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_content().empty()) {
         _this->_internal_set_content(from._internal_content());
@@ -1889,16 +1848,11 @@ void SendMessageRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_sender_id() != 0) {
-        _this->_impl_.sender_id_ = from._impl_.sender_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_target_id() != 0) {
         _this->_impl_.target_id_ = from._impl_.target_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_channel() != 0) {
         _this->_impl_.channel_ = from._impl_.channel_;
       }
@@ -1928,9 +1882,9 @@ void SendMessageRequest::InternalSwap(SendMessageRequest* PROTOBUF_RESTRICT PROT
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.channel_)
       + sizeof(SendMessageRequest::_impl_.channel_)
-      - PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.sender_id_)>(
-          reinterpret_cast<char*>(&_impl_.sender_id_),
-          reinterpret_cast<char*>(&other->_impl_.sender_id_));
+      - PROTOBUF_FIELD_OFFSET(SendMessageRequest, _impl_.target_id_)>(
+          reinterpret_cast<char*>(&_impl_.target_id_),
+          reinterpret_cast<char*>(&other->_impl_.target_id_));
 }
 
 ::google::protobuf::Metadata SendMessageRequest::GetMetadata() const {
@@ -2194,10 +2148,10 @@ PROTOBUF_NDEBUG_INLINE PullHistoryRequest::Impl_::Impl_(
 inline void PullHistoryRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
+               offsetof(Impl_, peer_id_),
            0,
            offsetof(Impl_, before_ms_) -
-               offsetof(Impl_, player_id_) +
+               offsetof(Impl_, peer_id_) +
                sizeof(Impl_::before_ms_));
 }
 PullHistoryRequest::~PullHistoryRequest() {
@@ -2248,10 +2202,10 @@ PROTOBUF_NOINLINE void PullHistoryRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.peer_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.before_ms_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.before_ms_));
+        reinterpret_cast<char*>(&_impl_.peer_id_)) + sizeof(_impl_.before_ms_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2276,17 +2230,8 @@ PROTOBUF_NOINLINE void PullHistoryRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_channel() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -2295,7 +2240,7 @@ PROTOBUF_NOINLINE void PullHistoryRequest::Clear() {
   }
 
   // uint64 peer_id = 3 [json_name = "peerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_peer_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2304,7 +2249,7 @@ PROTOBUF_NOINLINE void PullHistoryRequest::Clear() {
   }
 
   // int32 limit = 4 [json_name = "limit"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_limit() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<4>(
@@ -2313,7 +2258,7 @@ PROTOBUF_NOINLINE void PullHistoryRequest::Clear() {
   }
 
   // int64 before_ms = 5 [json_name = "beforeMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_before_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<5>(
@@ -2346,37 +2291,30 @@ PROTOBUF_NOINLINE void PullHistoryRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    // uint64 player_id = 1 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // uint64 peer_id = 3 [json_name = "peerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_peer_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_peer_id());
       }
     }
     // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_channel() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_channel());
       }
     }
     // int32 limit = 4 [json_name = "limit"];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_limit() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_limit());
       }
     }
     // int64 before_ms = 5 [json_name = "beforeMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_before_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_before_ms());
@@ -2400,28 +2338,23 @@ void PullHistoryRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_peer_id() != 0) {
         _this->_impl_.peer_id_ = from._impl_.peer_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_channel() != 0) {
         _this->_impl_.channel_ = from._impl_.channel_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_limit() != 0) {
         _this->_impl_.limit_ = from._impl_.limit_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_before_ms() != 0) {
         _this->_impl_.before_ms_ = from._impl_.before_ms_;
       }
@@ -2447,9 +2380,9 @@ void PullHistoryRequest::InternalSwap(PullHistoryRequest* PROTOBUF_RESTRICT PROT
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.before_ms_)
       + sizeof(PullHistoryRequest::_impl_.before_ms_)
-      - PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
+      - PROTOBUF_FIELD_OFFSET(PullHistoryRequest, _impl_.peer_id_)>(
+          reinterpret_cast<char*>(&_impl_.peer_id_),
+          reinterpret_cast<char*>(&other->_impl_.peer_id_));
 }
 
 ::google::protobuf::Metadata PullHistoryRequest::GetMetadata() const {

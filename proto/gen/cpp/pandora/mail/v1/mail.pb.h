@@ -31,6 +31,7 @@
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
+#include "pandora/bag/v1/bag.pb.h"
 #include "pandora/common/v1/errcode.pb.h"
 // @@protoc_insertion_point(includes)
 
@@ -96,6 +97,30 @@ extern const ::google::protobuf::internal::ClassDataFull DeleteMailResponse_clas
 #else
 extern const DeleteMailResponseGlobalsTypeInternal DeleteMailResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetClaimableAttachmentsRequest;
+struct GetClaimableAttachmentsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetClaimableAttachmentsRequestGlobalsTypeInternal GetClaimableAttachmentsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetClaimableAttachmentsRequest_class_data_;
+#else
+extern const GetClaimableAttachmentsRequestGlobalsTypeInternal GetClaimableAttachmentsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetClaimableAttachmentsResponse;
+struct GetClaimableAttachmentsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetClaimableAttachmentsResponseGlobalsTypeInternal GetClaimableAttachmentsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetClaimableAttachmentsResponse_class_data_;
+#else
+extern const GetClaimableAttachmentsResponseGlobalsTypeInternal GetClaimableAttachmentsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class InstanceAttachment;
+struct InstanceAttachmentGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern InstanceAttachmentGlobalsTypeInternal InstanceAttachment_globals_;
+extern const ::google::protobuf::internal::ClassDataFull InstanceAttachment_class_data_;
+#else
+extern const InstanceAttachmentGlobalsTypeInternal InstanceAttachment_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class ListMailRequest;
 struct ListMailRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -128,6 +153,14 @@ extern const ::google::protobuf::internal::ClassDataFull MailAttachment_class_da
 #else
 extern const MailAttachmentGlobalsTypeInternal MailAttachment_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class MailClaimIntentStorageRecord;
+struct MailClaimIntentStorageRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MailClaimIntentStorageRecordGlobalsTypeInternal MailClaimIntentStorageRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MailClaimIntentStorageRecord_class_data_;
+#else
+extern const MailClaimIntentStorageRecordGlobalsTypeInternal MailClaimIntentStorageRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class MailContentStorageRecord;
 struct MailContentStorageRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -135,6 +168,22 @@ extern MailContentStorageRecordGlobalsTypeInternal MailContentStorageRecord_glob
 extern const ::google::protobuf::internal::ClassDataFull MailContentStorageRecord_class_data_;
 #else
 extern const MailContentStorageRecordGlobalsTypeInternal MailContentStorageRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class MarkMailClaimedRequest;
+struct MarkMailClaimedRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MarkMailClaimedRequestGlobalsTypeInternal MarkMailClaimedRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MarkMailClaimedRequest_class_data_;
+#else
+extern const MarkMailClaimedRequestGlobalsTypeInternal MarkMailClaimedRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class MarkMailClaimedResponse;
+struct MarkMailClaimedResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MarkMailClaimedResponseGlobalsTypeInternal MarkMailClaimedResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MarkMailClaimedResponse_class_data_;
+#else
+extern const MarkMailClaimedResponseGlobalsTypeInternal MarkMailClaimedResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class ReadMailRequest;
 struct ReadMailRequestGlobalsTypeInternal;
@@ -199,6 +248,22 @@ extern SendSystemMailResponseGlobalsTypeInternal SendSystemMailResponse_globals_
 extern const ::google::protobuf::internal::ClassDataFull SendSystemMailResponse_class_data_;
 #else
 extern const SendSystemMailResponseGlobalsTypeInternal SendSystemMailResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class StackAttachment;
+struct StackAttachmentGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern StackAttachmentGlobalsTypeInternal StackAttachment_globals_;
+extern const ::google::protobuf::internal::ClassDataFull StackAttachment_class_data_;
+#else
+extern const StackAttachmentGlobalsTypeInternal StackAttachment_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TransferAttachment;
+struct TransferAttachmentGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TransferAttachmentGlobalsTypeInternal TransferAttachment_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TransferAttachment_class_data_;
+#else
+extern const TransferAttachmentGlobalsTypeInternal TransferAttachment_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }  // namespace v1
 }  // namespace mail
@@ -351,6 +416,219 @@ using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StackAttachment final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.mail.v1.StackAttachment) */ {
+ public:
+  inline StackAttachment() : StackAttachment(nullptr) {}
+  ~StackAttachment() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(StackAttachment* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StackAttachment));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr StackAttachment(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline StackAttachment(const StackAttachment& from) : StackAttachment(nullptr, from) {}
+  inline StackAttachment(StackAttachment&& from) noexcept : StackAttachment(nullptr, ::std::move(from)) {}
+  inline StackAttachment& operator=(const StackAttachment& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StackAttachment& operator=(StackAttachment&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const StackAttachment& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StackAttachment>(&StackAttachment_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(StackAttachment& a, StackAttachment& b) { a.Swap(&b); }
+  inline void Swap(StackAttachment* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StackAttachment* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] StackAttachment* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<StackAttachment>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const StackAttachment& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const StackAttachment& from) { StackAttachment::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(StackAttachment* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.StackAttachment"; }
+
+  explicit StackAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StackAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StackAttachment& from);
+  StackAttachment(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StackAttachment&& from) noexcept
+      : StackAttachment(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemConfigIdFieldNumber = 1,
+    kCountFieldNumber = 2,
+  };
+  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+  void clear_item_config_id() ;
+  [[nodiscard]] ::uint32_t item_config_id() const;
+  void set_item_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_config_id() const;
+  void _internal_set_item_config_id(::uint32_t value);
+
+  public:
+  // uint32 count = 2 [json_name = "count"];
+  void clear_count() ;
+  [[nodiscard]] ::uint32_t count() const;
+  void set_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_count() const;
+  void _internal_set_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.mail.v1.StackAttachment)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const StackAttachment& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t item_config_id_;
+    ::uint32_t count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmail_2fv1_2fmail_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendSystemMailResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.mail.v1.SendSystemMailResponse) */ {
  public:
@@ -407,7 +685,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendSystemMailResponse final : publ
   [[nodiscard]] static const SendSystemMailResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SendSystemMailResponse>(&SendSystemMailResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(SendSystemMailResponse& a, SendSystemMailResponse& b) { a.Swap(&b); }
   inline void Swap(SendSystemMailResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -620,7 +898,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendPersonalMailResponse final : pu
   [[nodiscard]] static const SendPersonalMailResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SendPersonalMailResponse>(&SendPersonalMailResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(SendPersonalMailResponse& a, SendPersonalMailResponse& b) { a.Swap(&b); }
   inline void Swap(SendPersonalMailResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -833,7 +1111,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendGuildMailResponse final : publi
   [[nodiscard]] static const SendGuildMailResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SendGuildMailResponse>(&SendGuildMailResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(SendGuildMailResponse& a, SendGuildMailResponse& b) { a.Swap(&b); }
   inline void Swap(SendGuildMailResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1046,7 +1324,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReadMailResponse final : public ::g
   [[nodiscard]] static const ReadMailResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReadMailResponse>(&ReadMailResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(ReadMailResponse& a, ReadMailResponse& b) { a.Swap(&b); }
   inline void Swap(ReadMailResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1247,7 +1525,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReadMailRequest final : public ::go
   [[nodiscard]] static const ReadMailRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReadMailRequest>(&ReadMailRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(ReadMailRequest& a, ReadMailRequest& b) { a.Swap(&b); }
   inline void Swap(ReadMailRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1339,19 +1617,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReadMailRequest final : public ::go
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kMailIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 mail_id = 2 [json_name = "mailId"];
   void clear_mail_id() ;
   [[nodiscard]] ::uint64_t mail_id() const;
@@ -1366,7 +1633,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReadMailRequest final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1395,7 +1662,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReadMailRequest final : public ::go
         const ReadMailRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t mail_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -1404,31 +1670,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReadMailRequest final : public ::go
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:pandora.mail.v1.MailAttachment) */ {
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MarkMailClaimedResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.mail.v1.MarkMailClaimedResponse) */ {
  public:
-  inline MailAttachment() : MailAttachment(nullptr) {}
-  ~MailAttachment() PROTOBUF_FINAL;
+  inline MarkMailClaimedResponse() : MarkMailClaimedResponse(nullptr) {}
+  ~MarkMailClaimedResponse() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(MailAttachment* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(MarkMailClaimedResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(MailAttachment));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MarkMailClaimedResponse));
   }
 #endif
 
   template <typename = void>
-  explicit constexpr MailAttachment(::google::protobuf::internal::ConstantInitialized,
+  explicit constexpr MarkMailClaimedResponse(::google::protobuf::internal::ConstantInitialized,
                            const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
                                class_data);
 
-  inline MailAttachment(const MailAttachment& from) : MailAttachment(nullptr, from) {}
-  inline MailAttachment(MailAttachment&& from) noexcept : MailAttachment(nullptr, ::std::move(from)) {}
-  inline MailAttachment& operator=(const MailAttachment& from) {
+  inline MarkMailClaimedResponse(const MarkMailClaimedResponse& from) : MarkMailClaimedResponse(nullptr, from) {}
+  inline MarkMailClaimedResponse(MarkMailClaimedResponse&& from) noexcept : MarkMailClaimedResponse(nullptr, ::std::move(from)) {}
+  inline MarkMailClaimedResponse& operator=(const MarkMailClaimedResponse& from) {
     CopyFrom(from);
     return *this;
   }
-  inline MailAttachment& operator=(MailAttachment&& from) noexcept {
+  inline MarkMailClaimedResponse& operator=(MarkMailClaimedResponse&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -1457,12 +1723,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::goo
   [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  [[nodiscard]] static const MailAttachment& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MailAttachment>(&MailAttachment_globals_);
+  [[nodiscard]] static const MarkMailClaimedResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MarkMailClaimedResponse>(&MarkMailClaimedResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 0;
-  friend void swap(MailAttachment& a, MailAttachment& b) { a.Swap(&b); }
-  inline void Swap(MailAttachment* PROTOBUF_NONNULL other) {
+  static constexpr int kIndexInFileMessages = 24;
+  friend void swap(MarkMailClaimedResponse& a, MarkMailClaimedResponse& b) { a.Swap(&b); }
+  inline void Swap(MarkMailClaimedResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -1470,7 +1736,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::goo
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(MailAttachment* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(MarkMailClaimedResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -1478,14 +1744,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::goo
 
   // implements Message ----------------------------------------------
 
-  [[nodiscard]] MailAttachment* PROTOBUF_NONNULL
+  [[nodiscard]] MarkMailClaimedResponse* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<MailAttachment>(arena);
+    return ::google::protobuf::Message::DefaultConstruct<MarkMailClaimedResponse>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const MailAttachment& from);
+  void CopyFrom(const MarkMailClaimedResponse& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const MailAttachment& from) { MailAttachment::MergeImpl(*this, from); }
+  void MergeFrom(const MarkMailClaimedResponse& from) { MarkMailClaimedResponse::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -1523,17 +1789,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::goo
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(MailAttachment* PROTOBUF_NONNULL other);
+  void InternalSwap(MarkMailClaimedResponse* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.MailAttachment"; }
+  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.MarkMailClaimedResponse"; }
 
-  explicit MailAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  MailAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MailAttachment& from);
-  MailAttachment(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MailAttachment&& from) noexcept
-      : MailAttachment(arena) {
+  explicit MarkMailClaimedResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MarkMailClaimedResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MarkMailClaimedResponse& from);
+  MarkMailClaimedResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MarkMailClaimedResponse&& from) noexcept
+      : MarkMailClaimedResponse(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -1552,45 +1818,23 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::goo
 
   // accessors -------------------------------------------------------
   enum : int {
-    kItemConfigIdFieldNumber = 1,
-    kCountFieldNumber = 2,
-    kAsInstanceFieldNumber = 3,
+    kCodeFieldNumber = 1,
   };
-  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
-  void clear_item_config_id() ;
-  [[nodiscard]] ::uint32_t item_config_id() const;
-  void set_item_config_id(::uint32_t value);
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
 
   private:
-  ::uint32_t _internal_item_config_id() const;
-  void _internal_set_item_config_id(::uint32_t value);
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
 
   public:
-  // uint32 count = 2 [json_name = "count"];
-  void clear_count() ;
-  [[nodiscard]] ::uint32_t count() const;
-  void set_count(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_count() const;
-  void _internal_set_count(::uint32_t value);
-
-  public:
-  // bool as_instance = 3 [json_name = "asInstance"];
-  void clear_as_instance() ;
-  [[nodiscard]] bool as_instance() const;
-  void set_as_instance(bool value);
-
-  private:
-  bool _internal_as_instance() const;
-  void _internal_set_as_instance(bool value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:pandora.mail.v1.MailAttachment)
+  // @@protoc_insertion_point(class_scope:pandora.mail.v1.MarkMailClaimedResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1616,12 +1860,223 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::goo
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const MailAttachment& from_msg);
+        const MarkMailClaimedResponse& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint32_t item_config_id_;
-    ::uint32_t count_;
-    bool as_instance_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmail_2fv1_2fmail_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MarkMailClaimedRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.mail.v1.MarkMailClaimedRequest) */ {
+ public:
+  inline MarkMailClaimedRequest() : MarkMailClaimedRequest(nullptr) {}
+  ~MarkMailClaimedRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MarkMailClaimedRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MarkMailClaimedRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MarkMailClaimedRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MarkMailClaimedRequest(const MarkMailClaimedRequest& from) : MarkMailClaimedRequest(nullptr, from) {}
+  inline MarkMailClaimedRequest(MarkMailClaimedRequest&& from) noexcept : MarkMailClaimedRequest(nullptr, ::std::move(from)) {}
+  inline MarkMailClaimedRequest& operator=(const MarkMailClaimedRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MarkMailClaimedRequest& operator=(MarkMailClaimedRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MarkMailClaimedRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MarkMailClaimedRequest>(&MarkMailClaimedRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 23;
+  friend void swap(MarkMailClaimedRequest& a, MarkMailClaimedRequest& b) { a.Swap(&b); }
+  inline void Swap(MarkMailClaimedRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MarkMailClaimedRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MarkMailClaimedRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MarkMailClaimedRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MarkMailClaimedRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MarkMailClaimedRequest& from) { MarkMailClaimedRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MarkMailClaimedRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.MarkMailClaimedRequest"; }
+
+  explicit MarkMailClaimedRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MarkMailClaimedRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MarkMailClaimedRequest& from);
+  MarkMailClaimedRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MarkMailClaimedRequest&& from) noexcept
+      : MarkMailClaimedRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+    kMailIdFieldNumber = 2,
+  };
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 mail_id = 2 [json_name = "mailId"];
+  void clear_mail_id() ;
+  [[nodiscard]] ::uint64_t mail_id() const;
+  void set_mail_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_mail_id() const;
+  void _internal_set_mail_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.mail.v1.MarkMailClaimedRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MarkMailClaimedRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    ::uint64_t mail_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1685,7 +2140,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMailRequest final : public ::go
   [[nodiscard]] static const ListMailRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListMailRequest>(&ListMailRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(ListMailRequest& a, ListMailRequest& b) { a.Swap(&b); }
   inline void Swap(ListMailRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1777,20 +2232,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMailRequest final : public ::go
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kCursorFieldNumber = 2,
     kLimitFieldNumber = 3,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 cursor = 2 [json_name = "cursor"];
   void clear_cursor() ;
   [[nodiscard]] ::uint64_t cursor() const;
@@ -1815,7 +2259,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMailRequest final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1844,9 +2288,434 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMailRequest final : public ::go
         const ListMailRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t cursor_;
     ::int32_t limit_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmail_2fv1_2fmail_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InstanceAttachment final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.mail.v1.InstanceAttachment) */ {
+ public:
+  inline InstanceAttachment() : InstanceAttachment(nullptr) {}
+  ~InstanceAttachment() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(InstanceAttachment* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(InstanceAttachment));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr InstanceAttachment(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline InstanceAttachment(const InstanceAttachment& from) : InstanceAttachment(nullptr, from) {}
+  inline InstanceAttachment(InstanceAttachment&& from) noexcept : InstanceAttachment(nullptr, ::std::move(from)) {}
+  inline InstanceAttachment& operator=(const InstanceAttachment& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline InstanceAttachment& operator=(InstanceAttachment&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const InstanceAttachment& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<InstanceAttachment>(&InstanceAttachment_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(InstanceAttachment& a, InstanceAttachment& b) { a.Swap(&b); }
+  inline void Swap(InstanceAttachment* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(InstanceAttachment* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] InstanceAttachment* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<InstanceAttachment>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const InstanceAttachment& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const InstanceAttachment& from) { InstanceAttachment::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(InstanceAttachment* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.InstanceAttachment"; }
+
+  explicit InstanceAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  InstanceAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const InstanceAttachment& from);
+  InstanceAttachment(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, InstanceAttachment&& from) noexcept
+      : InstanceAttachment(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemConfigIdFieldNumber = 1,
+    kCountFieldNumber = 2,
+  };
+  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+  void clear_item_config_id() ;
+  [[nodiscard]] ::uint32_t item_config_id() const;
+  void set_item_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_config_id() const;
+  void _internal_set_item_config_id(::uint32_t value);
+
+  public:
+  // uint32 count = 2 [json_name = "count"];
+  void clear_count() ;
+  [[nodiscard]] ::uint32_t count() const;
+  void set_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_count() const;
+  void _internal_set_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.mail.v1.InstanceAttachment)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const InstanceAttachment& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t item_config_id_;
+    ::uint32_t count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmail_2fv1_2fmail_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetClaimableAttachmentsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.mail.v1.GetClaimableAttachmentsRequest) */ {
+ public:
+  inline GetClaimableAttachmentsRequest() : GetClaimableAttachmentsRequest(nullptr) {}
+  ~GetClaimableAttachmentsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetClaimableAttachmentsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetClaimableAttachmentsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetClaimableAttachmentsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetClaimableAttachmentsRequest(const GetClaimableAttachmentsRequest& from) : GetClaimableAttachmentsRequest(nullptr, from) {}
+  inline GetClaimableAttachmentsRequest(GetClaimableAttachmentsRequest&& from) noexcept : GetClaimableAttachmentsRequest(nullptr, ::std::move(from)) {}
+  inline GetClaimableAttachmentsRequest& operator=(const GetClaimableAttachmentsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetClaimableAttachmentsRequest& operator=(GetClaimableAttachmentsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetClaimableAttachmentsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetClaimableAttachmentsRequest>(&GetClaimableAttachmentsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(GetClaimableAttachmentsRequest& a, GetClaimableAttachmentsRequest& b) { a.Swap(&b); }
+  inline void Swap(GetClaimableAttachmentsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetClaimableAttachmentsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetClaimableAttachmentsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetClaimableAttachmentsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetClaimableAttachmentsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetClaimableAttachmentsRequest& from) { GetClaimableAttachmentsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetClaimableAttachmentsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.GetClaimableAttachmentsRequest"; }
+
+  explicit GetClaimableAttachmentsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetClaimableAttachmentsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetClaimableAttachmentsRequest& from);
+  GetClaimableAttachmentsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetClaimableAttachmentsRequest&& from) noexcept
+      : GetClaimableAttachmentsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+    kMailIdFieldNumber = 2,
+  };
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 mail_id = 2 [json_name = "mailId"];
+  void clear_mail_id() ;
+  [[nodiscard]] ::uint64_t mail_id() const;
+  void set_mail_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_mail_id() const;
+  void _internal_set_mail_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.mail.v1.GetClaimableAttachmentsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetClaimableAttachmentsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    ::uint64_t mail_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1910,7 +2779,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteMailResponse final : public :
   [[nodiscard]] static const DeleteMailResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteMailResponse>(&DeleteMailResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(DeleteMailResponse& a, DeleteMailResponse& b) { a.Swap(&b); }
   inline void Swap(DeleteMailResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2111,7 +2980,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteMailRequest final : public ::
   [[nodiscard]] static const DeleteMailRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteMailRequest>(&DeleteMailRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(DeleteMailRequest& a, DeleteMailRequest& b) { a.Swap(&b); }
   inline void Swap(DeleteMailRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2203,19 +3072,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteMailRequest final : public ::
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kMailIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 mail_id = 2 [json_name = "mailId"];
   void clear_mail_id() ;
   [[nodiscard]] ::uint64_t mail_id() const;
@@ -2230,7 +3088,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteMailRequest final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2259,7 +3117,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteMailRequest final : public ::
         const DeleteMailRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t mail_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2324,7 +3181,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimMailRequest final : public ::g
   [[nodiscard]] static const ClaimMailRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimMailRequest>(&ClaimMailRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(ClaimMailRequest& a, ClaimMailRequest& b) { a.Swap(&b); }
   inline void Swap(ClaimMailRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2416,19 +3273,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimMailRequest final : public ::g
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kMailIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 mail_id = 2 [json_name = "mailId"];
   void clear_mail_id() ;
   [[nodiscard]] ::uint64_t mail_id() const;
@@ -2443,7 +3289,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimMailRequest final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2472,8 +3318,986 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimMailRequest final : public ::g
         const ClaimMailRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t mail_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmail_2fv1_2fmail_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferAttachment final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.mail.v1.TransferAttachment) */ {
+ public:
+  inline TransferAttachment() : TransferAttachment(nullptr) {}
+  ~TransferAttachment() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TransferAttachment* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TransferAttachment));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TransferAttachment(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TransferAttachment(const TransferAttachment& from) : TransferAttachment(nullptr, from) {}
+  inline TransferAttachment(TransferAttachment&& from) noexcept : TransferAttachment(nullptr, ::std::move(from)) {}
+  inline TransferAttachment& operator=(const TransferAttachment& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TransferAttachment& operator=(TransferAttachment&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TransferAttachment& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TransferAttachment>(&TransferAttachment_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 3;
+  friend void swap(TransferAttachment& a, TransferAttachment& b) { a.Swap(&b); }
+  inline void Swap(TransferAttachment* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TransferAttachment* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TransferAttachment* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TransferAttachment>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TransferAttachment& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TransferAttachment& from) { TransferAttachment::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TransferAttachment* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.TransferAttachment"; }
+
+  explicit TransferAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TransferAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TransferAttachment& from);
+  TransferAttachment(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TransferAttachment&& from) noexcept
+      : TransferAttachment(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemFieldNumber = 1,
+    kSourcePlayerIdFieldNumber = 2,
+  };
+  // .pandora.bag.v1.BagItem item = 1 [json_name = "item"];
+  [[nodiscard]] bool has_item()
+      const;
+  void clear_item() ;
+  [[nodiscard]] const ::pandora::bag::v1::BagItem& item() const;
+  [[nodiscard]] ::pandora::bag::v1::BagItem* PROTOBUF_NULLABLE release_item();
+  ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL mutable_item();
+  void set_allocated_item(::pandora::bag::v1::BagItem* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_item(::pandora::bag::v1::BagItem* PROTOBUF_NULLABLE value);
+  ::pandora::bag::v1::BagItem* PROTOBUF_NULLABLE unsafe_arena_release_item();
+
+  private:
+  const ::pandora::bag::v1::BagItem& _internal_item() const;
+  ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL _internal_mutable_item();
+
+  public:
+  // uint64 source_player_id = 2 [json_name = "sourcePlayerId"];
+  void clear_source_player_id() ;
+  [[nodiscard]] ::uint64_t source_player_id() const;
+  void set_source_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_player_id() const;
+  void _internal_set_source_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.mail.v1.TransferAttachment)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TransferAttachment& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::bag::v1::BagItem* PROTOBUF_NULLABLE item_;
+    ::uint64_t source_player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmail_2fv1_2fmail_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailClaimIntentStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.mail.v1.MailClaimIntentStorageRecord) */ {
+ public:
+  inline MailClaimIntentStorageRecord() : MailClaimIntentStorageRecord(nullptr) {}
+  ~MailClaimIntentStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MailClaimIntentStorageRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MailClaimIntentStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MailClaimIntentStorageRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MailClaimIntentStorageRecord(const MailClaimIntentStorageRecord& from) : MailClaimIntentStorageRecord(nullptr, from) {}
+  inline MailClaimIntentStorageRecord(MailClaimIntentStorageRecord&& from) noexcept : MailClaimIntentStorageRecord(nullptr, ::std::move(from)) {}
+  inline MailClaimIntentStorageRecord& operator=(const MailClaimIntentStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MailClaimIntentStorageRecord& operator=(MailClaimIntentStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MailClaimIntentStorageRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MailClaimIntentStorageRecord>(&MailClaimIntentStorageRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 20;
+  friend void swap(MailClaimIntentStorageRecord& a, MailClaimIntentStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(MailClaimIntentStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MailClaimIntentStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MailClaimIntentStorageRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MailClaimIntentStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MailClaimIntentStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MailClaimIntentStorageRecord& from) { MailClaimIntentStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MailClaimIntentStorageRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.MailClaimIntentStorageRecord"; }
+
+  explicit MailClaimIntentStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MailClaimIntentStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MailClaimIntentStorageRecord& from);
+  MailClaimIntentStorageRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MailClaimIntentStorageRecord&& from) noexcept
+      : MailClaimIntentStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemsFieldNumber = 1,
+    kTransferInstanceIdsFieldNumber = 2,
+  };
+  // repeated .pandora.bag.v1.BagItem items = 1 [json_name = "items"];
+  [[nodiscard]] int items_size()
+      const;
+  private:
+  int _internal_items_size() const;
+
+  public:
+  void clear_items() ;
+  [[nodiscard]] const ::pandora::bag::v1::BagItem& items(int index) const;
+  [[nodiscard]] ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL mutable_items(int index);
+  ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL add_items();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>&
+  items() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL
+  mutable_items();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>& _internal_items() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL _internal_mutable_items();
+
+  public:
+  // repeated uint64 transfer_instance_ids = 2 [json_name = "transferInstanceIds"];
+  [[nodiscard]] int transfer_instance_ids_size()
+      const;
+  private:
+  int _internal_transfer_instance_ids_size() const;
+
+  public:
+  void clear_transfer_instance_ids() ;
+  [[nodiscard]] ::uint64_t transfer_instance_ids(int index) const;
+  void set_transfer_instance_ids(int index, ::uint64_t value);
+  void add_transfer_instance_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& transfer_instance_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_transfer_instance_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_transfer_instance_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_transfer_instance_ids();
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.mail.v1.MailClaimIntentStorageRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MailClaimIntentStorageRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::bag::v1::BagItem > items_;
+    ::google::protobuf::RepeatedField<::uint64_t> transfer_instance_ids_;
+    ::google::protobuf::internal::CachedSize _transfer_instance_ids_cached_byte_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmail_2fv1_2fmail_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetClaimableAttachmentsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.mail.v1.GetClaimableAttachmentsResponse) */ {
+ public:
+  inline GetClaimableAttachmentsResponse() : GetClaimableAttachmentsResponse(nullptr) {}
+  ~GetClaimableAttachmentsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetClaimableAttachmentsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetClaimableAttachmentsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetClaimableAttachmentsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetClaimableAttachmentsResponse(const GetClaimableAttachmentsResponse& from) : GetClaimableAttachmentsResponse(nullptr, from) {}
+  inline GetClaimableAttachmentsResponse(GetClaimableAttachmentsResponse&& from) noexcept : GetClaimableAttachmentsResponse(nullptr, ::std::move(from)) {}
+  inline GetClaimableAttachmentsResponse& operator=(const GetClaimableAttachmentsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetClaimableAttachmentsResponse& operator=(GetClaimableAttachmentsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetClaimableAttachmentsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetClaimableAttachmentsResponse>(&GetClaimableAttachmentsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 22;
+  friend void swap(GetClaimableAttachmentsResponse& a, GetClaimableAttachmentsResponse& b) { a.Swap(&b); }
+  inline void Swap(GetClaimableAttachmentsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetClaimableAttachmentsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetClaimableAttachmentsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetClaimableAttachmentsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetClaimableAttachmentsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetClaimableAttachmentsResponse& from) { GetClaimableAttachmentsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetClaimableAttachmentsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.GetClaimableAttachmentsResponse"; }
+
+  explicit GetClaimableAttachmentsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetClaimableAttachmentsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetClaimableAttachmentsResponse& from);
+  GetClaimableAttachmentsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetClaimableAttachmentsResponse&& from) noexcept
+      : GetClaimableAttachmentsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemsFieldNumber = 2,
+    kClaimKeyFieldNumber = 3,
+    kCodeFieldNumber = 1,
+    kAlreadyClaimedFieldNumber = 4,
+  };
+  // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+  [[nodiscard]] int items_size()
+      const;
+  private:
+  int _internal_items_size() const;
+
+  public:
+  void clear_items() ;
+  [[nodiscard]] const ::pandora::bag::v1::BagItem& items(int index) const;
+  [[nodiscard]] ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL mutable_items(int index);
+  ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL add_items();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>&
+  items() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL
+  mutable_items();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>& _internal_items() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL _internal_mutable_items();
+
+  public:
+  // string claim_key = 3 [json_name = "claimKey"];
+  void clear_claim_key() ;
+  [[nodiscard]] const ::std::string& claim_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_claim_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_claim_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_claim_key();
+  void set_allocated_claim_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_claim_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_claim_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_claim_key();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // bool already_claimed = 4 [json_name = "alreadyClaimed"];
+  void clear_already_claimed() ;
+  [[nodiscard]] bool already_claimed() const;
+  void set_already_claimed(bool value);
+
+  private:
+  bool _internal_already_claimed() const;
+  void _internal_set_already_claimed(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.mail.v1.GetClaimableAttachmentsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          1, 65,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetClaimableAttachmentsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::bag::v1::BagItem > items_;
+    ::google::protobuf::internal::ArenaStringPtr claim_key_;
+    int code_;
+    bool already_claimed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmail_2fv1_2fmail_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.mail.v1.MailAttachment) */ {
+ public:
+  inline MailAttachment() : MailAttachment(nullptr) {}
+  ~MailAttachment() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MailAttachment* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MailAttachment));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MailAttachment(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MailAttachment(const MailAttachment& from) : MailAttachment(nullptr, from) {}
+  inline MailAttachment(MailAttachment&& from) noexcept : MailAttachment(nullptr, ::std::move(from)) {}
+  inline MailAttachment& operator=(const MailAttachment& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MailAttachment& operator=(MailAttachment&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MailAttachment& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MailAttachment>(&MailAttachment_globals_);
+  }
+  enum BodyCase {
+    kStack = 1,
+    kInstance = 2,
+    kTransfer = 3,
+    BODY_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 0;
+  friend void swap(MailAttachment& a, MailAttachment& b) { a.Swap(&b); }
+  inline void Swap(MailAttachment* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MailAttachment* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MailAttachment* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MailAttachment>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MailAttachment& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MailAttachment& from) { MailAttachment::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MailAttachment* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.mail.v1.MailAttachment"; }
+
+  explicit MailAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MailAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MailAttachment& from);
+  MailAttachment(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MailAttachment&& from) noexcept
+      : MailAttachment(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kStackFieldNumber = 1,
+    kInstanceFieldNumber = 2,
+    kTransferFieldNumber = 3,
+  };
+  // .pandora.mail.v1.StackAttachment stack = 1 [json_name = "stack"];
+  [[nodiscard]] bool has_stack()
+      const;
+  private:
+  bool _internal_has_stack() const;
+
+  public:
+  void clear_stack() ;
+  [[nodiscard]] const ::pandora::mail::v1::StackAttachment& stack() const;
+  [[nodiscard]] ::pandora::mail::v1::StackAttachment* PROTOBUF_NULLABLE release_stack();
+  ::pandora::mail::v1::StackAttachment* PROTOBUF_NONNULL mutable_stack();
+  void set_allocated_stack(::pandora::mail::v1::StackAttachment* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_stack(::pandora::mail::v1::StackAttachment* PROTOBUF_NULLABLE value);
+  ::pandora::mail::v1::StackAttachment* PROTOBUF_NULLABLE unsafe_arena_release_stack();
+
+  private:
+  const ::pandora::mail::v1::StackAttachment& _internal_stack() const;
+  ::pandora::mail::v1::StackAttachment* PROTOBUF_NONNULL _internal_mutable_stack();
+
+  public:
+  // .pandora.mail.v1.InstanceAttachment instance = 2 [json_name = "instance"];
+  [[nodiscard]] bool has_instance()
+      const;
+  private:
+  bool _internal_has_instance() const;
+
+  public:
+  void clear_instance() ;
+  [[nodiscard]] const ::pandora::mail::v1::InstanceAttachment& instance() const;
+  [[nodiscard]] ::pandora::mail::v1::InstanceAttachment* PROTOBUF_NULLABLE release_instance();
+  ::pandora::mail::v1::InstanceAttachment* PROTOBUF_NONNULL mutable_instance();
+  void set_allocated_instance(::pandora::mail::v1::InstanceAttachment* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_instance(::pandora::mail::v1::InstanceAttachment* PROTOBUF_NULLABLE value);
+  ::pandora::mail::v1::InstanceAttachment* PROTOBUF_NULLABLE unsafe_arena_release_instance();
+
+  private:
+  const ::pandora::mail::v1::InstanceAttachment& _internal_instance() const;
+  ::pandora::mail::v1::InstanceAttachment* PROTOBUF_NONNULL _internal_mutable_instance();
+
+  public:
+  // .pandora.mail.v1.TransferAttachment transfer = 3 [json_name = "transfer"];
+  [[nodiscard]] bool has_transfer()
+      const;
+  private:
+  bool _internal_has_transfer() const;
+
+  public:
+  void clear_transfer() ;
+  [[nodiscard]] const ::pandora::mail::v1::TransferAttachment& transfer() const;
+  [[nodiscard]] ::pandora::mail::v1::TransferAttachment* PROTOBUF_NULLABLE release_transfer();
+  ::pandora::mail::v1::TransferAttachment* PROTOBUF_NONNULL mutable_transfer();
+  void set_allocated_transfer(::pandora::mail::v1::TransferAttachment* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_transfer(::pandora::mail::v1::TransferAttachment* PROTOBUF_NULLABLE value);
+  ::pandora::mail::v1::TransferAttachment* PROTOBUF_NULLABLE unsafe_arena_release_transfer();
+
+  private:
+  const ::pandora::mail::v1::TransferAttachment& _internal_transfer() const;
+  ::pandora::mail::v1::TransferAttachment* PROTOBUF_NONNULL _internal_mutable_transfer();
+
+  public:
+  void clear_body();
+  BodyCase body_case() const;
+  // @@protoc_insertion_point(class_scope:pandora.mail.v1.MailAttachment)
+ private:
+  class _Internal;
+  void set_has_stack();
+  void set_has_instance();
+  void set_has_transfer();
+  [[nodiscard]] inline bool has_body() const;
+  inline void clear_has_body();
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 3,
+                          3, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MailAttachment& from_msg);
+    union BodyUnion {
+      constexpr BodyUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE stack_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE instance_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE transfer_;
+    } body_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2537,7 +4361,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendSystemMailRequest final : publi
   [[nodiscard]] static const SendSystemMailRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SendSystemMailRequest>(&SendSystemMailRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(SendSystemMailRequest& a, SendSystemMailRequest& b) { a.Swap(&b); }
   inline void Swap(SendSystemMailRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2807,7 +4631,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendPersonalMailRequest final : pub
   [[nodiscard]] static const SendPersonalMailRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SendPersonalMailRequest>(&SendPersonalMailRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(SendPersonalMailRequest& a, SendPersonalMailRequest& b) { a.Swap(&b); }
   inline void Swap(SendPersonalMailRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3094,7 +4918,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendGuildMailRequest final : public
   [[nodiscard]] static const SendGuildMailRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SendGuildMailRequest>(&SendGuildMailRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(SendGuildMailRequest& a, SendGuildMailRequest& b) { a.Swap(&b); }
   inline void Swap(SendGuildMailRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3376,7 +5200,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailContentStorageRecord final : pu
   [[nodiscard]] static const MailContentStorageRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MailContentStorageRecord>(&MailContentStorageRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(MailContentStorageRecord& a, MailContentStorageRecord& b) { a.Swap(&b); }
   inline void Swap(MailContentStorageRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3639,7 +5463,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Mail final : public ::google::proto
   [[nodiscard]] static const Mail& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<Mail>(&Mail_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(Mail& a, Mail& b) { a.Swap(&b); }
   inline void Swap(Mail* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3957,7 +5781,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimMailResponse final : public ::
   [[nodiscard]] static const ClaimMailResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimMailResponse>(&ClaimMailResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(ClaimMailResponse& a, ClaimMailResponse& b) { a.Swap(&b); }
   inline void Swap(ClaimMailResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4181,7 +6005,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMailResponse final : public ::g
   [[nodiscard]] static const ListMailResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListMailResponse>(&ListMailResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(ListMailResponse& a, ListMailResponse& b) { a.Swap(&b); }
   inline void Swap(ListMailResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4376,76 +6200,484 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMailResponse final : public ::g
 
 // MailAttachment
 
+// .pandora.mail.v1.StackAttachment stack = 1 [json_name = "stack"];
+inline bool MailAttachment::has_stack() const {
+  return body_case() == kStack;
+}
+inline bool MailAttachment::_internal_has_stack() const {
+  return body_case() == kStack;
+}
+inline void MailAttachment::set_has_stack() {
+  _impl_._oneof_case_[0] = kStack;
+}
+inline void MailAttachment::clear_stack() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (body_case() == kStack) {
+    if (GetArena() == nullptr) {
+      delete _impl_.body_.stack_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.body_.stack_);
+    }
+    clear_has_body();
+  }
+}
+inline ::pandora::mail::v1::StackAttachment* PROTOBUF_NULLABLE MailAttachment::release_stack() {
+  // @@protoc_insertion_point(field_release:pandora.mail.v1.MailAttachment.stack)
+  if (body_case() == kStack) {
+    clear_has_body();
+    auto* temp = reinterpret_cast<::pandora::mail::v1::StackAttachment*>(_impl_.body_.stack_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.stack_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::pandora::mail::v1::StackAttachment& MailAttachment::_internal_stack() const {
+  return body_case() == kStack ? static_cast<const ::pandora::mail::v1::StackAttachment&>(*reinterpret_cast<::pandora::mail::v1::StackAttachment*>(_impl_.body_.stack_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::mail::v1::StackAttachment>(&::pandora::mail::v1::StackAttachment_globals_);
+}
+inline const ::pandora::mail::v1::StackAttachment& MailAttachment::stack() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailAttachment.stack)
+  return _internal_stack();
+}
+inline ::pandora::mail::v1::StackAttachment* PROTOBUF_NULLABLE MailAttachment::unsafe_arena_release_stack() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:pandora.mail.v1.MailAttachment.stack)
+  if (body_case() == kStack) {
+    clear_has_body();
+    auto* temp = reinterpret_cast<::pandora::mail::v1::StackAttachment*>(_impl_.body_.stack_);
+    _impl_.body_.stack_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void MailAttachment::unsafe_arena_set_allocated_stack(
+    ::pandora::mail::v1::StackAttachment* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_body();
+  if (value) {
+    set_has_stack();
+    _impl_.body_.stack_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.mail.v1.MailAttachment.stack)
+}
+inline ::pandora::mail::v1::StackAttachment* PROTOBUF_NONNULL MailAttachment::_internal_mutable_stack() {
+  if (body_case() != kStack) {
+    clear_body();
+    set_has_stack();
+    _impl_.body_.stack_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::pandora::mail::v1::StackAttachment>(GetArena()));
+  }
+  return reinterpret_cast<::pandora::mail::v1::StackAttachment*>(_impl_.body_.stack_);
+}
+inline ::pandora::mail::v1::StackAttachment* PROTOBUF_NONNULL MailAttachment::mutable_stack()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::pandora::mail::v1::StackAttachment* _msg = _internal_mutable_stack();
+  // @@protoc_insertion_point(field_mutable:pandora.mail.v1.MailAttachment.stack)
+  return _msg;
+}
+
+// .pandora.mail.v1.InstanceAttachment instance = 2 [json_name = "instance"];
+inline bool MailAttachment::has_instance() const {
+  return body_case() == kInstance;
+}
+inline bool MailAttachment::_internal_has_instance() const {
+  return body_case() == kInstance;
+}
+inline void MailAttachment::set_has_instance() {
+  _impl_._oneof_case_[0] = kInstance;
+}
+inline void MailAttachment::clear_instance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (body_case() == kInstance) {
+    if (GetArena() == nullptr) {
+      delete _impl_.body_.instance_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.body_.instance_);
+    }
+    clear_has_body();
+  }
+}
+inline ::pandora::mail::v1::InstanceAttachment* PROTOBUF_NULLABLE MailAttachment::release_instance() {
+  // @@protoc_insertion_point(field_release:pandora.mail.v1.MailAttachment.instance)
+  if (body_case() == kInstance) {
+    clear_has_body();
+    auto* temp = reinterpret_cast<::pandora::mail::v1::InstanceAttachment*>(_impl_.body_.instance_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.instance_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::pandora::mail::v1::InstanceAttachment& MailAttachment::_internal_instance() const {
+  return body_case() == kInstance ? static_cast<const ::pandora::mail::v1::InstanceAttachment&>(*reinterpret_cast<::pandora::mail::v1::InstanceAttachment*>(_impl_.body_.instance_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::mail::v1::InstanceAttachment>(&::pandora::mail::v1::InstanceAttachment_globals_);
+}
+inline const ::pandora::mail::v1::InstanceAttachment& MailAttachment::instance() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailAttachment.instance)
+  return _internal_instance();
+}
+inline ::pandora::mail::v1::InstanceAttachment* PROTOBUF_NULLABLE MailAttachment::unsafe_arena_release_instance() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:pandora.mail.v1.MailAttachment.instance)
+  if (body_case() == kInstance) {
+    clear_has_body();
+    auto* temp = reinterpret_cast<::pandora::mail::v1::InstanceAttachment*>(_impl_.body_.instance_);
+    _impl_.body_.instance_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void MailAttachment::unsafe_arena_set_allocated_instance(
+    ::pandora::mail::v1::InstanceAttachment* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_body();
+  if (value) {
+    set_has_instance();
+    _impl_.body_.instance_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.mail.v1.MailAttachment.instance)
+}
+inline ::pandora::mail::v1::InstanceAttachment* PROTOBUF_NONNULL MailAttachment::_internal_mutable_instance() {
+  if (body_case() != kInstance) {
+    clear_body();
+    set_has_instance();
+    _impl_.body_.instance_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::pandora::mail::v1::InstanceAttachment>(GetArena()));
+  }
+  return reinterpret_cast<::pandora::mail::v1::InstanceAttachment*>(_impl_.body_.instance_);
+}
+inline ::pandora::mail::v1::InstanceAttachment* PROTOBUF_NONNULL MailAttachment::mutable_instance()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::pandora::mail::v1::InstanceAttachment* _msg = _internal_mutable_instance();
+  // @@protoc_insertion_point(field_mutable:pandora.mail.v1.MailAttachment.instance)
+  return _msg;
+}
+
+// .pandora.mail.v1.TransferAttachment transfer = 3 [json_name = "transfer"];
+inline bool MailAttachment::has_transfer() const {
+  return body_case() == kTransfer;
+}
+inline bool MailAttachment::_internal_has_transfer() const {
+  return body_case() == kTransfer;
+}
+inline void MailAttachment::set_has_transfer() {
+  _impl_._oneof_case_[0] = kTransfer;
+}
+inline void MailAttachment::clear_transfer() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (body_case() == kTransfer) {
+    if (GetArena() == nullptr) {
+      delete _impl_.body_.transfer_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.body_.transfer_);
+    }
+    clear_has_body();
+  }
+}
+inline ::pandora::mail::v1::TransferAttachment* PROTOBUF_NULLABLE MailAttachment::release_transfer() {
+  // @@protoc_insertion_point(field_release:pandora.mail.v1.MailAttachment.transfer)
+  if (body_case() == kTransfer) {
+    clear_has_body();
+    auto* temp = reinterpret_cast<::pandora::mail::v1::TransferAttachment*>(_impl_.body_.transfer_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.transfer_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::pandora::mail::v1::TransferAttachment& MailAttachment::_internal_transfer() const {
+  return body_case() == kTransfer ? static_cast<const ::pandora::mail::v1::TransferAttachment&>(*reinterpret_cast<::pandora::mail::v1::TransferAttachment*>(_impl_.body_.transfer_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::mail::v1::TransferAttachment>(&::pandora::mail::v1::TransferAttachment_globals_);
+}
+inline const ::pandora::mail::v1::TransferAttachment& MailAttachment::transfer() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailAttachment.transfer)
+  return _internal_transfer();
+}
+inline ::pandora::mail::v1::TransferAttachment* PROTOBUF_NULLABLE MailAttachment::unsafe_arena_release_transfer() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:pandora.mail.v1.MailAttachment.transfer)
+  if (body_case() == kTransfer) {
+    clear_has_body();
+    auto* temp = reinterpret_cast<::pandora::mail::v1::TransferAttachment*>(_impl_.body_.transfer_);
+    _impl_.body_.transfer_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void MailAttachment::unsafe_arena_set_allocated_transfer(
+    ::pandora::mail::v1::TransferAttachment* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_body();
+  if (value) {
+    set_has_transfer();
+    _impl_.body_.transfer_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.mail.v1.MailAttachment.transfer)
+}
+inline ::pandora::mail::v1::TransferAttachment* PROTOBUF_NONNULL MailAttachment::_internal_mutable_transfer() {
+  if (body_case() != kTransfer) {
+    clear_body();
+    set_has_transfer();
+    _impl_.body_.transfer_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::pandora::mail::v1::TransferAttachment>(GetArena()));
+  }
+  return reinterpret_cast<::pandora::mail::v1::TransferAttachment*>(_impl_.body_.transfer_);
+}
+inline ::pandora::mail::v1::TransferAttachment* PROTOBUF_NONNULL MailAttachment::mutable_transfer()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::pandora::mail::v1::TransferAttachment* _msg = _internal_mutable_transfer();
+  // @@protoc_insertion_point(field_mutable:pandora.mail.v1.MailAttachment.transfer)
+  return _msg;
+}
+
+inline bool MailAttachment::has_body() const {
+  return body_case() != BODY_NOT_SET;
+}
+inline void MailAttachment::clear_has_body() {
+  _impl_._oneof_case_[0] = BODY_NOT_SET;
+}
+inline MailAttachment::BodyCase MailAttachment::body_case() const {
+  return MailAttachment::BodyCase(_impl_._oneof_case_[0]);
+}
+// -------------------------------------------------------------------
+
+// StackAttachment
+
 // uint32 item_config_id = 1 [json_name = "itemConfigId"];
-inline void MailAttachment::clear_item_config_id() {
+inline void StackAttachment::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = 0u;
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
-inline ::uint32_t MailAttachment::item_config_id() const {
-  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailAttachment.item_config_id)
+inline ::uint32_t StackAttachment::item_config_id() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.StackAttachment.item_config_id)
   return _internal_item_config_id();
 }
-inline void MailAttachment::set_item_config_id(::uint32_t value) {
+inline void StackAttachment::set_item_config_id(::uint32_t value) {
   _internal_set_item_config_id(value);
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.mail.v1.MailAttachment.item_config_id)
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.StackAttachment.item_config_id)
 }
-inline ::uint32_t MailAttachment::_internal_item_config_id() const {
+inline ::uint32_t StackAttachment::_internal_item_config_id() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.item_config_id_;
 }
-inline void MailAttachment::_internal_set_item_config_id(::uint32_t value) {
+inline void StackAttachment::_internal_set_item_config_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = value;
 }
 
 // uint32 count = 2 [json_name = "count"];
-inline void MailAttachment::clear_count() {
+inline void StackAttachment::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = 0u;
   ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
-inline ::uint32_t MailAttachment::count() const {
-  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailAttachment.count)
+inline ::uint32_t StackAttachment::count() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.StackAttachment.count)
   return _internal_count();
 }
-inline void MailAttachment::set_count(::uint32_t value) {
+inline void StackAttachment::set_count(::uint32_t value) {
   _internal_set_count(value);
   SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:pandora.mail.v1.MailAttachment.count)
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.StackAttachment.count)
 }
-inline ::uint32_t MailAttachment::_internal_count() const {
+inline ::uint32_t StackAttachment::_internal_count() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.count_;
 }
-inline void MailAttachment::_internal_set_count(::uint32_t value) {
+inline void StackAttachment::_internal_set_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = value;
 }
 
-// bool as_instance = 3 [json_name = "asInstance"];
-inline void MailAttachment::clear_as_instance() {
+// -------------------------------------------------------------------
+
+// InstanceAttachment
+
+// uint32 item_config_id = 1 [json_name = "itemConfigId"];
+inline void InstanceAttachment::clear_item_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.as_instance_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.item_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
-inline bool MailAttachment::as_instance() const {
-  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailAttachment.as_instance)
-  return _internal_as_instance();
+inline ::uint32_t InstanceAttachment::item_config_id() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.InstanceAttachment.item_config_id)
+  return _internal_item_config_id();
 }
-inline void MailAttachment::set_as_instance(bool value) {
-  _internal_set_as_instance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:pandora.mail.v1.MailAttachment.as_instance)
+inline void InstanceAttachment::set_item_config_id(::uint32_t value) {
+  _internal_set_item_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.InstanceAttachment.item_config_id)
 }
-inline bool MailAttachment::_internal_as_instance() const {
+inline ::uint32_t InstanceAttachment::_internal_item_config_id() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.as_instance_;
+  return _impl_.item_config_id_;
 }
-inline void MailAttachment::_internal_set_as_instance(bool value) {
+inline void InstanceAttachment::_internal_set_item_config_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.as_instance_ = value;
+  _impl_.item_config_id_ = value;
+}
+
+// uint32 count = 2 [json_name = "count"];
+inline void InstanceAttachment::clear_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t InstanceAttachment::count() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.InstanceAttachment.count)
+  return _internal_count();
+}
+inline void InstanceAttachment::set_count(::uint32_t value) {
+  _internal_set_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.InstanceAttachment.count)
+}
+inline ::uint32_t InstanceAttachment::_internal_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.count_;
+}
+inline void InstanceAttachment::_internal_set_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// TransferAttachment
+
+// .pandora.bag.v1.BagItem item = 1 [json_name = "item"];
+inline bool TransferAttachment::has_item() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.item_ != nullptr);
+  return value;
+}
+inline const ::pandora::bag::v1::BagItem& TransferAttachment::_internal_item() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::bag::v1::BagItem* p = _impl_.item_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::bag::v1::BagItem>(&::pandora::bag::v1::BagItem_globals_);
+}
+inline const ::pandora::bag::v1::BagItem& TransferAttachment::item() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.TransferAttachment.item)
+  return _internal_item();
+}
+inline void TransferAttachment::unsafe_arena_set_allocated_item(
+    ::pandora::bag::v1::BagItem* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.item_);
+  }
+  _impl_.item_ = reinterpret_cast<::pandora::bag::v1::BagItem*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.mail.v1.TransferAttachment.item)
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NULLABLE TransferAttachment::release_item() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::bag::v1::BagItem* released = _impl_.item_;
+  _impl_.item_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NULLABLE TransferAttachment::unsafe_arena_release_item() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.mail.v1.TransferAttachment.item)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::bag::v1::BagItem* temp = _impl_.item_;
+  _impl_.item_ = nullptr;
+  return temp;
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL TransferAttachment::_internal_mutable_item() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.item_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::bag::v1::BagItem>(GetArena());
+    _impl_.item_ = reinterpret_cast<::pandora::bag::v1::BagItem*>(p);
+  }
+  return _impl_.item_;
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL TransferAttachment::mutable_item()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::bag::v1::BagItem* _msg = _internal_mutable_item();
+  // @@protoc_insertion_point(field_mutable:pandora.mail.v1.TransferAttachment.item)
+  return _msg;
+}
+inline void TransferAttachment::set_allocated_item(::pandora::bag::v1::BagItem* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.item_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.item_ = reinterpret_cast<::pandora::bag::v1::BagItem*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.mail.v1.TransferAttachment.item)
+}
+
+// uint64 source_player_id = 2 [json_name = "sourcePlayerId"];
+inline void TransferAttachment::clear_source_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t TransferAttachment::source_player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.TransferAttachment.source_player_id)
+  return _internal_source_player_id();
+}
+inline void TransferAttachment::set_source_player_id(::uint64_t value) {
+  _internal_set_source_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.TransferAttachment.source_player_id)
+}
+inline ::uint64_t TransferAttachment::_internal_source_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_player_id_;
+}
+inline void TransferAttachment::_internal_set_source_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_player_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4783,35 +7015,11 @@ inline void Mail::_internal_set_expire_ms(::int64_t value) {
 
 // ListMailRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void ListMailRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t ListMailRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.mail.v1.ListMailRequest.player_id)
-  return _internal_player_id();
-}
-inline void ListMailRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.mail.v1.ListMailRequest.player_id)
-}
-inline ::uint64_t ListMailRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void ListMailRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 cursor = 2 [json_name = "cursor"];
 inline void ListMailRequest::clear_cursor() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cursor_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t ListMailRequest::cursor() const {
   // @@protoc_insertion_point(field_get:pandora.mail.v1.ListMailRequest.cursor)
@@ -4819,7 +7027,7 @@ inline ::uint64_t ListMailRequest::cursor() const {
 }
 inline void ListMailRequest::set_cursor(::uint64_t value) {
   _internal_set_cursor(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.mail.v1.ListMailRequest.cursor)
 }
 inline ::uint64_t ListMailRequest::_internal_cursor() const {
@@ -4835,7 +7043,7 @@ inline void ListMailRequest::_internal_set_cursor(::uint64_t value) {
 inline void ListMailRequest::clear_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.limit_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::int32_t ListMailRequest::limit() const {
   // @@protoc_insertion_point(field_get:pandora.mail.v1.ListMailRequest.limit)
@@ -4843,7 +7051,7 @@ inline ::int32_t ListMailRequest::limit() const {
 }
 inline void ListMailRequest::set_limit(::int32_t value) {
   _internal_set_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.mail.v1.ListMailRequest.limit)
 }
 inline ::int32_t ListMailRequest::_internal_limit() const {
@@ -4966,35 +7174,11 @@ inline void ListMailResponse::_internal_set_next_cursor(::uint64_t value) {
 
 // ReadMailRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void ReadMailRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t ReadMailRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.mail.v1.ReadMailRequest.player_id)
-  return _internal_player_id();
-}
-inline void ReadMailRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.mail.v1.ReadMailRequest.player_id)
-}
-inline ::uint64_t ReadMailRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void ReadMailRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 mail_id = 2 [json_name = "mailId"];
 inline void ReadMailRequest::clear_mail_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mail_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t ReadMailRequest::mail_id() const {
   // @@protoc_insertion_point(field_get:pandora.mail.v1.ReadMailRequest.mail_id)
@@ -5002,7 +7186,7 @@ inline ::uint64_t ReadMailRequest::mail_id() const {
 }
 inline void ReadMailRequest::set_mail_id(::uint64_t value) {
   _internal_set_mail_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.mail.v1.ReadMailRequest.mail_id)
 }
 inline ::uint64_t ReadMailRequest::_internal_mail_id() const {
@@ -5046,35 +7230,11 @@ inline void ReadMailResponse::_internal_set_code(::pandora::common::v1::ErrCode 
 
 // ClaimMailRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void ClaimMailRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t ClaimMailRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.mail.v1.ClaimMailRequest.player_id)
-  return _internal_player_id();
-}
-inline void ClaimMailRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.mail.v1.ClaimMailRequest.player_id)
-}
-inline ::uint64_t ClaimMailRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void ClaimMailRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 mail_id = 2 [json_name = "mailId"];
 inline void ClaimMailRequest::clear_mail_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mail_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t ClaimMailRequest::mail_id() const {
   // @@protoc_insertion_point(field_get:pandora.mail.v1.ClaimMailRequest.mail_id)
@@ -5082,7 +7242,7 @@ inline ::uint64_t ClaimMailRequest::mail_id() const {
 }
 inline void ClaimMailRequest::set_mail_id(::uint64_t value) {
   _internal_set_mail_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.mail.v1.ClaimMailRequest.mail_id)
 }
 inline ::uint64_t ClaimMailRequest::_internal_mail_id() const {
@@ -5181,35 +7341,11 @@ ClaimMailResponse::_internal_mutable_attachments() {
 
 // DeleteMailRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void DeleteMailRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t DeleteMailRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.mail.v1.DeleteMailRequest.player_id)
-  return _internal_player_id();
-}
-inline void DeleteMailRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.mail.v1.DeleteMailRequest.player_id)
-}
-inline ::uint64_t DeleteMailRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void DeleteMailRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 mail_id = 2 [json_name = "mailId"];
 inline void DeleteMailRequest::clear_mail_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mail_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t DeleteMailRequest::mail_id() const {
   // @@protoc_insertion_point(field_get:pandora.mail.v1.DeleteMailRequest.mail_id)
@@ -5217,7 +7353,7 @@ inline ::uint64_t DeleteMailRequest::mail_id() const {
 }
 inline void DeleteMailRequest::set_mail_id(::uint64_t value) {
   _internal_set_mail_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.mail.v1.DeleteMailRequest.mail_id)
 }
 inline ::uint64_t DeleteMailRequest::_internal_mail_id() const {
@@ -6455,6 +8591,409 @@ inline void MailContentStorageRecord::set_allocated_instance_grant_key(::std::st
     _impl_.instance_grant_key_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.mail.v1.MailContentStorageRecord.instance_grant_key)
+}
+
+// -------------------------------------------------------------------
+
+// MailClaimIntentStorageRecord
+
+// repeated .pandora.bag.v1.BagItem items = 1 [json_name = "items"];
+inline int MailClaimIntentStorageRecord::_internal_items_size() const {
+  return _internal_items().size();
+}
+inline int MailClaimIntentStorageRecord::items_size() const {
+  return _internal_items_size();
+}
+inline const ::pandora::bag::v1::BagItem& MailClaimIntentStorageRecord::items(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailClaimIntentStorageRecord.items)
+  return _internal_items().Get(index);
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL MailClaimIntentStorageRecord::mutable_items(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.mail.v1.MailClaimIntentStorageRecord.items)
+  return _internal_mutable_items()->Mutable(index);
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL MailClaimIntentStorageRecord::add_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::bag::v1::BagItem* _add =
+      _internal_mutable_items()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.mail.v1.MailClaimIntentStorageRecord.items)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>& MailClaimIntentStorageRecord::items() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.mail.v1.MailClaimIntentStorageRecord.items)
+  return _internal_items();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL
+MailClaimIntentStorageRecord::mutable_items() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.mail.v1.MailClaimIntentStorageRecord.items)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_items();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>&
+MailClaimIntentStorageRecord::_internal_items() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.items_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL
+MailClaimIntentStorageRecord::_internal_mutable_items() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.items_;
+}
+
+// repeated uint64 transfer_instance_ids = 2 [json_name = "transferInstanceIds"];
+inline int MailClaimIntentStorageRecord::_internal_transfer_instance_ids_size() const {
+  return _internal_transfer_instance_ids().size();
+}
+inline int MailClaimIntentStorageRecord::transfer_instance_ids_size() const {
+  return _internal_transfer_instance_ids_size();
+}
+inline void MailClaimIntentStorageRecord::clear_transfer_instance_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.transfer_instance_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t MailClaimIntentStorageRecord::transfer_instance_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailClaimIntentStorageRecord.transfer_instance_ids)
+  return _internal_transfer_instance_ids().Get(index);
+}
+inline void MailClaimIntentStorageRecord::set_transfer_instance_ids(int index, ::uint64_t value) {
+  _internal_mutable_transfer_instance_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.MailClaimIntentStorageRecord.transfer_instance_ids)
+}
+inline void MailClaimIntentStorageRecord::add_transfer_instance_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_transfer_instance_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:pandora.mail.v1.MailClaimIntentStorageRecord.transfer_instance_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& MailClaimIntentStorageRecord::transfer_instance_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.mail.v1.MailClaimIntentStorageRecord.transfer_instance_ids)
+  return _internal_transfer_instance_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL MailClaimIntentStorageRecord::mutable_transfer_instance_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.mail.v1.MailClaimIntentStorageRecord.transfer_instance_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_transfer_instance_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+MailClaimIntentStorageRecord::_internal_transfer_instance_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.transfer_instance_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+MailClaimIntentStorageRecord::_internal_mutable_transfer_instance_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.transfer_instance_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// GetClaimableAttachmentsRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void GetClaimableAttachmentsRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GetClaimableAttachmentsRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.GetClaimableAttachmentsRequest.player_id)
+  return _internal_player_id();
+}
+inline void GetClaimableAttachmentsRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.GetClaimableAttachmentsRequest.player_id)
+}
+inline ::uint64_t GetClaimableAttachmentsRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void GetClaimableAttachmentsRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 mail_id = 2 [json_name = "mailId"];
+inline void GetClaimableAttachmentsRequest::clear_mail_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t GetClaimableAttachmentsRequest::mail_id() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.GetClaimableAttachmentsRequest.mail_id)
+  return _internal_mail_id();
+}
+inline void GetClaimableAttachmentsRequest::set_mail_id(::uint64_t value) {
+  _internal_set_mail_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.GetClaimableAttachmentsRequest.mail_id)
+}
+inline ::uint64_t GetClaimableAttachmentsRequest::_internal_mail_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.mail_id_;
+}
+inline void GetClaimableAttachmentsRequest::_internal_set_mail_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetClaimableAttachmentsResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void GetClaimableAttachmentsResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::pandora::common::v1::ErrCode GetClaimableAttachmentsResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.GetClaimableAttachmentsResponse.code)
+  return _internal_code();
+}
+inline void GetClaimableAttachmentsResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.GetClaimableAttachmentsResponse.code)
+}
+inline ::pandora::common::v1::ErrCode GetClaimableAttachmentsResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void GetClaimableAttachmentsResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+inline int GetClaimableAttachmentsResponse::_internal_items_size() const {
+  return _internal_items().size();
+}
+inline int GetClaimableAttachmentsResponse::items_size() const {
+  return _internal_items_size();
+}
+inline const ::pandora::bag::v1::BagItem& GetClaimableAttachmentsResponse::items(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.GetClaimableAttachmentsResponse.items)
+  return _internal_items().Get(index);
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL GetClaimableAttachmentsResponse::mutable_items(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.mail.v1.GetClaimableAttachmentsResponse.items)
+  return _internal_mutable_items()->Mutable(index);
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL GetClaimableAttachmentsResponse::add_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::bag::v1::BagItem* _add =
+      _internal_mutable_items()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.mail.v1.GetClaimableAttachmentsResponse.items)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>& GetClaimableAttachmentsResponse::items() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.mail.v1.GetClaimableAttachmentsResponse.items)
+  return _internal_items();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL
+GetClaimableAttachmentsResponse::mutable_items() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.mail.v1.GetClaimableAttachmentsResponse.items)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_items();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>&
+GetClaimableAttachmentsResponse::_internal_items() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.items_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL
+GetClaimableAttachmentsResponse::_internal_mutable_items() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.items_;
+}
+
+// string claim_key = 3 [json_name = "claimKey"];
+inline void GetClaimableAttachmentsResponse::clear_claim_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& GetClaimableAttachmentsResponse::claim_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.GetClaimableAttachmentsResponse.claim_key)
+  return _internal_claim_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetClaimableAttachmentsResponse::set_claim_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.claim_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.GetClaimableAttachmentsResponse.claim_key)
+}
+inline ::std::string* PROTOBUF_NONNULL GetClaimableAttachmentsResponse::mutable_claim_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_claim_key();
+  // @@protoc_insertion_point(field_mutable:pandora.mail.v1.GetClaimableAttachmentsResponse.claim_key)
+  return _s;
+}
+inline const ::std::string& GetClaimableAttachmentsResponse::_internal_claim_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claim_key_.Get();
+}
+inline void GetClaimableAttachmentsResponse::_internal_set_claim_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetClaimableAttachmentsResponse::_internal_mutable_claim_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.claim_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetClaimableAttachmentsResponse::release_claim_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.mail.v1.GetClaimableAttachmentsResponse.claim_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.claim_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.claim_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetClaimableAttachmentsResponse::set_allocated_claim_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.claim_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.claim_key_.IsDefault()) {
+    _impl_.claim_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.mail.v1.GetClaimableAttachmentsResponse.claim_key)
+}
+
+// bool already_claimed = 4 [json_name = "alreadyClaimed"];
+inline void GetClaimableAttachmentsResponse::clear_already_claimed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.already_claimed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool GetClaimableAttachmentsResponse::already_claimed() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.GetClaimableAttachmentsResponse.already_claimed)
+  return _internal_already_claimed();
+}
+inline void GetClaimableAttachmentsResponse::set_already_claimed(bool value) {
+  _internal_set_already_claimed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.GetClaimableAttachmentsResponse.already_claimed)
+}
+inline bool GetClaimableAttachmentsResponse::_internal_already_claimed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.already_claimed_;
+}
+inline void GetClaimableAttachmentsResponse::_internal_set_already_claimed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.already_claimed_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MarkMailClaimedRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void MarkMailClaimedRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t MarkMailClaimedRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MarkMailClaimedRequest.player_id)
+  return _internal_player_id();
+}
+inline void MarkMailClaimedRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.MarkMailClaimedRequest.player_id)
+}
+inline ::uint64_t MarkMailClaimedRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void MarkMailClaimedRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 mail_id = 2 [json_name = "mailId"];
+inline void MarkMailClaimedRequest::clear_mail_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t MarkMailClaimedRequest::mail_id() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MarkMailClaimedRequest.mail_id)
+  return _internal_mail_id();
+}
+inline void MarkMailClaimedRequest::set_mail_id(::uint64_t value) {
+  _internal_set_mail_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.MarkMailClaimedRequest.mail_id)
+}
+inline ::uint64_t MarkMailClaimedRequest::_internal_mail_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.mail_id_;
+}
+inline void MarkMailClaimedRequest::_internal_set_mail_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MarkMailClaimedResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void MarkMailClaimedResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode MarkMailClaimedResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MarkMailClaimedResponse.code)
+  return _internal_code();
+}
+inline void MarkMailClaimedResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.MarkMailClaimedResponse.code)
+}
+inline ::pandora::common::v1::ErrCode MarkMailClaimedResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void MarkMailClaimedResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
 }
 
 #ifdef __GNUC__

@@ -1,0 +1,213 @@
+// Pandora 背包域协议(pandora.bag.v1,2026-07-21 拍板,docs/design/bag-domain.md)。
+//
+// 职责(独立背包域,三域定界见 bag-domain.md §1):
+//   - 玩家背包存储:journal(同步流水)+ checkpoint(异步快照)+ 加载交接;
+//   - 驻留分层:随身组(身上 0/装备栏 2/临时格 3)由 owner DS checkout 进内存权威;
+//     仓库 1 / 临时活动背包 100+ 后端驻留(存储侧权威,DS 只发起操作 + 只读视图);
+//   - 活动背包代际(generation):切代即逻辑清空,旧代写 fail-closed 拒,类型可安全重用。
+//
+// 信任模型(CLAUDE.md §9.6 五要件,受信写者):
+//   ①身份(DS JWT / writer epoch,传输层)②owner 授权(调用方须为该玩家当前 owner;
+//   phase 1 只迁读,phase 2 写权威切换前由 owner authority 校验)③fencing(owner_epoch,
+//   存储侧 CAS bag_meta)④额度(journal 层速率 / 单窗上限)⑤审计(journal 即流水)。
+//
+// 边界:
+//   - 本服务不对客户端暴露(Envoy 一律 403;调用方 = owner DS 与内部系统);
+//   - 经验等"事实→数值换算"仍走 battle.proto(换算域不迁);
+//   - 货币 / 拍卖 escrow / 交易结算留经济域(inventory.proto)。
+//
+// 幂等 / 顺序:
+//   - journal 每玩家单调 journal_seq(从 1 起),批内升序、单飞行批、失败原批重发;
+//   - AppendJournal 前缀确认(acked_seq 语义同 battle.ReportProgress);
+//   - uk(player_id, journal_seq) + uk(player_id, idempotency_key) 双唯一键去重。
+
+syntax = "proto3";
+
+package pandora.bag.v1;
+
+import "pandora/common/v1/errcode.proto";
+
+service BagService {
+  // LoadBag 加载 DS 驻留组(owner DS checkout;Admission 通过后调用)。
+  // 返回 checkpoint 快照(仅随身组段)+ covered_seq 之后的 journal 尾部;
+  // 调用方按 seq 升序重放尾部构建内存态,之后以 last_journal_seq+1 起写。
+  rpc LoadBag(LoadBagRequest) returns (LoadBagResponse);
+
+  // AppendJournal 追加 journal(同步入账;落库成功操作才算完成)。
+  // 批内 journal_seq 升序;涉及后端驻留段的 op(转移 / 领取 / 使用)在同一事务改 bag_section。
+  // 错误语义:ERR_BAG_EPOCH_FENCED / ERR_BAG_GENERATION_MISMATCH = 整批拒(调用方停写重查);
+  // ERR_UNAVAILABLE = 原批重试;其余业务错误 = 整批拒且未应用。
+  rpc AppendJournal(AppendJournalRequest) returns (AppendJournalResponse);
+
+  // SaveCheckpoint 保存随身组快照(异步周期 + 关键点:owner 迁移 / 撤离 / 下线)。
+  // covered_journal_seq 必须 ≤ 服务端已确认水位且 ≥ 既有 checkpoint 覆盖位(防回退)。
+  rpc SaveCheckpoint(SaveCheckpointRequest) returns (SaveCheckpointResponse);
+
+  // GetSections 查询后端驻留段(仓库 / 活动背包;DS 只读视图与 UI 用)。
+  // 活动段只返回 current generation 的内容(读过滤,切代即逻辑清空)。
+  // 返回的 capacity 为有效容量(base + 已购增量,bag-domain.md §5.3)。
+  rpc GetSections(GetSectionsRequest) returns (GetSectionsResponse);
+
+  // PurchaseCapacity 购买背包容量扩容(bag-domain.md §5.3,2026-07-22 拍板)。
+  // 调用方 = owner DS(五要件授权同写路径);价格 / 档位 / 封顶全在服务端,DS 不传数值。
+  // 幂等身份 = (player_id, bag_type, 第 N 档):服务端按当前已购档数定下一档,同档重试 /
+  // 双击并发收敛为单次扣费单次生效(经济域 ledger 幂等 + bag 侧档数 CAS 两步 saga;
+  // 两步间崩溃凭 ledger 行重放第二步收敛,不存在"扣钱未到账"终态)。
+  // 错误:ERR_BAG_SECTION_NOT_ALLOWED = 该段不可购买;ERR_BAG_CAPACITY_MAXED = 档位
+  // 已购罄 / 到硬上限;ERR_INVENTORY_INSUFFICIENT = 金币不足。
+  rpc PurchaseCapacity(PurchaseCapacityRequest) returns (PurchaseCapacityResponse);
+}
+
+// ── 存储结构(服务端存储快照,不下发客户端;§5.8 快照场景)─────────────
+
+// BagItemAttribute 物品实例动态属性(鉴定词条等;数值由服务端 roll,§9.6)。
+message BagItemAttribute {
+  uint32 attr_id = 1;
+  int64  value   = 2;
+}
+
+// BagItem 一格物品(堆叠或实例)。
+message BagItem {
+  uint32 item_config_id = 1;  // 配置表道具 ID(§12)
+  uint32 count          = 2;  // 堆叠数量(实例恒 1)
+  uint32 slot           = 3;  // 格子位置(0..capacity-1)
+  uint64 instance_id    = 4;  // 实例唯一 ID(雪花;0 = 可堆叠非实例)
+  bool   identified     = 5;  // 实例已鉴定
+  repeated BagItemAttribute attrs = 6;  // 实例动态属性(未鉴定为空)
+}
+
+// BagSection 一个背包段(某 bag_type 在某 generation 下的内容)。
+message BagSection {
+  uint32 bag_type   = 1;  // 0 身上 / 1 仓库 / 2 装备栏 / 3 临时格 / 100+ 活动段
+  uint64 generation = 2;  // 活动段代际(固定背包恒 0)
+  uint32 capacity   = 3;  // 段容量(服务端配置权威)
+  repeated BagItem items = 4;
+}
+
+// BagStorageRecord 随身组整包快照(checkpoint blob;仅含 DS 驻留组段)。
+// 演进遵守 §9.17:只加新字段 / reserved 删字段,读改写不丢 unknown fields。
+message BagStorageRecord {
+  repeated BagSection sections = 1;
+}
+
+// ── journal 操作(oneof;entry.bag_type 是操作主段)────────────────────
+
+// PickupGrantOp 拾取入包(phase 2 取代 ReportProgress 掉落分支;零丢失门控语义)。
+message PickupGrantOp {
+  repeated BagItem items = 1;  // 入 entry.bag_type 段;instance_id 由 DS 级雪花预生成
+}
+
+// MailClaimOp 邮件附件领取入包(mail 原子 claim 成功后写;claim_key 与 mail 侧幂等对齐)。
+message MailClaimOp {
+  uint64 mail_id   = 1;
+  string claim_key = 2;
+  repeated BagItem items = 3;  // 入 entry.bag_type 段
+}
+
+// TransferOp 同玩家跨段转移(仓库⇄身上 / 装填活动物资;存储侧同一事务改两侧)。
+message TransferOp {
+  uint32 to_bag_type   = 1;  // 目标段(entry.bag_type 为源段)
+  uint64 to_generation = 2;  // 目标段代际(活动段必填,固定段 0)
+  repeated BagItem items = 3;
+}
+
+// ConsumeOp 后端驻留段物品使用(bag-domain.md §5.1):扣除 entry.bag_type 段物品,
+// 可选把产出原子入 produce_bag_type 段(开箱 / 兑换 = 扣 + 产同一事务,零窗口)。
+message ConsumeOp {
+  repeated BagItem consume_items   = 1;  // 扣除(按 config/instance 匹配,数量不足整批拒)
+  uint32 produce_bag_type          = 2;  // 0 值 + produce_items 空 = 纯扣除(瞬时效果型)
+  uint64 produce_generation        = 3;
+  repeated BagItem produce_items   = 4;
+}
+
+// BagJournalEntry 一条背包流水。
+//
+// 随身组组级寻址(bag-domain.md §3.2,2026-07-22 拍板):随身组(0/2/3)op 的寻址粒度是
+// **随身组整体**(instance_id / config+count),bag_type 仅标记主段供审计与额度统计,
+// 不绑段内格位;DS 崩溃恢复重放按组解析(例:卸下〔checkpoint 类,回档后仍在装备栏〕
+// → 交易扣出〔已 journal〕,重放从装备栏找到该实例扣除)。重放 grant 容量不足时溢出
+// 临时格(bag_type 3)/ 超容只出不进,永不 fail-closed 拒载(资产守恒)。
+// 后端驻留段 op 不受此影响(段本身即权威事务域,格位由存储侧分配)。
+message BagJournalEntry {
+  uint64 journal_seq     = 1;  // 每玩家单调,从 1 起
+  uint32 bag_type        = 2;  // 操作主段(随身组 op 仅审计/额度标记,见头注释组级寻址)
+  uint64 generation      = 3;  // 主段代际(活动段必填;固定段恒 0)
+  string idempotency_key = 4;  // uk(player_id, key);重放 / 重试去重
+  int64  ts_ms           = 5;  // DS 侧发生时间(审计;权威时间以服务端为准)
+  oneof op {
+    PickupGrantOp pickup_grant = 10;
+    MailClaimOp   mail_claim   = 11;
+    TransferOp    transfer     = 12;
+    ConsumeOp     consume      = 13;
+  }
+}
+
+// ── RPC 出入参 ───────────────────────────────────────────────────────
+
+message LoadBagRequest {
+  uint64 player_id   = 1;
+  uint64 owner_epoch = 2;  // 五要件③;≥ bag_meta 当前值才可推进(单调不回退)
+}
+
+// BagEffectiveCapacity 某段的权威有效容量(base 配置 + 玩家已购增量,bag-domain.md §5.3)。
+message BagEffectiveCapacity {
+  uint32 bag_type = 1;
+  uint32 capacity = 2;  // 有效容量(checkpoint 内 capacity 仅 DS 回显,不作数)
+}
+
+message LoadBagResponse {
+  pandora.common.v1.ErrCode code = 1;
+  BagStorageRecord snapshot      = 2;  // 随身组 checkpoint(可为空 = 新玩家)
+  repeated BagJournalEntry tail  = 3;  // covered_seq 之后的已确认 journal(升序)
+  uint64 last_journal_seq        = 4;  // 权威水位(重放终点;后续写从 +1 起)
+  // 随身段权威有效容量(§5.3):仅含服务端已配置 base 的段;未含的段 DS 沿用客户端配置
+  // (base 全量迁服务端前的过渡语义)。DS 以此 Init/ExpandCapacity,不信 checkpoint。
+  repeated BagEffectiveCapacity effective_capacities = 5;
+}
+
+message AppendJournalRequest {
+  uint64 player_id   = 1;
+  uint64 owner_epoch = 2;                  // 五要件③:存储侧 CAS bag_meta.owner_epoch
+  repeated BagJournalEntry entries = 3;    // 非空;批内 seq 升序;单批条数有服务端上限
+}
+
+message AppendJournalResponse {
+  pandora.common.v1.ErrCode code = 1;
+  uint64 acked_seq               = 2;  // 已应用水位(含本批;整批旧 seq 重放返回当前水位)
+}
+
+message SaveCheckpointRequest {
+  uint64 player_id            = 1;
+  uint64 owner_epoch          = 2;
+  BagStorageRecord snapshot   = 3;  // 仅随身组段;含后端驻留段整批拒
+  uint64 covered_journal_seq  = 4;  // 快照覆盖到的 journal 水位
+}
+
+message SaveCheckpointResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message PurchaseCapacityRequest {
+  uint64 player_id   = 1;
+  uint64 owner_epoch = 2;  // 五要件③(0 = 服务端代填,同其余写路径)
+  uint32 bag_type    = 3;  // 可购段(当前:0 身上 / 1 仓库;服务端配置权威)
+}
+
+message PurchaseCapacityResponse {
+  pandora.common.v1.ErrCode code = 1;
+  uint32 purchases          = 2;  // 已购档数(含本次;幂等重放返回当前值)
+  uint32 extra              = 3;  // 已购增量总格数
+  uint32 effective_capacity = 4;  // 本段有效容量(base + extra;DS 据此 ExpandCapacity)
+  int64  gold_cost          = 5;  // 本次实际扣费(幂等重放 / 未新购 = 0)
+  int64  gold_remaining     = 6;  // 扣费后金币余额(UI 展示)
+}
+
+message GetSectionsRequest {
+  uint64 player_id = 1;
+  repeated uint32 bag_types = 2;  // 非空;只允许后端驻留段(仓库 / 活动段)
+}
+
+message GetSectionsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated BagSection sections   = 2;  // 活动段按 current generation 过滤
+}

@@ -3609,20 +3609,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfirmMatchRequest final : public 
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kMatchIdFieldNumber = 2,
     kAcceptFieldNumber = 3,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 match_id = 2 [json_name = "matchId"];
   void clear_match_id() ;
   [[nodiscard]] ::uint64_t match_id() const;
@@ -3647,7 +3636,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfirmMatchRequest final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3676,7 +3665,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfirmMatchRequest final : public 
         const ConfirmMatchRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t match_id_;
     bool accept_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -6194,35 +6182,11 @@ inline void CancelMatchResponse::_internal_set_code(::pandora::common::v1::ErrCo
 
 // ConfirmMatchRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void ConfirmMatchRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t ConfirmMatchRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.match.v1.ConfirmMatchRequest.player_id)
-  return _internal_player_id();
-}
-inline void ConfirmMatchRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.match.v1.ConfirmMatchRequest.player_id)
-}
-inline ::uint64_t ConfirmMatchRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void ConfirmMatchRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 match_id = 2 [json_name = "matchId"];
 inline void ConfirmMatchRequest::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t ConfirmMatchRequest::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.match.v1.ConfirmMatchRequest.match_id)
@@ -6230,7 +6194,7 @@ inline ::uint64_t ConfirmMatchRequest::match_id() const {
 }
 inline void ConfirmMatchRequest::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.match.v1.ConfirmMatchRequest.match_id)
 }
 inline ::uint64_t ConfirmMatchRequest::_internal_match_id() const {
@@ -6246,7 +6210,7 @@ inline void ConfirmMatchRequest::_internal_set_match_id(::uint64_t value) {
 inline void ConfirmMatchRequest::clear_accept() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.accept_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline bool ConfirmMatchRequest::accept() const {
   // @@protoc_insertion_point(field_get:pandora.match.v1.ConfirmMatchRequest.accept)
@@ -6254,7 +6218,7 @@ inline bool ConfirmMatchRequest::accept() const {
 }
 inline void ConfirmMatchRequest::set_accept(bool value) {
   _internal_set_accept(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.match.v1.ConfirmMatchRequest.accept)
 }
 inline bool ConfirmMatchRequest::_internal_accept() const {

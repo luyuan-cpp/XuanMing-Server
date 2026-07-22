@@ -837,11 +837,11 @@ constexpr BoardOptions::ParseTableT_ BoardOptions::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -851,10 +851,7 @@ constexpr BoardOptions::ParseTableT_ BoardOptions::InternalGenerateParseTable_(c
       ::_pbi::TcParser::GetTable<::pandora::leaderboard::v1::BoardOptions>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // bool ascending = 4 [json_name = "ascending"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BoardOptions, _impl_.ascending_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.ascending_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // int64 ttl_seconds = 1 [json_name = "ttlSeconds"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BoardOptions, _impl_.ttl_seconds_), 0>(),
        {8, 0, 0,
@@ -864,9 +861,19 @@ constexpr BoardOptions::ParseTableT_ BoardOptions::InternalGenerateParseTable_(c
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.max_size_)}},
       // bool tie_break_by_time = 3 [json_name = "tieBreakByTime"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BoardOptions, _impl_.tie_break_by_time_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BoardOptions, _impl_.tie_break_by_time_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.tie_break_by_time_)}},
+      // bool ascending = 4 [json_name = "ascending"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BoardOptions, _impl_.ascending_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.ascending_)}},
+      // int64 estimate_bucket_width = 5 [json_name = "estimateBucketWidth"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BoardOptions, _impl_.estimate_bucket_width_), 2>(),
+       {40, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.estimate_bucket_width_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -875,9 +882,11 @@ constexpr BoardOptions::ParseTableT_ BoardOptions::InternalGenerateParseTable_(c
       // int64 max_size = 2 [json_name = "maxSize"];
       {PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.max_size_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // bool tie_break_by_time = 3 [json_name = "tieBreakByTime"];
-      {PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.tie_break_by_time_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.tie_break_by_time_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool ascending = 4 [json_name = "ascending"];
-      {PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.ascending_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.ascending_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // int64 estimate_bucket_width = 5 [json_name = "estimateBucketWidth"];
+      {PROTOBUF_FIELD_OFFSET(BoardOptions, _impl_.estimate_bucket_width_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
     {{
@@ -892,6 +901,7 @@ inline constexpr BoardOptions::Impl_::Impl_(
       : _cached_size_{0},
         ttl_seconds_{::int64_t{0}},
         max_size_{::int64_t{0}},
+        estimate_bucket_width_{::int64_t{0}},
         tie_break_by_time_{false},
         ascending_{false} {}
 
@@ -2028,11 +2038,11 @@ constexpr GetRankResponse::ParseTableT_ GetRankResponse::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      5,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2055,6 +2065,16 @@ constexpr GetRankResponse::ParseTableT_ GetRankResponse::InternalGenerateParseTa
       {::_pbi::TcParser::FastMtS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.entry_)}},
+      // bool estimated = 4 [json_name = "estimated"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetRankResponse, _impl_.estimated_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.estimated_)}},
+      // int64 total_submitters = 5 [json_name = "totalSubmitters"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetRankResponse, _impl_.total_submitters_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.total_submitters_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2064,6 +2084,10 @@ constexpr GetRankResponse::ParseTableT_ GetRankResponse::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.found_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // .pandora.leaderboard.v1.LeaderboardEntry entry = 3 [json_name = "entry"];
       {PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.entry_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool estimated = 4 [json_name = "estimated"];
+      {PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.estimated_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // int64 total_submitters = 5 [json_name = "totalSubmitters"];
+      {PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.total_submitters_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2084,7 +2108,9 @@ inline constexpr GetRankResponse::Impl_::Impl_(
       : _cached_size_{0},
         entry_{nullptr},
         code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
-        found_{false} {}
+        found_{false},
+        estimated_{false},
+        total_submitters_{::int64_t{0}} {}
 
 template <typename>
 constexpr GetRankResponse::GetRankResponse(::_pbi::ConstantInitialized,
@@ -3497,15 +3523,17 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::BoardOptions, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::BoardOptions, _impl_.ttl_seconds_),
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::BoardOptions, _impl_.max_size_),
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::BoardOptions, _impl_.tie_break_by_time_),
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::BoardOptions, _impl_.ascending_),
+        PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::BoardOptions, _impl_.estimate_bucket_width_),
         0,
         1,
-        2,
         3,
+        4,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::LeaderboardEntry, _impl_._has_bits_),
         7, // hasbit index offset
@@ -3580,13 +3608,17 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::GetRankResponse, _impl_._has_bits_),
-        6, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::GetRankResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::GetRankResponse, _impl_.found_),
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::GetRankResponse, _impl_.entry_),
+        PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::GetRankResponse, _impl_.estimated_),
+        PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::GetRankResponse, _impl_.total_submitters_),
         1,
         2,
         0,
+        3,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::leaderboard::v1::GetRangeRequest, _impl_._has_bits_),
         6, // hasbit index offset
@@ -3677,25 +3709,25 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::leaderboard::v1::BoardKey)},
         {11, sizeof(::pandora::leaderboard::v1::BoardOptions)},
-        {22, sizeof(::pandora::leaderboard::v1::LeaderboardEntry)},
-        {33, sizeof(::pandora::leaderboard::v1::RewardItem)},
-        {40, sizeof(::pandora::leaderboard::v1::RewardTier)},
-        {49, sizeof(::pandora::leaderboard::v1::RewardTable)},
-        {54, sizeof(::pandora::leaderboard::v1::LeaderboardSettleEvent)},
-        {65, sizeof(::pandora::leaderboard::v1::SubmitScoreRequest)},
-        {78, sizeof(::pandora::leaderboard::v1::SubmitScoreResponse)},
-        {87, sizeof(::pandora::leaderboard::v1::GetRankRequest)},
-        {94, sizeof(::pandora::leaderboard::v1::GetRankResponse)},
-        {103, sizeof(::pandora::leaderboard::v1::GetRangeRequest)},
-        {112, sizeof(::pandora::leaderboard::v1::GetRangeResponse)},
-        {121, sizeof(::pandora::leaderboard::v1::GetAroundRequest)},
-        {130, sizeof(::pandora::leaderboard::v1::GetAroundResponse)},
-        {139, sizeof(::pandora::leaderboard::v1::RemoveEntryRequest)},
-        {146, sizeof(::pandora::leaderboard::v1::RemoveEntryResponse)},
-        {151, sizeof(::pandora::leaderboard::v1::SettleBoardRequest)},
-        {164, sizeof(::pandora::leaderboard::v1::SettleBoardResponse)},
-        {177, sizeof(::pandora::leaderboard::v1::DeleteBoardRequest)},
-        {182, sizeof(::pandora::leaderboard::v1::DeleteBoardResponse)},
+        {24, sizeof(::pandora::leaderboard::v1::LeaderboardEntry)},
+        {35, sizeof(::pandora::leaderboard::v1::RewardItem)},
+        {42, sizeof(::pandora::leaderboard::v1::RewardTier)},
+        {51, sizeof(::pandora::leaderboard::v1::RewardTable)},
+        {56, sizeof(::pandora::leaderboard::v1::LeaderboardSettleEvent)},
+        {67, sizeof(::pandora::leaderboard::v1::SubmitScoreRequest)},
+        {80, sizeof(::pandora::leaderboard::v1::SubmitScoreResponse)},
+        {89, sizeof(::pandora::leaderboard::v1::GetRankRequest)},
+        {96, sizeof(::pandora::leaderboard::v1::GetRankResponse)},
+        {109, sizeof(::pandora::leaderboard::v1::GetRangeRequest)},
+        {118, sizeof(::pandora::leaderboard::v1::GetRangeResponse)},
+        {127, sizeof(::pandora::leaderboard::v1::GetAroundRequest)},
+        {136, sizeof(::pandora::leaderboard::v1::GetAroundResponse)},
+        {145, sizeof(::pandora::leaderboard::v1::RemoveEntryRequest)},
+        {152, sizeof(::pandora::leaderboard::v1::RemoveEntryResponse)},
+        {157, sizeof(::pandora::leaderboard::v1::SettleBoardRequest)},
+        {170, sizeof(::pandora::leaderboard::v1::SettleBoardResponse)},
+        {183, sizeof(::pandora::leaderboard::v1::DeleteBoardRequest)},
+        {188, sizeof(::pandora::leaderboard::v1::DeleteBoardResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3729,103 +3761,106 @@ const char descriptor_table_protodef_pandora_2fleaderboard_2fv1_2fleaderboard_2e
     "d_type\030\001 \001(\rR\tboardType\022>\n\005scope\030\002 \001(\0162("
     ".pandora.leaderboard.v1.LeaderboardScope"
     "R\005scope\022\031\n\010scope_id\030\003 \001(\004R\007scopeId\022\026\n\006pe"
-    "riod\030\004 \001(\tR\006period\"\223\001\n\014BoardOptions\022\037\n\013t"
+    "riod\030\004 \001(\tR\006period\"\307\001\n\014BoardOptions\022\037\n\013t"
     "tl_seconds\030\001 \001(\003R\nttlSeconds\022\031\n\010max_size"
     "\030\002 \001(\003R\007maxSize\022)\n\021tie_break_by_time\030\003 \001"
     "(\010R\016tieBreakByTime\022\034\n\tascending\030\004 \001(\010R\ta"
-    "scending\"}\n\020LeaderboardEntry\022\033\n\tentity_i"
-    "d\030\001 \001(\004R\010entityId\022\024\n\005score\030\002 \001(\003R\005score\022"
-    "\022\n\004rank\030\003 \001(\003R\004rank\022\"\n\rupdated_at_ms\030\004 \001"
-    "(\003R\013updatedAtMs\"H\n\nRewardItem\022$\n\016item_co"
-    "nfig_id\030\001 \001(\rR\014itemConfigId\022\024\n\005count\030\002 \001"
-    "(\003R\005count\"|\n\nRewardTier\022\033\n\trank_from\030\001 \001"
-    "(\003R\010rankFrom\022\027\n\007rank_to\030\002 \001(\003R\006rankTo\0228\n"
-    "\005items\030\003 \003(\0132\".pandora.leaderboard.v1.Re"
-    "wardItemR\005items\"G\n\013RewardTable\0228\n\005tiers\030"
-    "\001 \003(\0132\".pandora.leaderboard.v1.RewardTie"
-    "rR\005tiers\"\335\001\n\026LeaderboardSettleEvent\022#\n\rs"
-    "ettlement_id\030\001 \001(\004R\014settlementId\0226\n\005boar"
-    "d\030\002 \001(\0132 .pandora.leaderboard.v1.BoardKe"
-    "yR\005board\022B\n\007winners\030\003 \003(\0132(.pandora.lead"
-    "erboard.v1.LeaderboardEntryR\007winners\022\"\n\r"
-    "settled_at_ms\030\004 \001(\003R\013settledAtMs\"\367\001\n\022Sub"
-    "mitScoreRequest\0226\n\005board\030\001 \001(\0132 .pandora"
+    "scending\0222\n\025estimate_bucket_width\030\005 \001(\003R"
+    "\023estimateBucketWidth\"}\n\020LeaderboardEntry"
+    "\022\033\n\tentity_id\030\001 \001(\004R\010entityId\022\024\n\005score\030\002"
+    " \001(\003R\005score\022\022\n\004rank\030\003 \001(\003R\004rank\022\"\n\rupdat"
+    "ed_at_ms\030\004 \001(\003R\013updatedAtMs\"H\n\nRewardIte"
+    "m\022$\n\016item_config_id\030\001 \001(\rR\014itemConfigId\022"
+    "\024\n\005count\030\002 \001(\003R\005count\"|\n\nRewardTier\022\033\n\tr"
+    "ank_from\030\001 \001(\003R\010rankFrom\022\027\n\007rank_to\030\002 \001("
+    "\003R\006rankTo\0228\n\005items\030\003 \003(\0132\".pandora.leade"
+    "rboard.v1.RewardItemR\005items\"G\n\013RewardTab"
+    "le\0228\n\005tiers\030\001 \003(\0132\".pandora.leaderboard."
+    "v1.RewardTierR\005tiers\"\335\001\n\026LeaderboardSett"
+    "leEvent\022#\n\rsettlement_id\030\001 \001(\004R\014settleme"
+    "ntId\0226\n\005board\030\002 \001(\0132 .pandora.leaderboar"
+    "d.v1.BoardKeyR\005board\022B\n\007winners\030\003 \003(\0132(."
+    "pandora.leaderboard.v1.LeaderboardEntryR"
+    "\007winners\022\"\n\rsettled_at_ms\030\004 \001(\003R\013settled"
+    "AtMs\"\367\001\n\022SubmitScoreRequest\0226\n\005board\030\001 \001"
+    "(\0132 .pandora.leaderboard.v1.BoardKeyR\005bo"
+    "ard\022\033\n\tentity_id\030\002 \001(\004R\010entityId\022\024\n\005scor"
+    "e\030\003 \001(\003R\005score\0226\n\004mode\030\004 \001(\0162\".pandora.l"
+    "eaderboard.v1.SubmitModeR\004mode\022>\n\007option"
+    "s\030\005 \001(\0132$.pandora.leaderboard.v1.BoardOp"
+    "tionsR\007options\"v\n\023SubmitScoreResponse\022.\n"
+    "\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR"
+    "\004code\022\033\n\tnew_score\030\002 \001(\003R\010newScore\022\022\n\004ra"
+    "nk\030\003 \001(\003R\004rank\"e\n\016GetRankRequest\0226\n\005boar"
+    "d\030\001 \001(\0132 .pandora.leaderboard.v1.BoardKe"
+    "yR\005board\022\033\n\tentity_id\030\002 \001(\004R\010entityId\"\340\001"
+    "\n\017GetRankResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
+    "a.common.v1.ErrCodeR\004code\022\024\n\005found\030\002 \001(\010"
+    "R\005found\022>\n\005entry\030\003 \001(\0132(.pandora.leaderb"
+    "oard.v1.LeaderboardEntryR\005entry\022\034\n\testim"
+    "ated\030\004 \001(\010R\testimated\022)\n\020total_submitter"
+    "s\030\005 \001(\003R\017totalSubmitters\"w\n\017GetRangeRequ"
+    "est\0226\n\005board\030\001 \001(\0132 .pandora.leaderboard"
+    ".v1.BoardKeyR\005board\022\026\n\006offset\030\002 \001(\003R\006off"
+    "set\022\024\n\005limit\030\003 \001(\005R\005limit\"\234\001\n\020GetRangeRe"
+    "sponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1"
+    ".ErrCodeR\004code\022B\n\007entries\030\002 \003(\0132(.pandor"
+    "a.leaderboard.v1.LeaderboardEntryR\007entri"
+    "es\022\024\n\005total\030\003 \001(\003R\005total\"\177\n\020GetAroundReq"
+    "uest\0226\n\005board\030\001 \001(\0132 .pandora.leaderboar"
+    "d.v1.BoardKeyR\005board\022\033\n\tentity_id\030\002 \001(\004R"
+    "\010entityId\022\026\n\006radius\030\003 \001(\005R\006radius\"\235\001\n\021Ge"
+    "tAroundResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\022B\n\007entries\030\002 \003(\013"
+    "2(.pandora.leaderboard.v1.LeaderboardEnt"
+    "ryR\007entries\022\024\n\005found\030\003 \001(\010R\005found\"i\n\022Rem"
+    "oveEntryRequest\0226\n\005board\030\001 \001(\0132 .pandora"
     ".leaderboard.v1.BoardKeyR\005board\022\033\n\tentit"
-    "y_id\030\002 \001(\004R\010entityId\022\024\n\005score\030\003 \001(\003R\005sco"
-    "re\0226\n\004mode\030\004 \001(\0162\".pandora.leaderboard.v"
-    "1.SubmitModeR\004mode\022>\n\007options\030\005 \001(\0132$.pa"
-    "ndora.leaderboard.v1.BoardOptionsR\007optio"
-    "ns\"v\n\023SubmitScoreResponse\022.\n\004code\030\001 \001(\0162"
-    "\032.pandora.common.v1.ErrCodeR\004code\022\033\n\tnew"
-    "_score\030\002 \001(\003R\010newScore\022\022\n\004rank\030\003 \001(\003R\004ra"
-    "nk\"e\n\016GetRankRequest\0226\n\005board\030\001 \001(\0132 .pa"
-    "ndora.leaderboard.v1.BoardKeyR\005board\022\033\n\t"
-    "entity_id\030\002 \001(\004R\010entityId\"\227\001\n\017GetRankRes"
-    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCodeR\004code\022\024\n\005found\030\002 \001(\010R\005found\022>\n\005e"
-    "ntry\030\003 \001(\0132(.pandora.leaderboard.v1.Lead"
-    "erboardEntryR\005entry\"w\n\017GetRangeRequest\0226"
-    "\n\005board\030\001 \001(\0132 .pandora.leaderboard.v1.B"
-    "oardKeyR\005board\022\026\n\006offset\030\002 \001(\003R\006offset\022\024"
-    "\n\005limit\030\003 \001(\005R\005limit\"\234\001\n\020GetRangeRespons"
-    "e\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrC"
-    "odeR\004code\022B\n\007entries\030\002 \003(\0132(.pandora.lea"
-    "derboard.v1.LeaderboardEntryR\007entries\022\024\n"
-    "\005total\030\003 \001(\003R\005total\"\177\n\020GetAroundRequest\022"
-    "6\n\005board\030\001 \001(\0132 .pandora.leaderboard.v1."
-    "BoardKeyR\005board\022\033\n\tentity_id\030\002 \001(\004R\010enti"
-    "tyId\022\026\n\006radius\030\003 \001(\005R\006radius\"\235\001\n\021GetArou"
-    "ndResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
-    "n.v1.ErrCodeR\004code\022B\n\007entries\030\002 \003(\0132(.pa"
-    "ndora.leaderboard.v1.LeaderboardEntryR\007e"
-    "ntries\022\024\n\005found\030\003 \001(\010R\005found\"i\n\022RemoveEn"
-    "tryRequest\0226\n\005board\030\001 \001(\0132 .pandora.lead"
-    "erboard.v1.BoardKeyR\005board\022\033\n\tentity_id\030"
-    "\002 \001(\004R\010entityId\"E\n\023RemoveEntryResponse\022."
-    "\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCode"
-    "R\004code\"\200\002\n\022SettleBoardRequest\0226\n\005board\030\001"
-    " \001(\0132 .pandora.leaderboard.v1.BoardKeyR\005"
-    "board\022\023\n\005top_n\030\002 \001(\005R\004topN\022F\n\014reward_tab"
-    "le\030\003 \001(\0132#.pandora.leaderboard.v1.Reward"
-    "TableR\013rewardTable\022\037\n\013reset_after\030\004 \001(\010R"
-    "\nresetAfter\0224\n\026settle_idempotency_key\030\005 "
-    "\001(\tR\024settleIdempotencyKey\"\374\001\n\023SettleBoar"
-    "dResponse\022.\n\004code\030\001 \001(\0162\032.pandora.common"
-    ".v1.ErrCodeR\004code\022#\n\rsettlement_id\030\002 \001(\004"
-    "R\014settlementId\022#\n\rsettled_count\030\003 \001(\003R\014s"
-    "ettledCount\022\'\n\017already_settled\030\004 \001(\010R\016al"
-    "readySettled\022B\n\007winners\030\005 \003(\0132(.pandora."
-    "leaderboard.v1.LeaderboardEntryR\007winners"
-    "\"L\n\022DeleteBoardRequest\0226\n\005board\030\001 \001(\0132 ."
-    "pandora.leaderboard.v1.BoardKeyR\005board\"E"
-    "\n\023DeleteBoardResponse\022.\n\004code\030\001 \001(\0162\032.pa"
-    "ndora.common.v1.ErrCodeR\004code*\256\001\n\020Leader"
-    "boardScope\022!\n\035LEADERBOARD_SCOPE_UNSPECIF"
-    "IED\020\000\022\034\n\030LEADERBOARD_SCOPE_GLOBAL\020\001\022\033\n\027L"
-    "EADERBOARD_SCOPE_GUILD\020\002\022\036\n\032LEADERBOARD_"
-    "SCOPE_INSTANCE\020\003\022\034\n\030LEADERBOARD_SCOPE_CU"
-    "STOM\020\004*x\n\nSubmitMode\022\033\n\027SUBMIT_MODE_UNSP"
-    "ECIFIED\020\000\022\035\n\031SUBMIT_MODE_SET_IF_HIGHER\020\001"
-    "\022\023\n\017SUBMIT_MODE_SET\020\002\022\031\n\025SUBMIT_MODE_INC"
-    "REMENT\020\0032\321\005\n\022LeaderboardService\022f\n\013Submi"
-    "tScore\022*.pandora.leaderboard.v1.SubmitSc"
-    "oreRequest\032+.pandora.leaderboard.v1.Subm"
-    "itScoreResponse\022Z\n\007GetRank\022&.pandora.lea"
-    "derboard.v1.GetRankRequest\032\'.pandora.lea"
-    "derboard.v1.GetRankResponse\022]\n\010GetRange\022"
-    "\'.pandora.leaderboard.v1.GetRangeRequest"
-    "\032(.pandora.leaderboard.v1.GetRangeRespon"
-    "se\022`\n\tGetAround\022(.pandora.leaderboard.v1"
-    ".GetAroundRequest\032).pandora.leaderboard."
-    "v1.GetAroundResponse\022f\n\013RemoveEntry\022*.pa"
-    "ndora.leaderboard.v1.RemoveEntryRequest\032"
-    "+.pandora.leaderboard.v1.RemoveEntryResp"
-    "onse\022f\n\013SettleBoard\022*.pandora.leaderboar"
-    "d.v1.SettleBoardRequest\032+.pandora.leader"
-    "board.v1.SettleBoardResponse\022f\n\013DeleteBo"
-    "ard\022*.pandora.leaderboard.v1.DeleteBoard"
-    "Request\032+.pandora.leaderboard.v1.DeleteB"
-    "oardResponseb\006proto3"
+    "y_id\030\002 \001(\004R\010entityId\"E\n\023RemoveEntryRespo"
+    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
+    "rCodeR\004code\"\200\002\n\022SettleBoardRequest\0226\n\005bo"
+    "ard\030\001 \001(\0132 .pandora.leaderboard.v1.Board"
+    "KeyR\005board\022\023\n\005top_n\030\002 \001(\005R\004topN\022F\n\014rewar"
+    "d_table\030\003 \001(\0132#.pandora.leaderboard.v1.R"
+    "ewardTableR\013rewardTable\022\037\n\013reset_after\030\004"
+    " \001(\010R\nresetAfter\0224\n\026settle_idempotency_k"
+    "ey\030\005 \001(\tR\024settleIdempotencyKey\"\374\001\n\023Settl"
+    "eBoardResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
+    "ommon.v1.ErrCodeR\004code\022#\n\rsettlement_id\030"
+    "\002 \001(\004R\014settlementId\022#\n\rsettled_count\030\003 \001"
+    "(\003R\014settledCount\022\'\n\017already_settled\030\004 \001("
+    "\010R\016alreadySettled\022B\n\007winners\030\005 \003(\0132(.pan"
+    "dora.leaderboard.v1.LeaderboardEntryR\007wi"
+    "nners\"L\n\022DeleteBoardRequest\0226\n\005board\030\001 \001"
+    "(\0132 .pandora.leaderboard.v1.BoardKeyR\005bo"
+    "ard\"E\n\023DeleteBoardResponse\022.\n\004code\030\001 \001(\016"
+    "2\032.pandora.common.v1.ErrCodeR\004code*\256\001\n\020L"
+    "eaderboardScope\022!\n\035LEADERBOARD_SCOPE_UNS"
+    "PECIFIED\020\000\022\034\n\030LEADERBOARD_SCOPE_GLOBAL\020\001"
+    "\022\033\n\027LEADERBOARD_SCOPE_GUILD\020\002\022\036\n\032LEADERB"
+    "OARD_SCOPE_INSTANCE\020\003\022\034\n\030LEADERBOARD_SCO"
+    "PE_CUSTOM\020\004*x\n\nSubmitMode\022\033\n\027SUBMIT_MODE"
+    "_UNSPECIFIED\020\000\022\035\n\031SUBMIT_MODE_SET_IF_HIG"
+    "HER\020\001\022\023\n\017SUBMIT_MODE_SET\020\002\022\031\n\025SUBMIT_MOD"
+    "E_INCREMENT\020\0032\321\005\n\022LeaderboardService\022f\n\013"
+    "SubmitScore\022*.pandora.leaderboard.v1.Sub"
+    "mitScoreRequest\032+.pandora.leaderboard.v1"
+    ".SubmitScoreResponse\022Z\n\007GetRank\022&.pandor"
+    "a.leaderboard.v1.GetRankRequest\032\'.pandor"
+    "a.leaderboard.v1.GetRankResponse\022]\n\010GetR"
+    "ange\022\'.pandora.leaderboard.v1.GetRangeRe"
+    "quest\032(.pandora.leaderboard.v1.GetRangeR"
+    "esponse\022`\n\tGetAround\022(.pandora.leaderboa"
+    "rd.v1.GetAroundRequest\032).pandora.leaderb"
+    "oard.v1.GetAroundResponse\022f\n\013RemoveEntry"
+    "\022*.pandora.leaderboard.v1.RemoveEntryReq"
+    "uest\032+.pandora.leaderboard.v1.RemoveEntr"
+    "yResponse\022f\n\013SettleBoard\022*.pandora.leade"
+    "rboard.v1.SettleBoardRequest\032+.pandora.l"
+    "eaderboard.v1.SettleBoardResponse\022f\n\013Del"
+    "eteBoard\022*.pandora.leaderboard.v1.Delete"
+    "BoardRequest\032+.pandora.leaderboard.v1.De"
+    "leteBoardResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto_deps[1] = {
@@ -3835,7 +3870,7 @@ static ::absl::once_flag descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboa
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto = {
     false,
     false,
-    4100,
+    4225,
     descriptor_table_protodef_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto,
     "pandora/leaderboard/v1/leaderboard.proto",
     &descriptor_table_pandora_2fleaderboard_2fv1_2fleaderboard_2eproto_once,
@@ -4253,7 +4288,7 @@ PROTOBUF_NOINLINE void BoardOptions::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     ::memset(&_impl_.ttl_seconds_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.ascending_) -
         reinterpret_cast<char*>(&_impl_.ttl_seconds_)) + sizeof(_impl_.ascending_));
@@ -4300,7 +4335,7 @@ PROTOBUF_NOINLINE void BoardOptions::Clear() {
   }
 
   // bool tie_break_by_time = 3 [json_name = "tieBreakByTime"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_tie_break_by_time() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -4309,11 +4344,20 @@ PROTOBUF_NOINLINE void BoardOptions::Clear() {
   }
 
   // bool ascending = 4 [json_name = "ascending"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_ascending() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           4, this_._internal_ascending(), target);
+    }
+  }
+
+  // int64 estimate_bucket_width = 5 [json_name = "estimateBucketWidth"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_estimate_bucket_width() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<5>(
+              stream, this_._internal_estimate_bucket_width(), target);
     }
   }
 
@@ -4342,7 +4386,7 @@ PROTOBUF_NOINLINE void BoardOptions::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // int64 ttl_seconds = 1 [json_name = "ttlSeconds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_ttl_seconds() != 0) {
@@ -4357,14 +4401,21 @@ PROTOBUF_NOINLINE void BoardOptions::Clear() {
             this_._internal_max_size());
       }
     }
-    // bool tie_break_by_time = 3 [json_name = "tieBreakByTime"];
+    // int64 estimate_bucket_width = 5 [json_name = "estimateBucketWidth"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_estimate_bucket_width() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_estimate_bucket_width());
+      }
+    }
+    // bool tie_break_by_time = 3 [json_name = "tieBreakByTime"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_tie_break_by_time() != 0) {
         total_size += 2;
       }
     }
     // bool ascending = 4 [json_name = "ascending"];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_ascending() != 0) {
         total_size += 2;
       }
@@ -4387,7 +4438,7 @@ void BoardOptions::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_ttl_seconds() != 0) {
         _this->_impl_.ttl_seconds_ = from._impl_.ttl_seconds_;
@@ -4399,11 +4450,16 @@ void BoardOptions::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_estimate_bucket_width() != 0) {
+        _this->_impl_.estimate_bucket_width_ = from._impl_.estimate_bucket_width_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_tie_break_by_time() != 0) {
         _this->_impl_.tie_break_by_time_ = from._impl_.tie_break_by_time_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_ascending() != 0) {
         _this->_impl_.ascending_ = from._impl_.ascending_;
       }
@@ -6633,9 +6689,9 @@ GetRankResponse::GetRankResponse(
                offsetof(Impl_, code_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, code_),
-           offsetof(Impl_, found_) -
+           offsetof(Impl_, total_submitters_) -
                offsetof(Impl_, code_) +
-               sizeof(Impl_::found_));
+               sizeof(Impl_::total_submitters_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.leaderboard.v1.GetRankResponse)
 }
@@ -6649,9 +6705,9 @@ inline void GetRankResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, entry_),
            0,
-           offsetof(Impl_, found_) -
+           offsetof(Impl_, total_submitters_) -
                offsetof(Impl_, entry_) +
-               sizeof(Impl_::found_));
+               sizeof(Impl_::total_submitters_));
 }
 GetRankResponse::~GetRankResponse() {
   // @@protoc_insertion_point(destructor:pandora.leaderboard.v1.GetRankResponse)
@@ -6706,10 +6762,10 @@ PROTOBUF_NOINLINE void GetRankResponse::Clear() {
     ABSL_DCHECK(_impl_.entry_ != nullptr);
     _impl_.entry_->Clear();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
     ::memset(&_impl_.code_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.found_) -
-        reinterpret_cast<char*>(&_impl_.code_)) + sizeof(_impl_.found_));
+        reinterpret_cast<char*>(&_impl_.total_submitters_) -
+        reinterpret_cast<char*>(&_impl_.code_)) + sizeof(_impl_.total_submitters_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6759,6 +6815,24 @@ PROTOBUF_NOINLINE void GetRankResponse::Clear() {
         stream);
   }
 
+  // bool estimated = 4 [json_name = "estimated"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_estimated() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_estimated(), target);
+    }
+  }
+
+  // int64 total_submitters = 5 [json_name = "totalSubmitters"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_total_submitters() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<5>(
+              stream, this_._internal_total_submitters(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6784,7 +6858,7 @@ PROTOBUF_NOINLINE void GetRankResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // .pandora.leaderboard.v1.LeaderboardEntry entry = 3 [json_name = "entry"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -6801,6 +6875,19 @@ PROTOBUF_NOINLINE void GetRankResponse::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_found() != 0) {
         total_size += 2;
+      }
+    }
+    // bool estimated = 4 [json_name = "estimated"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_estimated() != 0) {
+        total_size += 2;
+      }
+    }
+    // int64 total_submitters = 5 [json_name = "totalSubmitters"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_total_submitters() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_total_submitters());
       }
     }
   }
@@ -6822,7 +6909,7 @@ void GetRankResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.entry_ != nullptr);
       if (_this->_impl_.entry_ == nullptr) {
@@ -6839,6 +6926,16 @@ void GetRankResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_found() != 0) {
         _this->_impl_.found_ = from._impl_.found_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_estimated() != 0) {
+        _this->_impl_.estimated_ = from._impl_.estimated_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_total_submitters() != 0) {
+        _this->_impl_.total_submitters_ = from._impl_.total_submitters_;
       }
     }
   }
@@ -6860,8 +6957,8 @@ void GetRankResponse::InternalSwap(GetRankResponse* PROTOBUF_RESTRICT PROTOBUF_N
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.found_)
-      + sizeof(GetRankResponse::_impl_.found_)
+      PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.total_submitters_)
+      + sizeof(GetRankResponse::_impl_.total_submitters_)
       - PROTOBUF_FIELD_OFFSET(GetRankResponse, _impl_.entry_)>(
           reinterpret_cast<char*>(&_impl_.entry_),
           reinterpret_cast<char*>(&other->_impl_.entry_));

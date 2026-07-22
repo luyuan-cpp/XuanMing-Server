@@ -47,8 +47,9 @@ message FriendInfo {
 }
 
 message AddFriendRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id        = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 target_player_id = 2;
 }
 
@@ -59,8 +60,9 @@ message AddFriendResponse {
 }
 
 message AcceptFriendRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id  = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 request_id = 2;
 }
 
@@ -69,9 +71,10 @@ message AcceptFriendResponse {
 }
 
 message RejectFriendRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
   // 只有请求的 target 本人能拒绝;pending→rejected。不推送给 requester(避免尴尬)。
-  uint64 player_id  = 1;
+  reserved 1;
+  reserved "player_id";
   uint64 request_id = 2;
 }
 
@@ -90,8 +93,9 @@ message FriendRequestInfo {
 }
 
 message ListFriendRequestsRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
 }
 
 message ListFriendRequestsResponse {
@@ -101,8 +105,9 @@ message ListFriendRequestsResponse {
 }
 
 message ListFriendsRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
 }
 
 message ListFriendsResponse {
@@ -111,8 +116,9 @@ message ListFriendsResponse {
 }
 
 message RemoveFriendRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id        = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 target_player_id = 2;
 }
 
@@ -121,8 +127,9 @@ message RemoveFriendResponse {
 }
 
 message BlockRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id        = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 target_player_id = 2;
 }
 
@@ -131,8 +138,9 @@ message BlockResponse {
 }
 
 message UnblockRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id        = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 target_player_id = 2;
 }
 
@@ -149,8 +157,9 @@ message BlockInfo {
 }
 
 message ListBlocksRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
 }
 
 message ListBlocksResponse {
@@ -170,8 +179,9 @@ message RecommendedFriendInfo {
 }
 
 message RecommendFriendsRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
-  uint64 player_id = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   // limit 期望返回数量(默认 5,服务端按上限收敛,0 取默认)。
   uint32 limit = 2;
   // exclude_player_ids 本轮已展示 / 不感兴趣的候选,刷新时回传以拿到新一批(无状态去重)。

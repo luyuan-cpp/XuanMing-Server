@@ -538,7 +538,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendMessageRequest final : public :
   enum : int {
     kContentFieldNumber = 4,
     kRequestIdFieldNumber = 5,
-    kSenderIdFieldNumber = 1,
     kTargetIdFieldNumber = 3,
     kChannelFieldNumber = 2,
   };
@@ -572,16 +571,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendMessageRequest final : public :
   ::std::string* PROTOBUF_NONNULL _internal_mutable_request_id();
 
   public:
-  // uint64 sender_id = 1 [json_name = "senderId"];
-  void clear_sender_id() ;
-  [[nodiscard]] ::uint64_t sender_id() const;
-  void set_sender_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_sender_id() const;
-  void _internal_set_sender_id(::uint64_t value);
-
-  public:
   // uint64 target_id = 3 [json_name = "targetId"];
   void clear_target_id() ;
   [[nodiscard]] ::uint64_t target_id() const;
@@ -606,7 +595,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendMessageRequest final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 60,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -637,7 +626,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendMessageRequest final : public :
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr content_;
     ::google::protobuf::internal::ArenaStringPtr request_id_;
-    ::uint64_t sender_id_;
     ::uint64_t target_id_;
     int channel_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -795,22 +783,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PullHistoryRequest final : public :
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kPeerIdFieldNumber = 3,
     kChannelFieldNumber = 2,
     kLimitFieldNumber = 4,
     kBeforeMsFieldNumber = 5,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 peer_id = 3 [json_name = "peerId"];
   void clear_peer_id() ;
   [[nodiscard]] ::uint64_t peer_id() const;
@@ -855,7 +832,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PullHistoryRequest final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -884,7 +861,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PullHistoryRequest final : public :
         const PullHistoryRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t peer_id_;
     int channel_;
     ::int32_t limit_;
@@ -1889,35 +1865,11 @@ inline void ChatMessage::_internal_set_send_time_ms(::int64_t value) {
 
 // SendMessageRequest
 
-// uint64 sender_id = 1 [json_name = "senderId"];
-inline void SendMessageRequest::clear_sender_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.sender_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-}
-inline ::uint64_t SendMessageRequest::sender_id() const {
-  // @@protoc_insertion_point(field_get:pandora.chat.v1.SendMessageRequest.sender_id)
-  return _internal_sender_id();
-}
-inline void SendMessageRequest::set_sender_id(::uint64_t value) {
-  _internal_set_sender_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:pandora.chat.v1.SendMessageRequest.sender_id)
-}
-inline ::uint64_t SendMessageRequest::_internal_sender_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.sender_id_;
-}
-inline void SendMessageRequest::_internal_set_sender_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.sender_id_ = value;
-}
-
 // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
 inline void SendMessageRequest::clear_channel() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.channel_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::pandora::chat::v1::ChatChannel SendMessageRequest::channel() const {
   // @@protoc_insertion_point(field_get:pandora.chat.v1.SendMessageRequest.channel)
@@ -1925,7 +1877,7 @@ inline ::pandora::chat::v1::ChatChannel SendMessageRequest::channel() const {
 }
 inline void SendMessageRequest::set_channel(::pandora::chat::v1::ChatChannel value) {
   _internal_set_channel(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:pandora.chat.v1.SendMessageRequest.channel)
 }
 inline ::pandora::chat::v1::ChatChannel SendMessageRequest::_internal_channel() const {
@@ -1941,7 +1893,7 @@ inline void SendMessageRequest::_internal_set_channel(::pandora::chat::v1::ChatC
 inline void SendMessageRequest::clear_target_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t SendMessageRequest::target_id() const {
   // @@protoc_insertion_point(field_get:pandora.chat.v1.SendMessageRequest.target_id)
@@ -1949,7 +1901,7 @@ inline ::uint64_t SendMessageRequest::target_id() const {
 }
 inline void SendMessageRequest::set_target_id(::uint64_t value) {
   _internal_set_target_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:pandora.chat.v1.SendMessageRequest.target_id)
 }
 inline ::uint64_t SendMessageRequest::_internal_target_id() const {
@@ -2145,35 +2097,11 @@ inline void SendMessageResponse::_internal_set_message_id(::uint64_t value) {
 
 // PullHistoryRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void PullHistoryRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t PullHistoryRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.chat.v1.PullHistoryRequest.player_id)
-  return _internal_player_id();
-}
-inline void PullHistoryRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.chat.v1.PullHistoryRequest.player_id)
-}
-inline ::uint64_t PullHistoryRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void PullHistoryRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // .pandora.chat.v1.ChatChannel channel = 2 [json_name = "channel"];
 inline void PullHistoryRequest::clear_channel() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.channel_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::pandora::chat::v1::ChatChannel PullHistoryRequest::channel() const {
   // @@protoc_insertion_point(field_get:pandora.chat.v1.PullHistoryRequest.channel)
@@ -2181,7 +2109,7 @@ inline ::pandora::chat::v1::ChatChannel PullHistoryRequest::channel() const {
 }
 inline void PullHistoryRequest::set_channel(::pandora::chat::v1::ChatChannel value) {
   _internal_set_channel(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.chat.v1.PullHistoryRequest.channel)
 }
 inline ::pandora::chat::v1::ChatChannel PullHistoryRequest::_internal_channel() const {
@@ -2197,7 +2125,7 @@ inline void PullHistoryRequest::_internal_set_channel(::pandora::chat::v1::ChatC
 inline void PullHistoryRequest::clear_peer_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.peer_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t PullHistoryRequest::peer_id() const {
   // @@protoc_insertion_point(field_get:pandora.chat.v1.PullHistoryRequest.peer_id)
@@ -2205,7 +2133,7 @@ inline ::uint64_t PullHistoryRequest::peer_id() const {
 }
 inline void PullHistoryRequest::set_peer_id(::uint64_t value) {
   _internal_set_peer_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.chat.v1.PullHistoryRequest.peer_id)
 }
 inline ::uint64_t PullHistoryRequest::_internal_peer_id() const {
@@ -2221,7 +2149,7 @@ inline void PullHistoryRequest::_internal_set_peer_id(::uint64_t value) {
 inline void PullHistoryRequest::clear_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.limit_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::int32_t PullHistoryRequest::limit() const {
   // @@protoc_insertion_point(field_get:pandora.chat.v1.PullHistoryRequest.limit)
@@ -2229,7 +2157,7 @@ inline ::int32_t PullHistoryRequest::limit() const {
 }
 inline void PullHistoryRequest::set_limit(::int32_t value) {
   _internal_set_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:pandora.chat.v1.PullHistoryRequest.limit)
 }
 inline ::int32_t PullHistoryRequest::_internal_limit() const {
@@ -2245,7 +2173,7 @@ inline void PullHistoryRequest::_internal_set_limit(::int32_t value) {
 inline void PullHistoryRequest::clear_before_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.before_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::int64_t PullHistoryRequest::before_ms() const {
   // @@protoc_insertion_point(field_get:pandora.chat.v1.PullHistoryRequest.before_ms)
@@ -2253,7 +2181,7 @@ inline ::int64_t PullHistoryRequest::before_ms() const {
 }
 inline void PullHistoryRequest::set_before_ms(::int64_t value) {
   _internal_set_before_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:pandora.chat.v1.PullHistoryRequest.before_ms)
 }
 inline ::int64_t PullHistoryRequest::_internal_before_ms() const {

@@ -74,6 +74,9 @@ extern ::google::protobuf::internal::ExtensionIdentifier<
 inline constexpr int kExcelBitIndexFieldNumber = 51506;
 extern ::google::protobuf::internal::ExtensionIdentifier<
     ::google::protobuf::MessageOptions, ::google::protobuf::internal::PrimitiveTypeTraits< bool >, 8, false>(excel_bit_index);
+inline constexpr int kExcelDataStartRowFieldNumber = 51510;
+extern ::google::protobuf::internal::ExtensionIdentifier<
+    ::google::protobuf::MessageOptions, ::google::protobuf::internal::PrimitiveTypeTraits< ::uint32_t >, 13, false>(excel_data_start_row);
 inline constexpr int kExcelColFieldNumber = 51502;
 extern ::google::protobuf::internal::ExtensionIdentifier<
     ::google::protobuf::FieldOptions, ::google::protobuf::internal::StringTypeTraits, 9, false>(excel_col);

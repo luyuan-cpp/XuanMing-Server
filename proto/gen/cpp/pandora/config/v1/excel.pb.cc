@@ -46,19 +46,21 @@ const char descriptor_table_protodef_pandora_2fconfig_2fv1_2fexcel_2eproto[] ABS
     "roto:@\n\nexcel_file\022\037.google.protobuf.Mes"
     "sageOptions\030\255\222\003 \001(\tR\texcelFile:I\n\017excel_"
     "bit_index\022\037.google.protobuf.MessageOptio"
-    "ns\030\262\222\003 \001(\010R\rexcelBitIndex:<\n\texcel_col\022\035"
-    ".google.protobuf.FieldOptions\030\256\222\003 \001(\tR\010e"
-    "xcelCol:F\n\016excel_required\022\035.google.proto"
-    "buf.FieldOptions\030\257\222\003 \001(\010R\rexcelRequired:"
-    "D\n\rexcel_default\022\035.google.protobuf.Field"
-    "Options\030\260\222\003 \001(\tR\014excelDefault:B\n\014excel_p"
-    "refix\022\035.google.protobuf.FieldOptions\030\261\222\003"
-    " \001(\tR\013excelPrefix:<\n\texcel_key\022\035.google."
-    "protobuf.FieldOptions\030\263\222\003 \001(\010R\010excelKey:"
-    "G\n\017excel_multi_key\022\035.google.protobuf.Fie"
-    "ldOptions\030\264\222\003 \001(\010R\rexcelMultiKey::\n\010exce"
-    "l_fk\022\035.google.protobuf.FieldOptions\030\265\222\003 "
-    "\001(\tR\007excelFkb\006proto3"
+    "ns\030\262\222\003 \001(\010R\rexcelBitIndex:R\n\024excel_data_"
+    "start_row\022\037.google.protobuf.MessageOptio"
+    "ns\030\266\222\003 \001(\rR\021excelDataStartRow:<\n\texcel_c"
+    "ol\022\035.google.protobuf.FieldOptions\030\256\222\003 \001("
+    "\tR\010excelCol:F\n\016excel_required\022\035.google.p"
+    "rotobuf.FieldOptions\030\257\222\003 \001(\010R\rexcelRequi"
+    "red:D\n\rexcel_default\022\035.google.protobuf.F"
+    "ieldOptions\030\260\222\003 \001(\tR\014excelDefault:B\n\014exc"
+    "el_prefix\022\035.google.protobuf.FieldOptions"
+    "\030\261\222\003 \001(\tR\013excelPrefix:<\n\texcel_key\022\035.goo"
+    "gle.protobuf.FieldOptions\030\263\222\003 \001(\010R\010excel"
+    "Key:G\n\017excel_multi_key\022\035.google.protobuf"
+    ".FieldOptions\030\264\222\003 \001(\010R\rexcelMultiKey::\n\010"
+    "excel_fk\022\035.google.protobuf.FieldOptions\030"
+    "\265\222\003 \001(\tR\007excelFkb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fconfig_2fv1_2fexcel_2eproto_deps[1] = {
@@ -68,7 +70,7 @@ static ::absl::once_flag descriptor_table_pandora_2fconfig_2fv1_2fexcel_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fconfig_2fv1_2fexcel_2eproto = {
     false,
     false,
-    700,
+    784,
     descriptor_table_protodef_pandora_2fconfig_2fv1_2fexcel_2eproto,
     "pandora/config/v1/excel.proto",
     &descriptor_table_pandora_2fconfig_2fv1_2fexcel_2eproto_once,
@@ -93,6 +95,10 @@ PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 ::_pbi::ExtensionIdentifier<
         ::google::protobuf::MessageOptions, ::_pbi::PrimitiveTypeTraits< bool >, 8, false>
         excel_bit_index(kExcelBitIndexFieldNumber, false);
+PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 ::_pbi::ExtensionIdentifier<
+        ::google::protobuf::MessageOptions, ::_pbi::PrimitiveTypeTraits< ::uint32_t >, 13, false>
+        excel_data_start_row(kExcelDataStartRowFieldNumber, 0u);
 const std::string excel_col_default("");
 PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 ::_pbi::ExtensionIdentifier<
@@ -142,6 +148,9 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 static ::std::false_type
             false, false, /*is_utf8=*/true),
         ::_pbi::ExtensionSet::RegisterExtension(
             &::google::protobuf::MessageOptions::default_instance(), 51506, 8,
+            false, false, /*is_utf8=*/false),
+        ::_pbi::ExtensionSet::RegisterExtension(
+            &::google::protobuf::MessageOptions::default_instance(), 51510, 13,
             false, false, /*is_utf8=*/false),
         ::_pbi::ExtensionSet::RegisterExtension(
             &::google::protobuf::FieldOptions::default_instance(), 51502, 9,

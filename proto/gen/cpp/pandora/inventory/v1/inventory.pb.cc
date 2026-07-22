@@ -91,6 +91,24 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
         // ::pandora::inventory::v1::MoveInstanceResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::inventory::v1::EscrowOutInstancesRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::inventory::v1::EscrowOutInstancesResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::inventory::v1::TransferClaimItem
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::inventory::v1::ClaimTransferInstancesRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::inventory::v1::ClaimTransferInstancesResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::inventory::v1::ReleaseTransferEscrowRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::inventory::v1::ReleaseTransferEscrowResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::inventory::v1::ConsumeTransferEscrowRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::inventory::v1::ConsumeTransferEscrowResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -408,6 +426,154 @@ const ::_pbi::ClassData* UseItemRequest_get_class_data() {
   return UseItemRequest_globals_.GetClassData();
 #else
   return UseItemRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class TransferClaimItem::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TransferClaimItem>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_._has_bits_);
+};
+
+constexpr TransferClaimItem::ParseTableT_ TransferClaimItem::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::inventory::v1::TransferClaimItem>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TransferClaimItem, _impl_.item_config_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.item_config_id_)}},
+      // uint64 instance_id = 1 [json_name = "instanceId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TransferClaimItem, _impl_.instance_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.instance_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 instance_id = 1 [json_name = "instanceId"];
+      {PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.instance_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+      {PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.item_config_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr TransferClaimItem::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        instance_id_{::uint64_t{0u}},
+        item_config_id_{0u} {}
+
+template <typename>
+constexpr TransferClaimItem::TransferClaimItem(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TransferClaimItem::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TransferClaimItem(arena);
+}
+constexpr auto TransferClaimItem::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(TransferClaimItem), alignof(TransferClaimItem));
+}
+constexpr auto TransferClaimItem::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TransferClaimItem::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<TransferClaimItem>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TransferClaimItem::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<TransferClaimItem>(), &TransferClaimItem::ByteSizeLong,
+              &TransferClaimItem::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[33],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TransferClaimItemGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TransferClaimItemGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TransferClaimItem_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TransferClaimItem::InternalGenerateClassData_(
+            _default, &TransferClaimItem_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TransferClaimItem>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TransferClaimItemGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TransferClaimItem _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TransferClaimItem>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TransferClaimItemGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TransferClaimItemGlobalsTypeInternal TransferClaimItem_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TransferClaimItem_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TransferClaimItem_globals_.GetClassData();
+#else
+  return TransferClaimItem_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1203,6 +1369,293 @@ const ::_pbi::ClassData* SellItemRequest_get_class_data() {
   return SellItemRequest_globals_.GetClassData();
 #else
   return SellItemRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ReleaseTransferEscrowResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ReleaseTransferEscrowResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowResponse, _impl_._has_bits_);
+};
+
+constexpr ReleaseTransferEscrowResponse::ParseTableT_ ReleaseTransferEscrowResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ReleaseTransferEscrowResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReleaseTransferEscrowResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ReleaseTransferEscrowResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr ReleaseTransferEscrowResponse::ReleaseTransferEscrowResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ReleaseTransferEscrowResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ReleaseTransferEscrowResponse(arena);
+}
+constexpr auto ReleaseTransferEscrowResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ReleaseTransferEscrowResponse), alignof(ReleaseTransferEscrowResponse));
+}
+constexpr auto ReleaseTransferEscrowResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ReleaseTransferEscrowResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ReleaseTransferEscrowResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ReleaseTransferEscrowResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ReleaseTransferEscrowResponse>(), &ReleaseTransferEscrowResponse::ByteSizeLong,
+              &ReleaseTransferEscrowResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[37],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ReleaseTransferEscrowResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ReleaseTransferEscrowResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ReleaseTransferEscrowResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ReleaseTransferEscrowResponse::InternalGenerateClassData_(
+            _default, &ReleaseTransferEscrowResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ReleaseTransferEscrowResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ReleaseTransferEscrowResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ReleaseTransferEscrowResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ReleaseTransferEscrowResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ReleaseTransferEscrowResponseGlobalsTypeInternal ReleaseTransferEscrowResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ReleaseTransferEscrowResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ReleaseTransferEscrowResponse_globals_.GetClassData();
+#else
+  return ReleaseTransferEscrowResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ReleaseTransferEscrowRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ReleaseTransferEscrowRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowRequest, _impl_._has_bits_);
+};
+
+constexpr ReleaseTransferEscrowRequest::ParseTableT_ ReleaseTransferEscrowRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ReleaseTransferEscrowRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
+      {::_pbi::TcParser::FastV64P1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowRequest, _impl_.instance_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowRequest, _impl_.instance_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ReleaseTransferEscrowRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        instance_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::ReleaseTransferEscrowRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ReleaseTransferEscrowRequest, _impl_.instance_ids_)>()
+         }
+        ,
+        _instance_ids_cached_byte_size_{0} {}
+
+template <typename>
+constexpr ReleaseTransferEscrowRequest::ReleaseTransferEscrowRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ReleaseTransferEscrowRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ReleaseTransferEscrowRequest(arena);
+}
+constexpr auto ReleaseTransferEscrowRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ReleaseTransferEscrowRequest), alignof(ReleaseTransferEscrowRequest));
+}
+constexpr auto ReleaseTransferEscrowRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ReleaseTransferEscrowRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ReleaseTransferEscrowRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ReleaseTransferEscrowRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ReleaseTransferEscrowRequest>(), &ReleaseTransferEscrowRequest::ByteSizeLong,
+              &ReleaseTransferEscrowRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[36],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ReleaseTransferEscrowRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ReleaseTransferEscrowRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ReleaseTransferEscrowRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ReleaseTransferEscrowRequest::InternalGenerateClassData_(
+            _default, &ReleaseTransferEscrowRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ReleaseTransferEscrowRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ReleaseTransferEscrowRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ReleaseTransferEscrowRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ReleaseTransferEscrowRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ReleaseTransferEscrowRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ReleaseTransferEscrowRequestGlobalsTypeInternal ReleaseTransferEscrowRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ReleaseTransferEscrowRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ReleaseTransferEscrowRequest_globals_.GetClassData();
+#else
+  return ReleaseTransferEscrowRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -3159,6 +3612,178 @@ const ::_pbi::ClassData* FreezeForOrderRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class EscrowOutInstancesRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EscrowOutInstancesRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_._has_bits_);
+};
+
+constexpr EscrowOutInstancesRequest::ParseTableT_ EscrowOutInstancesRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::inventory::v1::EscrowOutInstancesRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string escrow_key = 4 [json_name = "escrowKey"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.escrow_key_)}},
+      // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EscrowOutInstancesRequest, _impl_.source_player_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.source_player_id_)}},
+      // uint64 to_player_id = 2 [json_name = "toPlayerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EscrowOutInstancesRequest, _impl_.to_player_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.to_player_id_)}},
+      // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
+      {::_pbi::TcParser::FastV64P1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.instance_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
+      {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.source_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 to_player_id = 2 [json_name = "toPlayerId"];
+      {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
+      {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.instance_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // string escrow_key = 4 [json_name = "escrowKey"];
+      {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.escrow_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\56\0\0\0\12\0\0\0"
+      "pandora.inventory.v1.EscrowOutInstancesRequest"
+      "escrow_key"
+    }},
+  };
+}
+
+
+inline constexpr EscrowOutInstancesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        instance_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::EscrowOutInstancesRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesRequest, _impl_.instance_ids_)>()
+         }
+        ,
+        _instance_ids_cached_byte_size_{0},
+        escrow_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        source_player_id_{::uint64_t{0u}},
+        to_player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr EscrowOutInstancesRequest::EscrowOutInstancesRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EscrowOutInstancesRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EscrowOutInstancesRequest(arena);
+}
+constexpr auto EscrowOutInstancesRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(EscrowOutInstancesRequest), alignof(EscrowOutInstancesRequest));
+}
+constexpr auto EscrowOutInstancesRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EscrowOutInstancesRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EscrowOutInstancesRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EscrowOutInstancesRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EscrowOutInstancesRequest>(), &EscrowOutInstancesRequest::ByteSizeLong,
+              &EscrowOutInstancesRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[31],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EscrowOutInstancesRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EscrowOutInstancesRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EscrowOutInstancesRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EscrowOutInstancesRequest::InternalGenerateClassData_(
+            _default, &EscrowOutInstancesRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EscrowOutInstancesRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EscrowOutInstancesRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EscrowOutInstancesRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EscrowOutInstancesRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EscrowOutInstancesRequestGlobalsTypeInternal EscrowOutInstancesRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EscrowOutInstancesRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EscrowOutInstancesRequest_globals_.GetClassData();
+#else
+  return EscrowOutInstancesRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class EnsureAuctionEscrowResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<EnsureAuctionEscrowResponse>()._impl_._has_bits_);
@@ -3767,6 +4392,441 @@ const ::_pbi::ClassData* DiscardInstanceRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ConsumeTransferEscrowResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ConsumeTransferEscrowResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowResponse, _impl_._has_bits_);
+};
+
+constexpr ConsumeTransferEscrowResponse::ParseTableT_ ConsumeTransferEscrowResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ConsumeTransferEscrowResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ConsumeTransferEscrowResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ConsumeTransferEscrowResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr ConsumeTransferEscrowResponse::ConsumeTransferEscrowResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ConsumeTransferEscrowResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ConsumeTransferEscrowResponse(arena);
+}
+constexpr auto ConsumeTransferEscrowResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ConsumeTransferEscrowResponse), alignof(ConsumeTransferEscrowResponse));
+}
+constexpr auto ConsumeTransferEscrowResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ConsumeTransferEscrowResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ConsumeTransferEscrowResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ConsumeTransferEscrowResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ConsumeTransferEscrowResponse>(), &ConsumeTransferEscrowResponse::ByteSizeLong,
+              &ConsumeTransferEscrowResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[39],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ConsumeTransferEscrowResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ConsumeTransferEscrowResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ConsumeTransferEscrowResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ConsumeTransferEscrowResponse::InternalGenerateClassData_(
+            _default, &ConsumeTransferEscrowResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ConsumeTransferEscrowResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ConsumeTransferEscrowResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ConsumeTransferEscrowResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ConsumeTransferEscrowResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ConsumeTransferEscrowResponseGlobalsTypeInternal ConsumeTransferEscrowResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ConsumeTransferEscrowResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ConsumeTransferEscrowResponse_globals_.GetClassData();
+#else
+  return ConsumeTransferEscrowResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ConsumeTransferEscrowRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ConsumeTransferEscrowRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_._has_bits_);
+};
+
+constexpr ConsumeTransferEscrowRequest::ParseTableT_ ConsumeTransferEscrowRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ConsumeTransferEscrowRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
+      {::_pbi::TcParser::FastV64P1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_.instance_ids_)}},
+      // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConsumeTransferEscrowRequest, _impl_.to_player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_.to_player_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+      {PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
+      {PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_.instance_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ConsumeTransferEscrowRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        instance_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::ConsumeTransferEscrowRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ConsumeTransferEscrowRequest, _impl_.instance_ids_)>()
+         }
+        ,
+        _instance_ids_cached_byte_size_{0},
+        to_player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr ConsumeTransferEscrowRequest::ConsumeTransferEscrowRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ConsumeTransferEscrowRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ConsumeTransferEscrowRequest(arena);
+}
+constexpr auto ConsumeTransferEscrowRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ConsumeTransferEscrowRequest), alignof(ConsumeTransferEscrowRequest));
+}
+constexpr auto ConsumeTransferEscrowRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ConsumeTransferEscrowRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ConsumeTransferEscrowRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ConsumeTransferEscrowRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ConsumeTransferEscrowRequest>(), &ConsumeTransferEscrowRequest::ByteSizeLong,
+              &ConsumeTransferEscrowRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[38],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ConsumeTransferEscrowRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ConsumeTransferEscrowRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ConsumeTransferEscrowRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ConsumeTransferEscrowRequest::InternalGenerateClassData_(
+            _default, &ConsumeTransferEscrowRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ConsumeTransferEscrowRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ConsumeTransferEscrowRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ConsumeTransferEscrowRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ConsumeTransferEscrowRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ConsumeTransferEscrowRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ConsumeTransferEscrowRequestGlobalsTypeInternal ConsumeTransferEscrowRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ConsumeTransferEscrowRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ConsumeTransferEscrowRequest_globals_.GetClassData();
+#else
+  return ConsumeTransferEscrowRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimTransferInstancesResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimTransferInstancesResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesResponse, _impl_._has_bits_);
+};
+
+constexpr ClaimTransferInstancesResponse::ParseTableT_ ClaimTransferInstancesResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ClaimTransferInstancesResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimTransferInstancesResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ClaimTransferInstancesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr ClaimTransferInstancesResponse::ClaimTransferInstancesResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimTransferInstancesResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimTransferInstancesResponse(arena);
+}
+constexpr auto ClaimTransferInstancesResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimTransferInstancesResponse), alignof(ClaimTransferInstancesResponse));
+}
+constexpr auto ClaimTransferInstancesResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimTransferInstancesResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimTransferInstancesResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimTransferInstancesResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimTransferInstancesResponse>(), &ClaimTransferInstancesResponse::ByteSizeLong,
+              &ClaimTransferInstancesResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[35],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimTransferInstancesResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimTransferInstancesResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimTransferInstancesResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimTransferInstancesResponse::InternalGenerateClassData_(
+            _default, &ClaimTransferInstancesResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimTransferInstancesResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimTransferInstancesResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimTransferInstancesResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimTransferInstancesResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimTransferInstancesResponseGlobalsTypeInternal ClaimTransferInstancesResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimTransferInstancesResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimTransferInstancesResponse_globals_.GetClassData();
+#else
+  return ClaimTransferInstancesResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class SettlePlayerTradeRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<SettlePlayerTradeRequest>()._impl_._has_bits_);
@@ -4329,6 +5389,177 @@ const ::_pbi::ClassData* GrantItemsRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimTransferInstancesRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimTransferInstancesRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_._has_bits_);
+};
+
+constexpr ClaimTransferInstancesRequest::ParseTableT_ ClaimTransferInstancesRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::inventory::v1::ClaimTransferInstancesRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimTransferInstancesRequest, _impl_.to_player_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.to_player_id_)}},
+      // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.items_)}},
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.idempotency_key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+      {PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
+      {PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string idempotency_key = 3 [json_name = "idempotencyKey"];
+      {PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_.idempotency_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::inventory::v1::TransferClaimItem>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::inventory::v1::TransferClaimItem_globals_},
+        #endif
+    }},
+    {{
+      "\62\0\0\17\0\0\0\0"
+      "pandora.inventory.v1.ClaimTransferInstancesRequest"
+      "idempotency_key"
+    }},
+  };
+}
+
+
+inline constexpr ClaimTransferInstancesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::ClaimTransferInstancesRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ClaimTransferInstancesRequest, _impl_.items_)>()
+         }
+        ,
+        idempotency_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        to_player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr ClaimTransferInstancesRequest::ClaimTransferInstancesRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimTransferInstancesRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimTransferInstancesRequest(arena);
+}
+constexpr auto ClaimTransferInstancesRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ClaimTransferInstancesRequest), alignof(ClaimTransferInstancesRequest));
+}
+constexpr auto ClaimTransferInstancesRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimTransferInstancesRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimTransferInstancesRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimTransferInstancesRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimTransferInstancesRequest>(), &ClaimTransferInstancesRequest::ByteSizeLong,
+              &ClaimTransferInstancesRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[34],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimTransferInstancesRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimTransferInstancesRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimTransferInstancesRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimTransferInstancesRequest::InternalGenerateClassData_(
+            _default, &ClaimTransferInstancesRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimTransferInstancesRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimTransferInstancesRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimTransferInstancesRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimTransferInstancesRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimTransferInstancesRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimTransferInstancesRequestGlobalsTypeInternal ClaimTransferInstancesRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimTransferInstancesRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimTransferInstancesRequest_globals_.GetClassData();
+#else
+  return ClaimTransferInstancesRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class Inventory::_Internal {
  public:
   using HasBits = decltype(::std::declval<Inventory>()._impl_._has_bits_);
@@ -4832,6 +6063,164 @@ const ::_pbi::ClassData* GrantInstancesResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class EscrowOutInstancesResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EscrowOutInstancesResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_._has_bits_);
+};
+
+constexpr EscrowOutInstancesResponse::ParseTableT_ EscrowOutInstancesResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::inventory::v1::EscrowOutInstancesResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_.items_)}},
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EscrowOutInstancesResponse, _impl_.code_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+      {PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::bag::v1::BagItem>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::bag::v1::BagItem_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr EscrowOutInstancesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::EscrowOutInstancesResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesResponse, _impl_.items_)>()
+         }
+        ,
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr EscrowOutInstancesResponse::EscrowOutInstancesResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EscrowOutInstancesResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EscrowOutInstancesResponse(arena);
+}
+constexpr auto EscrowOutInstancesResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(EscrowOutInstancesResponse), alignof(EscrowOutInstancesResponse));
+}
+constexpr auto EscrowOutInstancesResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EscrowOutInstancesResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EscrowOutInstancesResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EscrowOutInstancesResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EscrowOutInstancesResponse>(), &EscrowOutInstancesResponse::ByteSizeLong,
+              &EscrowOutInstancesResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[32],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EscrowOutInstancesResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EscrowOutInstancesResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EscrowOutInstancesResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EscrowOutInstancesResponse::InternalGenerateClassData_(
+            _default, &EscrowOutInstancesResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EscrowOutInstancesResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EscrowOutInstancesResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EscrowOutInstancesResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EscrowOutInstancesResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EscrowOutInstancesResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EscrowOutInstancesResponseGlobalsTypeInternal EscrowOutInstancesResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EscrowOutInstancesResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EscrowOutInstancesResponse_globals_.GetClassData();
+#else
+  return EscrowOutInstancesResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetInventoryResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetInventoryResponse>()._impl_._has_bits_);
@@ -5265,6 +6654,67 @@ const ::uint32_t
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::MoveInstanceResponse, _impl_.code_),
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesRequest, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesRequest, _impl_.source_player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesRequest, _impl_.to_player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesRequest, _impl_.instance_ids_),
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesRequest, _impl_.escrow_key_),
+        2,
+        3,
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesResponse, _impl_.items_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::TransferClaimItem, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::TransferClaimItem, _impl_.instance_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::TransferClaimItem, _impl_.item_config_id_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ClaimTransferInstancesRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ClaimTransferInstancesRequest, _impl_.to_player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ClaimTransferInstancesRequest, _impl_.items_),
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ClaimTransferInstancesRequest, _impl_.idempotency_key_),
+        2,
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ClaimTransferInstancesResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ClaimTransferInstancesResponse, _impl_.code_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ReleaseTransferEscrowRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ReleaseTransferEscrowRequest, _impl_.instance_ids_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ReleaseTransferEscrowResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ReleaseTransferEscrowResponse, _impl_.code_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ConsumeTransferEscrowRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ConsumeTransferEscrowRequest, _impl_.to_player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ConsumeTransferEscrowRequest, _impl_.instance_ids_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ConsumeTransferEscrowResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ConsumeTransferEscrowResponse, _impl_.code_),
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -5300,6 +6750,15 @@ static const ::_pbi::MigrationSchema
         {250, sizeof(::pandora::inventory::v1::DiscardInstanceResponse)},
         {255, sizeof(::pandora::inventory::v1::MoveInstanceRequest)},
         {264, sizeof(::pandora::inventory::v1::MoveInstanceResponse)},
+        {269, sizeof(::pandora::inventory::v1::EscrowOutInstancesRequest)},
+        {280, sizeof(::pandora::inventory::v1::EscrowOutInstancesResponse)},
+        {287, sizeof(::pandora::inventory::v1::TransferClaimItem)},
+        {294, sizeof(::pandora::inventory::v1::ClaimTransferInstancesRequest)},
+        {303, sizeof(::pandora::inventory::v1::ClaimTransferInstancesResponse)},
+        {308, sizeof(::pandora::inventory::v1::ReleaseTransferEscrowRequest)},
+        {313, sizeof(::pandora::inventory::v1::ReleaseTransferEscrowResponse)},
+        {318, sizeof(::pandora::inventory::v1::ConsumeTransferEscrowRequest)},
+        {325, sizeof(::pandora::inventory::v1::ConsumeTransferEscrowResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -5334,166 +6793,214 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::inventory::v1::DiscardInstanceResponse_globals_,
         &::pandora::inventory::v1::MoveInstanceRequest_globals_,
         &::pandora::inventory::v1::MoveInstanceResponse_globals_,
+        &::pandora::inventory::v1::EscrowOutInstancesRequest_globals_,
+        &::pandora::inventory::v1::EscrowOutInstancesResponse_globals_,
+        &::pandora::inventory::v1::TransferClaimItem_globals_,
+        &::pandora::inventory::v1::ClaimTransferInstancesRequest_globals_,
+        &::pandora::inventory::v1::ClaimTransferInstancesResponse_globals_,
+        &::pandora::inventory::v1::ReleaseTransferEscrowRequest_globals_,
+        &::pandora::inventory::v1::ReleaseTransferEscrowResponse_globals_,
+        &::pandora::inventory::v1::ConsumeTransferEscrowRequest_globals_,
+        &::pandora::inventory::v1::ConsumeTransferEscrowResponse_globals_,
 };
 const char descriptor_table_protodef_pandora_2finventory_2fv1_2finventory_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n$pandora/inventory/v1/inventory.proto\022\024"
     "pandora.inventory.v1\032\037pandora/common/v1/"
-    "errcode.proto\"G\n\tItemStack\022$\n\016item_confi"
-    "g_id\030\001 \001(\rR\014itemConfigId\022\024\n\005count\030\002 \001(\003R"
-    "\005count\"G\n\tItemGrant\022$\n\016item_config_id\030\001 "
-    "\001(\rR\014itemConfigId\022\024\n\005count\030\002 \001(\003R\005count\""
-    "\321\001\n\tInventory\022\033\n\tplayer_id\030\001 \001(\004R\010player"
-    "Id\022\022\n\004gold\030\002 \001(\003R\004gold\0225\n\005items\030\003 \003(\0132\037."
-    "pandora.inventory.v1.ItemStackR\005items\022\032\n"
-    "\010capacity\030\004 \001(\005R\010capacity\022@\n\tinstances\030\005"
-    " \003(\0132\".pandora.inventory.v1.ItemInstance"
-    "R\tinstances\">\n\rItemAttribute\022\027\n\007attr_id\030"
-    "\001 \001(\rR\006attrId\022\024\n\005value\030\002 \001(\003R\005value\"\357\001\n\014"
-    "ItemInstance\022\037\n\013instance_id\030\001 \001(\004R\ninsta"
-    "nceId\022$\n\016item_config_id\030\002 \001(\rR\014itemConfi"
-    "gId\022\036\n\nidentified\030\003 \001(\010R\nidentified\022C\n\na"
-    "ttributes\030\004 \003(\0132#.pandora.inventory.v1.I"
-    "temAttributeR\nattributes\022\035\n\nslot_index\030\005"
-    " \001(\005R\tslotIndex\022\024\n\005bound\030\006 \001(\010R\005bound\"2\n"
-    "\023GetInventoryRequest\022\033\n\tplayer_id\030\001 \001(\004R"
-    "\010playerId\"\205\001\n\024GetInventoryResponse\022.\n\004co"
-    "de\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004co"
-    "de\022=\n\tinventory\030\002 \001(\0132\037.pandora.inventor"
-    "y.v1.InventoryR\tinventory\"\244\001\n\021GrantItems"
-    "Request\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\0225\n\005"
-    "items\030\002 \003(\0132\037.pandora.inventory.v1.ItemG"
-    "rantR\005items\022\022\n\004gold\030\003 \001(\003R\004gold\022\'\n\017idemp"
-    "otency_key\030\004 \001(\tR\016idempotencyKey\"X\n\022Gran"
-    "tItemsResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
-    "ommon.v1.ErrCodeR\004code\022\022\n\004gold\030\002 \001(\003R\004go"
-    "ld\"\222\001\n\016UseItemRequest\022\033\n\tplayer_id\030\001 \001(\004"
-    "R\010playerId\022$\n\016item_config_id\030\002 \001(\rR\014item"
-    "ConfigId\022\024\n\005count\030\003 \001(\003R\005count\022\'\n\017idempo"
-    "tency_key\030\004 \001(\tR\016idempotencyKey\"_\n\017UseIt"
-    "emResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
-    "n.v1.ErrCodeR\004code\022\034\n\tremaining\030\002 \001(\003R\tr"
-    "emaining\"\223\001\n\017SellItemRequest\022\033\n\tplayer_i"
-    "d\030\001 \001(\004R\010playerId\022$\n\016item_config_id\030\002 \001("
-    "\rR\014itemConfigId\022\024\n\005count\030\003 \001(\003R\005count\022\'\n"
-    "\017idempotency_key\030\004 \001(\tR\016idempotencyKey\"t"
-    "\n\020SellItemResponse\022.\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCodeR\004code\022\034\n\tremaining\030"
-    "\002 \001(\003R\tremaining\022\022\n\004gold\030\003 \001(\003R\004gold\"\225\002\n"
-    "\031SettleAuctionMatchRequest\022\031\n\010match_id\030\001"
-    " \001(\004R\007matchId\022\033\n\tseller_id\030\002 \001(\004R\010seller"
-    "Id\022\031\n\010buyer_id\030\003 \001(\004R\007buyerId\022$\n\016item_co"
-    "nfig_id\030\004 \001(\rR\014itemConfigId\022\032\n\010quantity\030"
-    "\005 \001(\003R\010quantity\022\035\n\nunit_price\030\006 \001(\003R\tuni"
-    "tPrice\022\"\n\rsell_order_id\030\007 \001(\004R\013sellOrder"
-    "Id\022 \n\014buy_order_id\030\010 \001(\004R\nbuyOrderId\"L\n\032"
-    "SettleAuctionMatchResponse\022.\n\004code\030\001 \001(\016"
-    "2\032.pandora.common.v1.ErrCodeR\004code\"\211\002\n\030S"
-    "ettlePlayerTradeRequest\022\031\n\010order_id\030\001 \001("
-    "\004R\007orderId\022\033\n\tseller_id\030\002 \001(\004R\010sellerId\022"
-    "\031\n\010buyer_id\030\003 \001(\004R\007buyerId\022B\n\014seller_ite"
-    "ms\030\004 \003(\0132\037.pandora.inventory.v1.ItemGran"
-    "tR\013sellerItems\022@\n\013buyer_items\030\005 \003(\0132\037.pa"
-    "ndora.inventory.v1.ItemGrantR\nbuyerItems"
-    "\022\024\n\005price\030\006 \001(\003R\005price\"K\n\031SettlePlayerTr"
-    "adeResponse\022.\n\004code\030\001 \001(\0162\032.pandora.comm"
-    "on.v1.ErrCodeR\004code\"\346\001\n\025FreezeForOrderRe"
-    "quest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031\n\010or"
-    "der_id\030\002 \001(\004R\007orderId\0224\n\004side\030\003 \001(\0162 .pa"
-    "ndora.inventory.v1.EscrowSideR\004side\022$\n\016i"
-    "tem_config_id\030\004 \001(\rR\014itemConfigId\022\032\n\010qua"
-    "ntity\030\005 \001(\003R\010quantity\022\035\n\nunit_price\030\006 \001("
-    "\003R\tunitPrice\"H\n\026FreezeForOrderResponse\022."
-    "\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCode"
-    "R\004code\"\376\001\n\032EnsureAuctionEscrowRequest\022\033\n"
-    "\tplayer_id\030\001 \001(\004R\010playerId\022\031\n\010order_id\030\002"
-    " \001(\004R\007orderId\0224\n\004side\030\003 \001(\0162 .pandora.in"
-    "ventory.v1.EscrowSideR\004side\022$\n\016item_conf"
-    "ig_id\030\004 \001(\rR\014itemConfigId\022-\n\022remaining_q"
-    "uantity\030\005 \001(\004R\021remainingQuantity\022\035\n\nunit"
-    "_price\030\006 \001(\004R\tunitPrice\"M\n\033EnsureAuction"
-    "EscrowResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
-    "ommon.v1.ErrCodeR\004code\"N\n\024ReleaseEscrowR"
-    "equest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031\n\010o"
-    "rder_id\030\002 \001(\004R\007orderId\"G\n\025ReleaseEscrowR"
-    "esponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v"
-    "1.ErrCodeR\004code\"\205\001\n\025GrantInstancesReques"
-    "t\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022&\n\017item_c"
-    "onfig_ids\030\002 \003(\rR\ritemConfigIds\022\'\n\017idempo"
-    "tency_key\030\003 \001(\tR\016idempotencyKey\"\212\001\n\026Gran"
+    "errcode.proto\032\030pandora/bag/v1/bag.proto\""
+    "G\n\tItemStack\022$\n\016item_config_id\030\001 \001(\rR\014it"
+    "emConfigId\022\024\n\005count\030\002 \001(\003R\005count\"G\n\tItem"
+    "Grant\022$\n\016item_config_id\030\001 \001(\rR\014itemConfi"
+    "gId\022\024\n\005count\030\002 \001(\003R\005count\"\321\001\n\tInventory\022"
+    "\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\022\n\004gold\030\002 \001"
+    "(\003R\004gold\0225\n\005items\030\003 \003(\0132\037.pandora.invent"
+    "ory.v1.ItemStackR\005items\022\032\n\010capacity\030\004 \001("
+    "\005R\010capacity\022@\n\tinstances\030\005 \003(\0132\".pandora"
+    ".inventory.v1.ItemInstanceR\tinstances\">\n"
+    "\rItemAttribute\022\027\n\007attr_id\030\001 \001(\rR\006attrId\022"
+    "\024\n\005value\030\002 \001(\003R\005value\"\357\001\n\014ItemInstance\022\037"
+    "\n\013instance_id\030\001 \001(\004R\ninstanceId\022$\n\016item_"
+    "config_id\030\002 \001(\rR\014itemConfigId\022\036\n\nidentif"
+    "ied\030\003 \001(\010R\nidentified\022C\n\nattributes\030\004 \003("
+    "\0132#.pandora.inventory.v1.ItemAttributeR\n"
+    "attributes\022\035\n\nslot_index\030\005 \001(\005R\tslotInde"
+    "x\022\024\n\005bound\030\006 \001(\010R\005bound\"2\n\023GetInventoryR"
+    "equest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"\205\001\n\024"
+    "GetInventoryResponse\022.\n\004code\030\001 \001(\0162\032.pan"
+    "dora.common.v1.ErrCodeR\004code\022=\n\tinventor"
+    "y\030\002 \001(\0132\037.pandora.inventory.v1.Inventory"
+    "R\tinventory\"\244\001\n\021GrantItemsRequest\022\033\n\tpla"
+    "yer_id\030\001 \001(\004R\010playerId\0225\n\005items\030\002 \003(\0132\037."
+    "pandora.inventory.v1.ItemGrantR\005items\022\022\n"
+    "\004gold\030\003 \001(\003R\004gold\022\'\n\017idempotency_key\030\004 \001"
+    "(\tR\016idempotencyKey\"X\n\022GrantItemsResponse"
+    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
+    "deR\004code\022\022\n\004gold\030\002 \001(\003R\004gold\"\222\001\n\016UseItem"
+    "Request\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022$\n\016"
+    "item_config_id\030\002 \001(\rR\014itemConfigId\022\024\n\005co"
+    "unt\030\003 \001(\003R\005count\022\'\n\017idempotency_key\030\004 \001("
+    "\tR\016idempotencyKey\"_\n\017UseItemResponse\022.\n\004"
+    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
+    "code\022\034\n\tremaining\030\002 \001(\003R\tremaining\"\223\001\n\017S"
+    "ellItemRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
+    "rId\022$\n\016item_config_id\030\002 \001(\rR\014itemConfigI"
+    "d\022\024\n\005count\030\003 \001(\003R\005count\022\'\n\017idempotency_k"
+    "ey\030\004 \001(\tR\016idempotencyKey\"t\n\020SellItemResp"
+    "onse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.E"
+    "rrCodeR\004code\022\034\n\tremaining\030\002 \001(\003R\tremaini"
+    "ng\022\022\n\004gold\030\003 \001(\003R\004gold\"\225\002\n\031SettleAuction"
+    "MatchRequest\022\031\n\010match_id\030\001 \001(\004R\007matchId\022"
+    "\033\n\tseller_id\030\002 \001(\004R\010sellerId\022\031\n\010buyer_id"
+    "\030\003 \001(\004R\007buyerId\022$\n\016item_config_id\030\004 \001(\rR"
+    "\014itemConfigId\022\032\n\010quantity\030\005 \001(\003R\010quantit"
+    "y\022\035\n\nunit_price\030\006 \001(\003R\tunitPrice\022\"\n\rsell"
+    "_order_id\030\007 \001(\004R\013sellOrderId\022 \n\014buy_orde"
+    "r_id\030\010 \001(\004R\nbuyOrderId\"L\n\032SettleAuctionM"
+    "atchResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
+    "mon.v1.ErrCodeR\004code\"\211\002\n\030SettlePlayerTra"
+    "deRequest\022\031\n\010order_id\030\001 \001(\004R\007orderId\022\033\n\t"
+    "seller_id\030\002 \001(\004R\010sellerId\022\031\n\010buyer_id\030\003 "
+    "\001(\004R\007buyerId\022B\n\014seller_items\030\004 \003(\0132\037.pan"
+    "dora.inventory.v1.ItemGrantR\013sellerItems"
+    "\022@\n\013buyer_items\030\005 \003(\0132\037.pandora.inventor"
+    "y.v1.ItemGrantR\nbuyerItems\022\024\n\005price\030\006 \001("
+    "\003R\005price\"K\n\031SettlePlayerTradeResponse\022.\n"
+    "\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR"
+    "\004code\"\346\001\n\025FreezeForOrderRequest\022\033\n\tplaye"
+    "r_id\030\001 \001(\004R\010playerId\022\031\n\010order_id\030\002 \001(\004R\007"
+    "orderId\0224\n\004side\030\003 \001(\0162 .pandora.inventor"
+    "y.v1.EscrowSideR\004side\022$\n\016item_config_id\030"
+    "\004 \001(\rR\014itemConfigId\022\032\n\010quantity\030\005 \001(\003R\010q"
+    "uantity\022\035\n\nunit_price\030\006 \001(\003R\tunitPrice\"H"
+    "\n\026FreezeForOrderResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\"\376\001\n\032Ens"
+    "ureAuctionEscrowRequest\022\033\n\tplayer_id\030\001 \001"
+    "(\004R\010playerId\022\031\n\010order_id\030\002 \001(\004R\007orderId\022"
+    "4\n\004side\030\003 \001(\0162 .pandora.inventory.v1.Esc"
+    "rowSideR\004side\022$\n\016item_config_id\030\004 \001(\rR\014i"
+    "temConfigId\022-\n\022remaining_quantity\030\005 \001(\004R"
+    "\021remainingQuantity\022\035\n\nunit_price\030\006 \001(\004R\t"
+    "unitPrice\"M\n\033EnsureAuctionEscrowResponse"
+    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
+    "deR\004code\"N\n\024ReleaseEscrowRequest\022\033\n\tplay"
+    "er_id\030\001 \001(\004R\010playerId\022\031\n\010order_id\030\002 \001(\004R"
+    "\007orderId\"G\n\025ReleaseEscrowResponse\022.\n\004cod"
+    "e\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004cod"
+    "e\"\205\001\n\025GrantInstancesRequest\022\033\n\tplayer_id"
+    "\030\001 \001(\004R\010playerId\022&\n\017item_config_ids\030\002 \003("
+    "\rR\ritemConfigIds\022\'\n\017idempotency_key\030\003 \001("
+    "\tR\016idempotencyKey\"\212\001\n\026GrantInstancesResp"
+    "onse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.E"
+    "rrCodeR\004code\022@\n\tinstances\030\002 \003(\0132\".pandor"
+    "a.inventory.v1.ItemInstanceR\tinstances\"S"
+    "\n\023IdentifyItemRequest\022\033\n\tplayer_id\030\001 \001(\004"
+    "R\010playerId\022\037\n\013instance_id\030\002 \001(\004R\ninstanc"
+    "eId\"\206\001\n\024IdentifyItemResponse\022.\n\004code\030\001 \001"
+    "(\0162\032.pandora.common.v1.ErrCodeR\004code\022>\n\010"
+    "instance\030\002 \001(\0132\".pandora.inventory.v1.It"
+    "emInstanceR\010instance\"V\n\026DiscardInstanceR"
+    "equest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\037\n\013i"
+    "nstance_id\030\002 \001(\004R\ninstanceId\"I\n\027DiscardI"
+    "nstanceResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\"w\n\023MoveInstanceR"
+    "equest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\037\n\013i"
+    "nstance_id\030\002 \001(\004R\ninstanceId\022\"\n\rto_slot_"
+    "index\030\003 \001(\005R\013toSlotIndex\"F\n\024MoveInstance"
+    "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
+    "v1.ErrCodeR\004code\"\251\001\n\031EscrowOutInstancesR"
+    "equest\022(\n\020source_player_id\030\001 \001(\004R\016source"
+    "PlayerId\022 \n\014to_player_id\030\002 \001(\004R\ntoPlayer"
+    "Id\022!\n\014instance_ids\030\003 \003(\004R\013instanceIds\022\035\n"
+    "\nescrow_key\030\004 \001(\tR\tescrowKey\"{\n\032EscrowOu"
     "tInstancesResponse\022.\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCodeR\004code\022@\n\tinstances\030"
-    "\002 \003(\0132\".pandora.inventory.v1.ItemInstanc"
-    "eR\tinstances\"S\n\023IdentifyItemRequest\022\033\n\tp"
-    "layer_id\030\001 \001(\004R\010playerId\022\037\n\013instance_id\030"
-    "\002 \001(\004R\ninstanceId\"\206\001\n\024IdentifyItemRespon"
-    "se\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
-    "CodeR\004code\022>\n\010instance\030\002 \001(\0132\".pandora.i"
-    "nventory.v1.ItemInstanceR\010instance\"V\n\026Di"
-    "scardInstanceRequest\022\033\n\tplayer_id\030\001 \001(\004R"
-    "\010playerId\022\037\n\013instance_id\030\002 \001(\004R\ninstance"
-    "Id\"I\n\027DiscardInstanceResponse\022.\n\004code\030\001 "
-    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\"w\n"
-    "\023MoveInstanceRequest\022\033\n\tplayer_id\030\001 \001(\004R"
-    "\010playerId\022\037\n\013instance_id\030\002 \001(\004R\ninstance"
-    "Id\022\"\n\rto_slot_index\030\003 \001(\005R\013toSlotIndex\"F"
-    "\n\024MoveInstanceResponse\022.\n\004code\030\001 \001(\0162\032.p"
-    "andora.common.v1.ErrCodeR\004code*T\n\nEscrow"
-    "Side\022\033\n\027ESCROW_SIDE_UNSPECIFIED\020\000\022\024\n\020ESC"
-    "ROW_SIDE_SELL\020\001\022\023\n\017ESCROW_SIDE_BUY\020\002*E\n\014"
-    "CurrencyKind\022\035\n\031CURRENCY_KIND_UNSPECIFIE"
-    "D\020\000\022\026\n\022CURRENCY_KIND_GOLD\020\0012\372\n\n\020Inventor"
-    "yService\022e\n\014GetInventory\022).pandora.inven"
-    "tory.v1.GetInventoryRequest\032*.pandora.in"
-    "ventory.v1.GetInventoryResponse\022_\n\nGrant"
-    "Items\022\'.pandora.inventory.v1.GrantItemsR"
-    "equest\032(.pandora.inventory.v1.GrantItems"
-    "Response\022V\n\007UseItem\022$.pandora.inventory."
-    "v1.UseItemRequest\032%.pandora.inventory.v1"
-    ".UseItemResponse\022Y\n\010SellItem\022%.pandora.i"
-    "nventory.v1.SellItemRequest\032&.pandora.in"
-    "ventory.v1.SellItemResponse\022k\n\016GrantInst"
-    "ances\022+.pandora.inventory.v1.GrantInstan"
-    "cesRequest\032,.pandora.inventory.v1.GrantI"
-    "nstancesResponse\022e\n\014IdentifyItem\022).pando"
-    "ra.inventory.v1.IdentifyItemRequest\032*.pa"
-    "ndora.inventory.v1.IdentifyItemResponse\022"
-    "n\n\017DiscardInstance\022,.pandora.inventory.v"
-    "1.DiscardInstanceRequest\032-.pandora.inven"
-    "tory.v1.DiscardInstanceResponse\022e\n\014MoveI"
-    "nstance\022).pandora.inventory.v1.MoveInsta"
-    "nceRequest\032*.pandora.inventory.v1.MoveIn"
-    "stanceResponse\022k\n\016FreezeForOrder\022+.pando"
-    "ra.inventory.v1.FreezeForOrderRequest\032,."
-    "pandora.inventory.v1.FreezeForOrderRespo"
-    "nse\022z\n\023EnsureAuctionEscrow\0220.pandora.inv"
-    "entory.v1.EnsureAuctionEscrowRequest\0321.p"
-    "andora.inventory.v1.EnsureAuctionEscrowR"
-    "esponse\022w\n\022SettleAuctionMatch\022/.pandora."
-    "inventory.v1.SettleAuctionMatchRequest\0320"
-    ".pandora.inventory.v1.SettleAuctionMatch"
-    "Response\022t\n\021SettlePlayerTrade\022..pandora."
-    "inventory.v1.SettlePlayerTradeRequest\032/."
-    "pandora.inventory.v1.SettlePlayerTradeRe"
-    "sponse\022h\n\rReleaseEscrow\022*.pandora.invent"
-    "ory.v1.ReleaseEscrowRequest\032+.pandora.in"
-    "ventory.v1.ReleaseEscrowResponseb\006proto3"
+    "ra.common.v1.ErrCodeR\004code\022-\n\005items\030\002 \003("
+    "\0132\027.pandora.bag.v1.BagItemR\005items\"Z\n\021Tra"
+    "nsferClaimItem\022\037\n\013instance_id\030\001 \001(\004R\nins"
+    "tanceId\022$\n\016item_config_id\030\002 \001(\rR\014itemCon"
+    "figId\"\251\001\n\035ClaimTransferInstancesRequest\022"
+    " \n\014to_player_id\030\001 \001(\004R\ntoPlayerId\022=\n\005ite"
+    "ms\030\002 \003(\0132\'.pandora.inventory.v1.Transfer"
+    "ClaimItemR\005items\022\'\n\017idempotency_key\030\003 \001("
+    "\tR\016idempotencyKey\"P\n\036ClaimTransferInstan"
+    "cesResponse\022.\n\004code\030\001 \001(\0162\032.pandora.comm"
+    "on.v1.ErrCodeR\004code\"A\n\034ReleaseTransferEs"
+    "crowRequest\022!\n\014instance_ids\030\001 \003(\004R\013insta"
+    "nceIds\"O\n\035ReleaseTransferEscrowResponse\022"
+    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
+    "eR\004code\"c\n\034ConsumeTransferEscrowRequest\022"
+    " \n\014to_player_id\030\001 \001(\004R\ntoPlayerId\022!\n\014ins"
+    "tance_ids\030\002 \003(\004R\013instanceIds\"O\n\035ConsumeT"
+    "ransferEscrowResponse\022.\n\004code\030\001 \001(\0162\032.pa"
+    "ndora.common.v1.ErrCodeR\004code*T\n\nEscrowS"
+    "ide\022\033\n\027ESCROW_SIDE_UNSPECIFIED\020\000\022\024\n\020ESCR"
+    "OW_SIDE_SELL\020\001\022\023\n\017ESCROW_SIDE_BUY\020\002*E\n\014C"
+    "urrencyKind\022\035\n\031CURRENCY_KIND_UNSPECIFIED"
+    "\020\000\022\026\n\022CURRENCY_KIND_GOLD\020\0012\377\016\n\020Inventory"
+    "Service\022e\n\014GetInventory\022).pandora.invent"
+    "ory.v1.GetInventoryRequest\032*.pandora.inv"
+    "entory.v1.GetInventoryResponse\022_\n\nGrantI"
+    "tems\022\'.pandora.inventory.v1.GrantItemsRe"
+    "quest\032(.pandora.inventory.v1.GrantItemsR"
+    "esponse\022V\n\007UseItem\022$.pandora.inventory.v"
+    "1.UseItemRequest\032%.pandora.inventory.v1."
+    "UseItemResponse\022Y\n\010SellItem\022%.pandora.in"
+    "ventory.v1.SellItemRequest\032&.pandora.inv"
+    "entory.v1.SellItemResponse\022k\n\016GrantInsta"
+    "nces\022+.pandora.inventory.v1.GrantInstanc"
+    "esRequest\032,.pandora.inventory.v1.GrantIn"
+    "stancesResponse\022e\n\014IdentifyItem\022).pandor"
+    "a.inventory.v1.IdentifyItemRequest\032*.pan"
+    "dora.inventory.v1.IdentifyItemResponse\022n"
+    "\n\017DiscardInstance\022,.pandora.inventory.v1"
+    ".DiscardInstanceRequest\032-.pandora.invent"
+    "ory.v1.DiscardInstanceResponse\022e\n\014MoveIn"
+    "stance\022).pandora.inventory.v1.MoveInstan"
+    "ceRequest\032*.pandora.inventory.v1.MoveIns"
+    "tanceResponse\022k\n\016FreezeForOrder\022+.pandor"
+    "a.inventory.v1.FreezeForOrderRequest\032,.p"
+    "andora.inventory.v1.FreezeForOrderRespon"
+    "se\022z\n\023EnsureAuctionEscrow\0220.pandora.inve"
+    "ntory.v1.EnsureAuctionEscrowRequest\0321.pa"
+    "ndora.inventory.v1.EnsureAuctionEscrowRe"
+    "sponse\022w\n\022SettleAuctionMatch\022/.pandora.i"
+    "nventory.v1.SettleAuctionMatchRequest\0320."
+    "pandora.inventory.v1.SettleAuctionMatchR"
+    "esponse\022t\n\021SettlePlayerTrade\022..pandora.i"
+    "nventory.v1.SettlePlayerTradeRequest\032/.p"
+    "andora.inventory.v1.SettlePlayerTradeRes"
+    "ponse\022h\n\rReleaseEscrow\022*.pandora.invento"
+    "ry.v1.ReleaseEscrowRequest\032+.pandora.inv"
+    "entory.v1.ReleaseEscrowResponse\022w\n\022Escro"
+    "wOutInstances\022/.pandora.inventory.v1.Esc"
+    "rowOutInstancesRequest\0320.pandora.invento"
+    "ry.v1.EscrowOutInstancesResponse\022\203\001\n\026Cla"
+    "imTransferInstances\0223.pandora.inventory."
+    "v1.ClaimTransferInstancesRequest\0324.pando"
+    "ra.inventory.v1.ClaimTransferInstancesRe"
+    "sponse\022\200\001\n\025ReleaseTransferEscrow\0222.pando"
+    "ra.inventory.v1.ReleaseTransferEscrowReq"
+    "uest\0323.pandora.inventory.v1.ReleaseTrans"
+    "ferEscrowResponse\022\200\001\n\025ConsumeTransferEsc"
+    "row\0222.pandora.inventory.v1.ConsumeTransf"
+    "erEscrowRequest\0323.pandora.inventory.v1.C"
+    "onsumeTransferEscrowResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto_deps[1] = {
+    descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto_deps[2] = {
+        &::descriptor_table_pandora_2fbag_2fv1_2fbag_2eproto,
         &::descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto,
 };
 static ::absl::once_flag descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto = {
     false,
     false,
-    5640,
+    7156,
     descriptor_table_protodef_pandora_2finventory_2fv1_2finventory_2eproto,
     "pandora/inventory/v1/inventory.proto",
     &descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto_once,
     descriptor_table_pandora_2finventory_2fv1_2finventory_2eproto_deps,
-    1,
-    31,
+    2,
+    40,
     schemas,
     file_message_globals,
     TableStruct_pandora_2finventory_2fv1_2finventory_2eproto::offsets,
@@ -13368,6 +14875,2130 @@ void MoveInstanceResponse::InternalSwap(MoveInstanceResponse* PROTOBUF_RESTRICT 
 }
 
 ::google::protobuf::Metadata MoveInstanceResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+EscrowOutInstancesRequest::EscrowOutInstancesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EscrowOutInstancesRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.inventory.v1.EscrowOutInstancesRequest)
+}
+PROTOBUF_NDEBUG_INLINE EscrowOutInstancesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::inventory::v1::EscrowOutInstancesRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        instance_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::inventory::v1::EscrowOutInstancesRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesRequest, _impl_.instance_ids_)>()
+          , from.instance_ids_
+        }
+        ,
+        _instance_ids_cached_byte_size_{0},
+        escrow_key_(arena, from.escrow_key_) {}
+
+EscrowOutInstancesRequest::EscrowOutInstancesRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EscrowOutInstancesRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EscrowOutInstancesRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  EscrowOutInstancesRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, source_player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, source_player_id_),
+           offsetof(Impl_, to_player_id_) -
+               offsetof(Impl_, source_player_id_) +
+               sizeof(Impl_::to_player_id_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.inventory.v1.EscrowOutInstancesRequest)
+}
+PROTOBUF_NDEBUG_INLINE EscrowOutInstancesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        instance_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::EscrowOutInstancesRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesRequest, _impl_.instance_ids_)>()
+         }
+        ,
+        _instance_ids_cached_byte_size_{0},
+        escrow_key_(arena) {}
+
+inline void EscrowOutInstancesRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, source_player_id_),
+           0,
+           offsetof(Impl_, to_player_id_) -
+               offsetof(Impl_, source_player_id_) +
+               sizeof(Impl_::to_player_id_));
+}
+EscrowOutInstancesRequest::~EscrowOutInstancesRequest() {
+  // @@protoc_insertion_point(destructor:pandora.inventory.v1.EscrowOutInstancesRequest)
+  SharedDtor(*this);
+}
+inline void EscrowOutInstancesRequest::SharedDtor(MessageLite& self) {
+  EscrowOutInstancesRequest& this_ = static_cast<EscrowOutInstancesRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.escrow_key_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EscrowOutInstancesRequest_class_data_ =
+        EscrowOutInstancesRequest::InternalGenerateClassData_(EscrowOutInstancesRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EscrowOutInstancesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EscrowOutInstancesRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EscrowOutInstancesRequest_class_data_.tc_table);
+  return EscrowOutInstancesRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EscrowOutInstancesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EscrowOutInstancesRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EscrowOutInstancesRequest_globals_));
+  return EscrowOutInstancesRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EscrowOutInstancesRequest::ParseTableT_
+    EscrowOutInstancesRequest::_table_ =
+        EscrowOutInstancesRequest::InternalGenerateParseTable_(EscrowOutInstancesRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EscrowOutInstancesRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.inventory.v1.EscrowOutInstancesRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.instance_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.escrow_key_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+    ::memset(&_impl_.source_player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.to_player_id_) -
+        reinterpret_cast<char*>(&_impl_.source_player_id_)) + sizeof(_impl_.to_player_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EscrowOutInstancesRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EscrowOutInstancesRequest& this_ = static_cast<const EscrowOutInstancesRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EscrowOutInstancesRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EscrowOutInstancesRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.inventory.v1.EscrowOutInstancesRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_source_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_source_player_id(), target);
+    }
+  }
+
+  // uint64 to_player_id = 2 [json_name = "toPlayerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_to_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_to_player_id(), target);
+    }
+  }
+
+  // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._instance_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            3, this_._internal_instance_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // string escrow_key = 4 [json_name = "escrowKey"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_escrow_key().empty()) {
+      const ::std::string& _s = this_._internal_escrow_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.inventory.v1.EscrowOutInstancesRequest.escrow_key");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.inventory.v1.EscrowOutInstancesRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EscrowOutInstancesRequest::ByteSizeLong(const MessageLite& base) {
+  const EscrowOutInstancesRequest& this_ = static_cast<const EscrowOutInstancesRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EscrowOutInstancesRequest::ByteSizeLong() const {
+  const EscrowOutInstancesRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.inventory.v1.EscrowOutInstancesRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_instance_ids(), 1,
+              this_._impl_._instance_ids_cached_byte_size_);
+    }
+    // string escrow_key = 4 [json_name = "escrowKey"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_escrow_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_escrow_key());
+      }
+    }
+    // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_source_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_source_player_id());
+      }
+    }
+    // uint64 to_player_id = 2 [json_name = "toPlayerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_to_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_to_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EscrowOutInstancesRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EscrowOutInstancesRequest*>(&to_msg);
+  auto& from = static_cast<const EscrowOutInstancesRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.inventory.v1.EscrowOutInstancesRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_instance_ids()->MergeFrom(from._internal_instance_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_escrow_key().empty()) {
+        _this->_internal_set_escrow_key(from._internal_escrow_key());
+      } else {
+        if (_this->_impl_.escrow_key_.IsDefault()) {
+          _this->_internal_set_escrow_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_source_player_id() != 0) {
+        _this->_impl_.source_player_id_ = from._impl_.source_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_to_player_id() != 0) {
+        _this->_impl_.to_player_id_ = from._impl_.to_player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EscrowOutInstancesRequest::CopyFrom(const EscrowOutInstancesRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.inventory.v1.EscrowOutInstancesRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EscrowOutInstancesRequest::InternalSwap(EscrowOutInstancesRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.instance_ids_.InternalSwap(&other->_impl_.instance_ids_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.escrow_key_, &other->_impl_.escrow_key_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.to_player_id_)
+      + sizeof(EscrowOutInstancesRequest::_impl_.to_player_id_)
+      - PROTOBUF_FIELD_OFFSET(EscrowOutInstancesRequest, _impl_.source_player_id_)>(
+          reinterpret_cast<char*>(&_impl_.source_player_id_),
+          reinterpret_cast<char*>(&other->_impl_.source_player_id_));
+}
+
+::google::protobuf::Metadata EscrowOutInstancesRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void EscrowOutInstancesResponse::clear_items() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.items_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+EscrowOutInstancesResponse::EscrowOutInstancesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EscrowOutInstancesResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.inventory.v1.EscrowOutInstancesResponse)
+}
+PROTOBUF_NDEBUG_INLINE EscrowOutInstancesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::inventory::v1::EscrowOutInstancesResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        items_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::inventory::v1::EscrowOutInstancesResponse,
+              PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesResponse, _impl_.items_)>()
+          , from.items_
+        }
+     {}
+
+EscrowOutInstancesResponse::EscrowOutInstancesResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EscrowOutInstancesResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EscrowOutInstancesResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  EscrowOutInstancesResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.code_ = from._impl_.code_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.inventory.v1.EscrowOutInstancesResponse)
+}
+PROTOBUF_NDEBUG_INLINE EscrowOutInstancesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::EscrowOutInstancesResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::EscrowOutInstancesResponse, _impl_.items_)>()
+         }
+     {}
+
+inline void EscrowOutInstancesResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+EscrowOutInstancesResponse::~EscrowOutInstancesResponse() {
+  // @@protoc_insertion_point(destructor:pandora.inventory.v1.EscrowOutInstancesResponse)
+  SharedDtor(*this);
+}
+inline void EscrowOutInstancesResponse::SharedDtor(MessageLite& self) {
+  EscrowOutInstancesResponse& this_ = static_cast<EscrowOutInstancesResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EscrowOutInstancesResponse_class_data_ =
+        EscrowOutInstancesResponse::InternalGenerateClassData_(EscrowOutInstancesResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EscrowOutInstancesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EscrowOutInstancesResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EscrowOutInstancesResponse_class_data_.tc_table);
+  return EscrowOutInstancesResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EscrowOutInstancesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EscrowOutInstancesResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EscrowOutInstancesResponse_globals_));
+  return EscrowOutInstancesResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EscrowOutInstancesResponse::ParseTableT_
+    EscrowOutInstancesResponse::_table_ =
+        EscrowOutInstancesResponse::InternalGenerateParseTable_(EscrowOutInstancesResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EscrowOutInstancesResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.inventory.v1.EscrowOutInstancesResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.items_.Clear();
+  }
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EscrowOutInstancesResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EscrowOutInstancesResponse& this_ = static_cast<const EscrowOutInstancesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EscrowOutInstancesResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EscrowOutInstancesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.inventory.v1.EscrowOutInstancesResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_items_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_items().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              2, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.inventory.v1.EscrowOutInstancesResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EscrowOutInstancesResponse::ByteSizeLong(const MessageLite& base) {
+  const EscrowOutInstancesResponse& this_ = static_cast<const EscrowOutInstancesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EscrowOutInstancesResponse::ByteSizeLong() const {
+  const EscrowOutInstancesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.inventory.v1.EscrowOutInstancesResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_items_size();
+      for (const auto& msg : this_._internal_items()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EscrowOutInstancesResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EscrowOutInstancesResponse*>(&to_msg);
+  auto& from = static_cast<const EscrowOutInstancesResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.inventory.v1.EscrowOutInstancesResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_items()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_items());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EscrowOutInstancesResponse::CopyFrom(const EscrowOutInstancesResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.inventory.v1.EscrowOutInstancesResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EscrowOutInstancesResponse::InternalSwap(EscrowOutInstancesResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.items_.InternalSwap(&other->_impl_.items_);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata EscrowOutInstancesResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+TransferClaimItem::TransferClaimItem(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TransferClaimItem_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.inventory.v1.TransferClaimItem)
+}
+TransferClaimItem::TransferClaimItem(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TransferClaimItem& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TransferClaimItem_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE TransferClaimItem::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void TransferClaimItem::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, instance_id_),
+           0,
+           offsetof(Impl_, item_config_id_) -
+               offsetof(Impl_, instance_id_) +
+               sizeof(Impl_::item_config_id_));
+}
+TransferClaimItem::~TransferClaimItem() {
+  // @@protoc_insertion_point(destructor:pandora.inventory.v1.TransferClaimItem)
+  SharedDtor(*this);
+}
+inline void TransferClaimItem::SharedDtor(MessageLite& self) {
+  TransferClaimItem& this_ = static_cast<TransferClaimItem&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull TransferClaimItem_class_data_ =
+        TransferClaimItem::InternalGenerateClassData_(TransferClaimItem_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TransferClaimItem::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TransferClaimItem_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(TransferClaimItem_class_data_.tc_table);
+  return TransferClaimItem_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TransferClaimItem::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TransferClaimItem_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&TransferClaimItem_globals_));
+  return TransferClaimItem_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const TransferClaimItem::ParseTableT_
+    TransferClaimItem::_table_ =
+        TransferClaimItem::InternalGenerateParseTable_(TransferClaimItem_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void TransferClaimItem::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.inventory.v1.TransferClaimItem)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.instance_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.item_config_id_) -
+        reinterpret_cast<char*>(&_impl_.instance_id_)) + sizeof(_impl_.item_config_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL TransferClaimItem::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const TransferClaimItem& this_ = static_cast<const TransferClaimItem&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL TransferClaimItem::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const TransferClaimItem& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.inventory.v1.TransferClaimItem)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 instance_id = 1 [json_name = "instanceId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_instance_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_instance_id(), target);
+    }
+  }
+
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_item_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_item_config_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.inventory.v1.TransferClaimItem)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t TransferClaimItem::ByteSizeLong(const MessageLite& base) {
+  const TransferClaimItem& this_ = static_cast<const TransferClaimItem&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t TransferClaimItem::ByteSizeLong() const {
+  const TransferClaimItem& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.inventory.v1.TransferClaimItem)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint64 instance_id = 1 [json_name = "instanceId"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_instance_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_instance_id());
+      }
+    }
+    // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_item_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_item_config_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void TransferClaimItem::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<TransferClaimItem*>(&to_msg);
+  auto& from = static_cast<const TransferClaimItem&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.inventory.v1.TransferClaimItem)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_instance_id() != 0) {
+        _this->_impl_.instance_id_ = from._impl_.instance_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_item_config_id() != 0) {
+        _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TransferClaimItem::CopyFrom(const TransferClaimItem& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.inventory.v1.TransferClaimItem)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TransferClaimItem::InternalSwap(TransferClaimItem* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.item_config_id_)
+      + sizeof(TransferClaimItem::_impl_.item_config_id_)
+      - PROTOBUF_FIELD_OFFSET(TransferClaimItem, _impl_.instance_id_)>(
+          reinterpret_cast<char*>(&_impl_.instance_id_),
+          reinterpret_cast<char*>(&other->_impl_.instance_id_));
+}
+
+::google::protobuf::Metadata TransferClaimItem::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ClaimTransferInstancesRequest::ClaimTransferInstancesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimTransferInstancesRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.inventory.v1.ClaimTransferInstancesRequest)
+}
+PROTOBUF_NDEBUG_INLINE ClaimTransferInstancesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::inventory::v1::ClaimTransferInstancesRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        items_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::inventory::v1::ClaimTransferInstancesRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ClaimTransferInstancesRequest, _impl_.items_)>()
+          , from.items_
+        }
+        ,
+        idempotency_key_(arena, from.idempotency_key_) {}
+
+ClaimTransferInstancesRequest::ClaimTransferInstancesRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ClaimTransferInstancesRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimTransferInstancesRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ClaimTransferInstancesRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.to_player_id_ = from._impl_.to_player_id_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.inventory.v1.ClaimTransferInstancesRequest)
+}
+PROTOBUF_NDEBUG_INLINE ClaimTransferInstancesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::ClaimTransferInstancesRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ClaimTransferInstancesRequest, _impl_.items_)>()
+         }
+        ,
+        idempotency_key_(arena) {}
+
+inline void ClaimTransferInstancesRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.to_player_id_ = {};
+}
+ClaimTransferInstancesRequest::~ClaimTransferInstancesRequest() {
+  // @@protoc_insertion_point(destructor:pandora.inventory.v1.ClaimTransferInstancesRequest)
+  SharedDtor(*this);
+}
+inline void ClaimTransferInstancesRequest::SharedDtor(MessageLite& self) {
+  ClaimTransferInstancesRequest& this_ = static_cast<ClaimTransferInstancesRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.idempotency_key_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimTransferInstancesRequest_class_data_ =
+        ClaimTransferInstancesRequest::InternalGenerateClassData_(ClaimTransferInstancesRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimTransferInstancesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimTransferInstancesRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimTransferInstancesRequest_class_data_.tc_table);
+  return ClaimTransferInstancesRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimTransferInstancesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimTransferInstancesRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimTransferInstancesRequest_globals_));
+  return ClaimTransferInstancesRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimTransferInstancesRequest::ParseTableT_
+    ClaimTransferInstancesRequest::_table_ =
+        ClaimTransferInstancesRequest::InternalGenerateParseTable_(ClaimTransferInstancesRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimTransferInstancesRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.inventory.v1.ClaimTransferInstancesRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.items_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.idempotency_key_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_.to_player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimTransferInstancesRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimTransferInstancesRequest& this_ = static_cast<const ClaimTransferInstancesRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimTransferInstancesRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimTransferInstancesRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.inventory.v1.ClaimTransferInstancesRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_to_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_to_player_id(), target);
+    }
+  }
+
+  // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_items_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_items().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              2, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // string idempotency_key = 3 [json_name = "idempotencyKey"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_idempotency_key().empty()) {
+      const ::std::string& _s = this_._internal_idempotency_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.inventory.v1.ClaimTransferInstancesRequest.idempotency_key");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.inventory.v1.ClaimTransferInstancesRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimTransferInstancesRequest::ByteSizeLong(const MessageLite& base) {
+  const ClaimTransferInstancesRequest& this_ = static_cast<const ClaimTransferInstancesRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimTransferInstancesRequest::ByteSizeLong() const {
+  const ClaimTransferInstancesRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.inventory.v1.ClaimTransferInstancesRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_items_size();
+      for (const auto& msg : this_._internal_items()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // string idempotency_key = 3 [json_name = "idempotencyKey"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_idempotency_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_idempotency_key());
+      }
+    }
+    // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_to_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_to_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimTransferInstancesRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimTransferInstancesRequest*>(&to_msg);
+  auto& from = static_cast<const ClaimTransferInstancesRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.inventory.v1.ClaimTransferInstancesRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_items()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_items());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_idempotency_key().empty()) {
+        _this->_internal_set_idempotency_key(from._internal_idempotency_key());
+      } else {
+        if (_this->_impl_.idempotency_key_.IsDefault()) {
+          _this->_internal_set_idempotency_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_to_player_id() != 0) {
+        _this->_impl_.to_player_id_ = from._impl_.to_player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimTransferInstancesRequest::CopyFrom(const ClaimTransferInstancesRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.inventory.v1.ClaimTransferInstancesRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimTransferInstancesRequest::InternalSwap(ClaimTransferInstancesRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.items_.InternalSwap(&other->_impl_.items_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.idempotency_key_, &other->_impl_.idempotency_key_, arena);
+  swap(_impl_.to_player_id_, other->_impl_.to_player_id_);
+}
+
+::google::protobuf::Metadata ClaimTransferInstancesRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ClaimTransferInstancesResponse::ClaimTransferInstancesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimTransferInstancesResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.inventory.v1.ClaimTransferInstancesResponse)
+}
+ClaimTransferInstancesResponse::ClaimTransferInstancesResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimTransferInstancesResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimTransferInstancesResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ClaimTransferInstancesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ClaimTransferInstancesResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+ClaimTransferInstancesResponse::~ClaimTransferInstancesResponse() {
+  // @@protoc_insertion_point(destructor:pandora.inventory.v1.ClaimTransferInstancesResponse)
+  SharedDtor(*this);
+}
+inline void ClaimTransferInstancesResponse::SharedDtor(MessageLite& self) {
+  ClaimTransferInstancesResponse& this_ = static_cast<ClaimTransferInstancesResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimTransferInstancesResponse_class_data_ =
+        ClaimTransferInstancesResponse::InternalGenerateClassData_(ClaimTransferInstancesResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimTransferInstancesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimTransferInstancesResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimTransferInstancesResponse_class_data_.tc_table);
+  return ClaimTransferInstancesResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimTransferInstancesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimTransferInstancesResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimTransferInstancesResponse_globals_));
+  return ClaimTransferInstancesResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimTransferInstancesResponse::ParseTableT_
+    ClaimTransferInstancesResponse::_table_ =
+        ClaimTransferInstancesResponse::InternalGenerateParseTable_(ClaimTransferInstancesResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimTransferInstancesResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.inventory.v1.ClaimTransferInstancesResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimTransferInstancesResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimTransferInstancesResponse& this_ = static_cast<const ClaimTransferInstancesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimTransferInstancesResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimTransferInstancesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.inventory.v1.ClaimTransferInstancesResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.inventory.v1.ClaimTransferInstancesResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimTransferInstancesResponse::ByteSizeLong(const MessageLite& base) {
+  const ClaimTransferInstancesResponse& this_ = static_cast<const ClaimTransferInstancesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimTransferInstancesResponse::ByteSizeLong() const {
+  const ClaimTransferInstancesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.inventory.v1.ClaimTransferInstancesResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimTransferInstancesResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimTransferInstancesResponse*>(&to_msg);
+  auto& from = static_cast<const ClaimTransferInstancesResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.inventory.v1.ClaimTransferInstancesResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_code() != 0) {
+      _this->_impl_.code_ = from._impl_.code_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimTransferInstancesResponse::CopyFrom(const ClaimTransferInstancesResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.inventory.v1.ClaimTransferInstancesResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimTransferInstancesResponse::InternalSwap(ClaimTransferInstancesResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata ClaimTransferInstancesResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ReleaseTransferEscrowRequest::ReleaseTransferEscrowRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReleaseTransferEscrowRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+}
+PROTOBUF_NDEBUG_INLINE ReleaseTransferEscrowRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::inventory::v1::ReleaseTransferEscrowRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        instance_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::inventory::v1::ReleaseTransferEscrowRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ReleaseTransferEscrowRequest, _impl_.instance_ids_)>()
+          , from.instance_ids_
+        }
+        ,
+        _instance_ids_cached_byte_size_{0} {}
+
+ReleaseTransferEscrowRequest::ReleaseTransferEscrowRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ReleaseTransferEscrowRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReleaseTransferEscrowRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ReleaseTransferEscrowRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+}
+PROTOBUF_NDEBUG_INLINE ReleaseTransferEscrowRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        instance_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::ReleaseTransferEscrowRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ReleaseTransferEscrowRequest, _impl_.instance_ids_)>()
+         }
+        ,
+        _instance_ids_cached_byte_size_{0} {}
+
+inline void ReleaseTransferEscrowRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+ReleaseTransferEscrowRequest::~ReleaseTransferEscrowRequest() {
+  // @@protoc_insertion_point(destructor:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+  SharedDtor(*this);
+}
+inline void ReleaseTransferEscrowRequest::SharedDtor(MessageLite& self) {
+  ReleaseTransferEscrowRequest& this_ = static_cast<ReleaseTransferEscrowRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ReleaseTransferEscrowRequest_class_data_ =
+        ReleaseTransferEscrowRequest::InternalGenerateClassData_(ReleaseTransferEscrowRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReleaseTransferEscrowRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReleaseTransferEscrowRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ReleaseTransferEscrowRequest_class_data_.tc_table);
+  return ReleaseTransferEscrowRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReleaseTransferEscrowRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReleaseTransferEscrowRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ReleaseTransferEscrowRequest_globals_));
+  return ReleaseTransferEscrowRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ReleaseTransferEscrowRequest::ParseTableT_
+    ReleaseTransferEscrowRequest::_table_ =
+        ReleaseTransferEscrowRequest::InternalGenerateParseTable_(ReleaseTransferEscrowRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ReleaseTransferEscrowRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.instance_ids_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ReleaseTransferEscrowRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ReleaseTransferEscrowRequest& this_ = static_cast<const ReleaseTransferEscrowRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ReleaseTransferEscrowRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ReleaseTransferEscrowRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._instance_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            1, this_._internal_instance_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ReleaseTransferEscrowRequest::ByteSizeLong(const MessageLite& base) {
+  const ReleaseTransferEscrowRequest& this_ = static_cast<const ReleaseTransferEscrowRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ReleaseTransferEscrowRequest::ByteSizeLong() const {
+  const ReleaseTransferEscrowRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_instance_ids(), 1,
+              this_._impl_._instance_ids_cached_byte_size_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ReleaseTransferEscrowRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ReleaseTransferEscrowRequest*>(&to_msg);
+  auto& from = static_cast<const ReleaseTransferEscrowRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _this->_internal_mutable_instance_ids()->MergeFrom(from._internal_instance_ids());
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ReleaseTransferEscrowRequest::CopyFrom(const ReleaseTransferEscrowRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ReleaseTransferEscrowRequest::InternalSwap(ReleaseTransferEscrowRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.instance_ids_.InternalSwap(&other->_impl_.instance_ids_);
+}
+
+::google::protobuf::Metadata ReleaseTransferEscrowRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ReleaseTransferEscrowResponse::ReleaseTransferEscrowResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReleaseTransferEscrowResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.inventory.v1.ReleaseTransferEscrowResponse)
+}
+ReleaseTransferEscrowResponse::ReleaseTransferEscrowResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReleaseTransferEscrowResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReleaseTransferEscrowResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ReleaseTransferEscrowResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ReleaseTransferEscrowResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+ReleaseTransferEscrowResponse::~ReleaseTransferEscrowResponse() {
+  // @@protoc_insertion_point(destructor:pandora.inventory.v1.ReleaseTransferEscrowResponse)
+  SharedDtor(*this);
+}
+inline void ReleaseTransferEscrowResponse::SharedDtor(MessageLite& self) {
+  ReleaseTransferEscrowResponse& this_ = static_cast<ReleaseTransferEscrowResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ReleaseTransferEscrowResponse_class_data_ =
+        ReleaseTransferEscrowResponse::InternalGenerateClassData_(ReleaseTransferEscrowResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReleaseTransferEscrowResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReleaseTransferEscrowResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ReleaseTransferEscrowResponse_class_data_.tc_table);
+  return ReleaseTransferEscrowResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReleaseTransferEscrowResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReleaseTransferEscrowResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ReleaseTransferEscrowResponse_globals_));
+  return ReleaseTransferEscrowResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ReleaseTransferEscrowResponse::ParseTableT_
+    ReleaseTransferEscrowResponse::_table_ =
+        ReleaseTransferEscrowResponse::InternalGenerateParseTable_(ReleaseTransferEscrowResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ReleaseTransferEscrowResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.inventory.v1.ReleaseTransferEscrowResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ReleaseTransferEscrowResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ReleaseTransferEscrowResponse& this_ = static_cast<const ReleaseTransferEscrowResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ReleaseTransferEscrowResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ReleaseTransferEscrowResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.inventory.v1.ReleaseTransferEscrowResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.inventory.v1.ReleaseTransferEscrowResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ReleaseTransferEscrowResponse::ByteSizeLong(const MessageLite& base) {
+  const ReleaseTransferEscrowResponse& this_ = static_cast<const ReleaseTransferEscrowResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ReleaseTransferEscrowResponse::ByteSizeLong() const {
+  const ReleaseTransferEscrowResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.inventory.v1.ReleaseTransferEscrowResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ReleaseTransferEscrowResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ReleaseTransferEscrowResponse*>(&to_msg);
+  auto& from = static_cast<const ReleaseTransferEscrowResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.inventory.v1.ReleaseTransferEscrowResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_code() != 0) {
+      _this->_impl_.code_ = from._impl_.code_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ReleaseTransferEscrowResponse::CopyFrom(const ReleaseTransferEscrowResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.inventory.v1.ReleaseTransferEscrowResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ReleaseTransferEscrowResponse::InternalSwap(ReleaseTransferEscrowResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata ReleaseTransferEscrowResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ConsumeTransferEscrowRequest::ConsumeTransferEscrowRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ConsumeTransferEscrowRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+}
+PROTOBUF_NDEBUG_INLINE ConsumeTransferEscrowRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::inventory::v1::ConsumeTransferEscrowRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        instance_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::inventory::v1::ConsumeTransferEscrowRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ConsumeTransferEscrowRequest, _impl_.instance_ids_)>()
+          , from.instance_ids_
+        }
+        ,
+        _instance_ids_cached_byte_size_{0} {}
+
+ConsumeTransferEscrowRequest::ConsumeTransferEscrowRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ConsumeTransferEscrowRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ConsumeTransferEscrowRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ConsumeTransferEscrowRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.to_player_id_ = from._impl_.to_player_id_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+}
+PROTOBUF_NDEBUG_INLINE ConsumeTransferEscrowRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        instance_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::inventory::v1::ConsumeTransferEscrowRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::inventory::v1::ConsumeTransferEscrowRequest, _impl_.instance_ids_)>()
+         }
+        ,
+        _instance_ids_cached_byte_size_{0} {}
+
+inline void ConsumeTransferEscrowRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.to_player_id_ = {};
+}
+ConsumeTransferEscrowRequest::~ConsumeTransferEscrowRequest() {
+  // @@protoc_insertion_point(destructor:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+  SharedDtor(*this);
+}
+inline void ConsumeTransferEscrowRequest::SharedDtor(MessageLite& self) {
+  ConsumeTransferEscrowRequest& this_ = static_cast<ConsumeTransferEscrowRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ConsumeTransferEscrowRequest_class_data_ =
+        ConsumeTransferEscrowRequest::InternalGenerateClassData_(ConsumeTransferEscrowRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ConsumeTransferEscrowRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ConsumeTransferEscrowRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ConsumeTransferEscrowRequest_class_data_.tc_table);
+  return ConsumeTransferEscrowRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ConsumeTransferEscrowRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ConsumeTransferEscrowRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ConsumeTransferEscrowRequest_globals_));
+  return ConsumeTransferEscrowRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ConsumeTransferEscrowRequest::ParseTableT_
+    ConsumeTransferEscrowRequest::_table_ =
+        ConsumeTransferEscrowRequest::InternalGenerateParseTable_(ConsumeTransferEscrowRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ConsumeTransferEscrowRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.instance_ids_.Clear();
+  }
+  _impl_.to_player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ConsumeTransferEscrowRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ConsumeTransferEscrowRequest& this_ = static_cast<const ConsumeTransferEscrowRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ConsumeTransferEscrowRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ConsumeTransferEscrowRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_to_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_to_player_id(), target);
+    }
+  }
+
+  // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._instance_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            2, this_._internal_instance_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ConsumeTransferEscrowRequest::ByteSizeLong(const MessageLite& base) {
+  const ConsumeTransferEscrowRequest& this_ = static_cast<const ConsumeTransferEscrowRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ConsumeTransferEscrowRequest::ByteSizeLong() const {
+  const ConsumeTransferEscrowRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_instance_ids(), 1,
+              this_._impl_._instance_ids_cached_byte_size_);
+    }
+    // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_to_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_to_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ConsumeTransferEscrowRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ConsumeTransferEscrowRequest*>(&to_msg);
+  auto& from = static_cast<const ConsumeTransferEscrowRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_instance_ids()->MergeFrom(from._internal_instance_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_to_player_id() != 0) {
+        _this->_impl_.to_player_id_ = from._impl_.to_player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ConsumeTransferEscrowRequest::CopyFrom(const ConsumeTransferEscrowRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ConsumeTransferEscrowRequest::InternalSwap(ConsumeTransferEscrowRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.instance_ids_.InternalSwap(&other->_impl_.instance_ids_);
+  swap(_impl_.to_player_id_, other->_impl_.to_player_id_);
+}
+
+::google::protobuf::Metadata ConsumeTransferEscrowRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ConsumeTransferEscrowResponse::ConsumeTransferEscrowResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ConsumeTransferEscrowResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.inventory.v1.ConsumeTransferEscrowResponse)
+}
+ConsumeTransferEscrowResponse::ConsumeTransferEscrowResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ConsumeTransferEscrowResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ConsumeTransferEscrowResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ConsumeTransferEscrowResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ConsumeTransferEscrowResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+ConsumeTransferEscrowResponse::~ConsumeTransferEscrowResponse() {
+  // @@protoc_insertion_point(destructor:pandora.inventory.v1.ConsumeTransferEscrowResponse)
+  SharedDtor(*this);
+}
+inline void ConsumeTransferEscrowResponse::SharedDtor(MessageLite& self) {
+  ConsumeTransferEscrowResponse& this_ = static_cast<ConsumeTransferEscrowResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ConsumeTransferEscrowResponse_class_data_ =
+        ConsumeTransferEscrowResponse::InternalGenerateClassData_(ConsumeTransferEscrowResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ConsumeTransferEscrowResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ConsumeTransferEscrowResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ConsumeTransferEscrowResponse_class_data_.tc_table);
+  return ConsumeTransferEscrowResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ConsumeTransferEscrowResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ConsumeTransferEscrowResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ConsumeTransferEscrowResponse_globals_));
+  return ConsumeTransferEscrowResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ConsumeTransferEscrowResponse::ParseTableT_
+    ConsumeTransferEscrowResponse::_table_ =
+        ConsumeTransferEscrowResponse::InternalGenerateParseTable_(ConsumeTransferEscrowResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ConsumeTransferEscrowResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.inventory.v1.ConsumeTransferEscrowResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ConsumeTransferEscrowResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ConsumeTransferEscrowResponse& this_ = static_cast<const ConsumeTransferEscrowResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ConsumeTransferEscrowResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ConsumeTransferEscrowResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.inventory.v1.ConsumeTransferEscrowResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.inventory.v1.ConsumeTransferEscrowResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ConsumeTransferEscrowResponse::ByteSizeLong(const MessageLite& base) {
+  const ConsumeTransferEscrowResponse& this_ = static_cast<const ConsumeTransferEscrowResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ConsumeTransferEscrowResponse::ByteSizeLong() const {
+  const ConsumeTransferEscrowResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.inventory.v1.ConsumeTransferEscrowResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ConsumeTransferEscrowResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ConsumeTransferEscrowResponse*>(&to_msg);
+  auto& from = static_cast<const ConsumeTransferEscrowResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.inventory.v1.ConsumeTransferEscrowResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_code() != 0) {
+      _this->_impl_.code_ = from._impl_.code_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ConsumeTransferEscrowResponse::CopyFrom(const ConsumeTransferEscrowResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.inventory.v1.ConsumeTransferEscrowResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ConsumeTransferEscrowResponse::InternalSwap(ConsumeTransferEscrowResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata ConsumeTransferEscrowResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

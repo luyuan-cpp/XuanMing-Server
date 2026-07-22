@@ -32,6 +32,7 @@
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "pandora/common/v1/errcode.pb.h"
+#include "pandora/bag/v1/bag.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -62,6 +63,38 @@ enum CurrencyKind : int;
 extern const uint32_t CurrencyKind_internal_data_[];
 enum EscrowSide : int;
 extern const uint32_t EscrowSide_internal_data_[];
+class ClaimTransferInstancesRequest;
+struct ClaimTransferInstancesRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimTransferInstancesRequestGlobalsTypeInternal ClaimTransferInstancesRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimTransferInstancesRequest_class_data_;
+#else
+extern const ClaimTransferInstancesRequestGlobalsTypeInternal ClaimTransferInstancesRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClaimTransferInstancesResponse;
+struct ClaimTransferInstancesResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimTransferInstancesResponseGlobalsTypeInternal ClaimTransferInstancesResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimTransferInstancesResponse_class_data_;
+#else
+extern const ClaimTransferInstancesResponseGlobalsTypeInternal ClaimTransferInstancesResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ConsumeTransferEscrowRequest;
+struct ConsumeTransferEscrowRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ConsumeTransferEscrowRequestGlobalsTypeInternal ConsumeTransferEscrowRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ConsumeTransferEscrowRequest_class_data_;
+#else
+extern const ConsumeTransferEscrowRequestGlobalsTypeInternal ConsumeTransferEscrowRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ConsumeTransferEscrowResponse;
+struct ConsumeTransferEscrowResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ConsumeTransferEscrowResponseGlobalsTypeInternal ConsumeTransferEscrowResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ConsumeTransferEscrowResponse_class_data_;
+#else
+extern const ConsumeTransferEscrowResponseGlobalsTypeInternal ConsumeTransferEscrowResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class DiscardInstanceRequest;
 struct DiscardInstanceRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -93,6 +126,22 @@ extern EnsureAuctionEscrowResponseGlobalsTypeInternal EnsureAuctionEscrowRespons
 extern const ::google::protobuf::internal::ClassDataFull EnsureAuctionEscrowResponse_class_data_;
 #else
 extern const EnsureAuctionEscrowResponseGlobalsTypeInternal EnsureAuctionEscrowResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class EscrowOutInstancesRequest;
+struct EscrowOutInstancesRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EscrowOutInstancesRequestGlobalsTypeInternal EscrowOutInstancesRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EscrowOutInstancesRequest_class_data_;
+#else
+extern const EscrowOutInstancesRequestGlobalsTypeInternal EscrowOutInstancesRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class EscrowOutInstancesResponse;
+struct EscrowOutInstancesResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EscrowOutInstancesResponseGlobalsTypeInternal EscrowOutInstancesResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EscrowOutInstancesResponse_class_data_;
+#else
+extern const EscrowOutInstancesResponseGlobalsTypeInternal EscrowOutInstancesResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class FreezeForOrderRequest;
 struct FreezeForOrderRequestGlobalsTypeInternal;
@@ -246,6 +295,22 @@ extern const ::google::protobuf::internal::ClassDataFull ReleaseEscrowResponse_c
 #else
 extern const ReleaseEscrowResponseGlobalsTypeInternal ReleaseEscrowResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ReleaseTransferEscrowRequest;
+struct ReleaseTransferEscrowRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ReleaseTransferEscrowRequestGlobalsTypeInternal ReleaseTransferEscrowRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ReleaseTransferEscrowRequest_class_data_;
+#else
+extern const ReleaseTransferEscrowRequestGlobalsTypeInternal ReleaseTransferEscrowRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ReleaseTransferEscrowResponse;
+struct ReleaseTransferEscrowResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ReleaseTransferEscrowResponseGlobalsTypeInternal ReleaseTransferEscrowResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ReleaseTransferEscrowResponse_class_data_;
+#else
+extern const ReleaseTransferEscrowResponseGlobalsTypeInternal ReleaseTransferEscrowResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SellItemRequest;
 struct SellItemRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -293,6 +358,14 @@ extern SettlePlayerTradeResponseGlobalsTypeInternal SettlePlayerTradeResponse_gl
 extern const ::google::protobuf::internal::ClassDataFull SettlePlayerTradeResponse_class_data_;
 #else
 extern const SettlePlayerTradeResponseGlobalsTypeInternal SettlePlayerTradeResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TransferClaimItem;
+struct TransferClaimItemGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TransferClaimItemGlobalsTypeInternal TransferClaimItem_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TransferClaimItem_class_data_;
+#else
+extern const TransferClaimItemGlobalsTypeInternal TransferClaimItem_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class UseItemRequest;
 struct UseItemRequestGlobalsTypeInternal;
@@ -863,6 +936,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UseItemRequest final : public ::goo
     ::google::protobuf::internal::ArenaStringPtr idempotency_key_;
     ::uint64_t player_id_;
     ::int64_t count_;
+    ::uint32_t item_config_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferClaimItem final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.TransferClaimItem) */ {
+ public:
+  inline TransferClaimItem() : TransferClaimItem(nullptr) {}
+  ~TransferClaimItem() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TransferClaimItem* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TransferClaimItem));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TransferClaimItem(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TransferClaimItem(const TransferClaimItem& from) : TransferClaimItem(nullptr, from) {}
+  inline TransferClaimItem(TransferClaimItem&& from) noexcept : TransferClaimItem(nullptr, ::std::move(from)) {}
+  inline TransferClaimItem& operator=(const TransferClaimItem& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TransferClaimItem& operator=(TransferClaimItem&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TransferClaimItem& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TransferClaimItem>(&TransferClaimItem_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 33;
+  friend void swap(TransferClaimItem& a, TransferClaimItem& b) { a.Swap(&b); }
+  inline void Swap(TransferClaimItem* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TransferClaimItem* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TransferClaimItem* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TransferClaimItem>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TransferClaimItem& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TransferClaimItem& from) { TransferClaimItem::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TransferClaimItem* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.TransferClaimItem"; }
+
+  explicit TransferClaimItem(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TransferClaimItem(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TransferClaimItem& from);
+  TransferClaimItem(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TransferClaimItem&& from) noexcept
+      : TransferClaimItem(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kInstanceIdFieldNumber = 1,
+    kItemConfigIdFieldNumber = 2,
+  };
+  // uint64 instance_id = 1 [json_name = "instanceId"];
+  void clear_instance_id() ;
+  [[nodiscard]] ::uint64_t instance_id() const;
+  void set_instance_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_instance_id() const;
+  void _internal_set_instance_id(::uint64_t value);
+
+  public:
+  // uint32 item_config_id = 2 [json_name = "itemConfigId"];
+  void clear_item_config_id() ;
+  [[nodiscard]] ::uint32_t item_config_id() const;
+  void set_item_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_config_id() const;
+  void _internal_set_item_config_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.TransferClaimItem)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TransferClaimItem& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t instance_id_;
     ::uint32_t item_config_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2018,6 +2304,419 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellItemRequest final : public ::go
     ::uint64_t player_id_;
     ::int64_t count_;
     ::uint32_t item_config_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseTransferEscrowResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.ReleaseTransferEscrowResponse) */ {
+ public:
+  inline ReleaseTransferEscrowResponse() : ReleaseTransferEscrowResponse(nullptr) {}
+  ~ReleaseTransferEscrowResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ReleaseTransferEscrowResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReleaseTransferEscrowResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ReleaseTransferEscrowResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ReleaseTransferEscrowResponse(const ReleaseTransferEscrowResponse& from) : ReleaseTransferEscrowResponse(nullptr, from) {}
+  inline ReleaseTransferEscrowResponse(ReleaseTransferEscrowResponse&& from) noexcept : ReleaseTransferEscrowResponse(nullptr, ::std::move(from)) {}
+  inline ReleaseTransferEscrowResponse& operator=(const ReleaseTransferEscrowResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReleaseTransferEscrowResponse& operator=(ReleaseTransferEscrowResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ReleaseTransferEscrowResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseTransferEscrowResponse>(&ReleaseTransferEscrowResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 37;
+  friend void swap(ReleaseTransferEscrowResponse& a, ReleaseTransferEscrowResponse& b) { a.Swap(&b); }
+  inline void Swap(ReleaseTransferEscrowResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReleaseTransferEscrowResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ReleaseTransferEscrowResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ReleaseTransferEscrowResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ReleaseTransferEscrowResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ReleaseTransferEscrowResponse& from) { ReleaseTransferEscrowResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ReleaseTransferEscrowResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.ReleaseTransferEscrowResponse"; }
+
+  explicit ReleaseTransferEscrowResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ReleaseTransferEscrowResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReleaseTransferEscrowResponse& from);
+  ReleaseTransferEscrowResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReleaseTransferEscrowResponse&& from) noexcept
+      : ReleaseTransferEscrowResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.ReleaseTransferEscrowResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ReleaseTransferEscrowResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseTransferEscrowRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.ReleaseTransferEscrowRequest) */ {
+ public:
+  inline ReleaseTransferEscrowRequest() : ReleaseTransferEscrowRequest(nullptr) {}
+  ~ReleaseTransferEscrowRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ReleaseTransferEscrowRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReleaseTransferEscrowRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ReleaseTransferEscrowRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ReleaseTransferEscrowRequest(const ReleaseTransferEscrowRequest& from) : ReleaseTransferEscrowRequest(nullptr, from) {}
+  inline ReleaseTransferEscrowRequest(ReleaseTransferEscrowRequest&& from) noexcept : ReleaseTransferEscrowRequest(nullptr, ::std::move(from)) {}
+  inline ReleaseTransferEscrowRequest& operator=(const ReleaseTransferEscrowRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReleaseTransferEscrowRequest& operator=(ReleaseTransferEscrowRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ReleaseTransferEscrowRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseTransferEscrowRequest>(&ReleaseTransferEscrowRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 36;
+  friend void swap(ReleaseTransferEscrowRequest& a, ReleaseTransferEscrowRequest& b) { a.Swap(&b); }
+  inline void Swap(ReleaseTransferEscrowRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReleaseTransferEscrowRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ReleaseTransferEscrowRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ReleaseTransferEscrowRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ReleaseTransferEscrowRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ReleaseTransferEscrowRequest& from) { ReleaseTransferEscrowRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ReleaseTransferEscrowRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.ReleaseTransferEscrowRequest"; }
+
+  explicit ReleaseTransferEscrowRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ReleaseTransferEscrowRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReleaseTransferEscrowRequest& from);
+  ReleaseTransferEscrowRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReleaseTransferEscrowRequest&& from) noexcept
+      : ReleaseTransferEscrowRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kInstanceIdsFieldNumber = 1,
+  };
+  // repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
+  [[nodiscard]] int instance_ids_size()
+      const;
+  private:
+  int _internal_instance_ids_size() const;
+
+  public:
+  void clear_instance_ids() ;
+  [[nodiscard]] ::uint64_t instance_ids(int index) const;
+  void set_instance_ids(int index, ::uint64_t value);
+  void add_instance_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& instance_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_instance_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_instance_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_instance_ids();
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.ReleaseTransferEscrowRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ReleaseTransferEscrowRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> instance_ids_;
+    ::google::protobuf::internal::CachedSize _instance_ids_cached_byte_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4834,6 +5533,259 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderRequest final : publi
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.EscrowOutInstancesRequest) */ {
+ public:
+  inline EscrowOutInstancesRequest() : EscrowOutInstancesRequest(nullptr) {}
+  ~EscrowOutInstancesRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EscrowOutInstancesRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EscrowOutInstancesRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EscrowOutInstancesRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EscrowOutInstancesRequest(const EscrowOutInstancesRequest& from) : EscrowOutInstancesRequest(nullptr, from) {}
+  inline EscrowOutInstancesRequest(EscrowOutInstancesRequest&& from) noexcept : EscrowOutInstancesRequest(nullptr, ::std::move(from)) {}
+  inline EscrowOutInstancesRequest& operator=(const EscrowOutInstancesRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EscrowOutInstancesRequest& operator=(EscrowOutInstancesRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EscrowOutInstancesRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EscrowOutInstancesRequest>(&EscrowOutInstancesRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 31;
+  friend void swap(EscrowOutInstancesRequest& a, EscrowOutInstancesRequest& b) { a.Swap(&b); }
+  inline void Swap(EscrowOutInstancesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EscrowOutInstancesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EscrowOutInstancesRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EscrowOutInstancesRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EscrowOutInstancesRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EscrowOutInstancesRequest& from) { EscrowOutInstancesRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EscrowOutInstancesRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.EscrowOutInstancesRequest"; }
+
+  explicit EscrowOutInstancesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EscrowOutInstancesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EscrowOutInstancesRequest& from);
+  EscrowOutInstancesRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EscrowOutInstancesRequest&& from) noexcept
+      : EscrowOutInstancesRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kInstanceIdsFieldNumber = 3,
+    kEscrowKeyFieldNumber = 4,
+    kSourcePlayerIdFieldNumber = 1,
+    kToPlayerIdFieldNumber = 2,
+  };
+  // repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
+  [[nodiscard]] int instance_ids_size()
+      const;
+  private:
+  int _internal_instance_ids_size() const;
+
+  public:
+  void clear_instance_ids() ;
+  [[nodiscard]] ::uint64_t instance_ids(int index) const;
+  void set_instance_ids(int index, ::uint64_t value);
+  void add_instance_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& instance_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_instance_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_instance_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_instance_ids();
+
+  public:
+  // string escrow_key = 4 [json_name = "escrowKey"];
+  void clear_escrow_key() ;
+  [[nodiscard]] const ::std::string& escrow_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_escrow_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_escrow_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_escrow_key();
+  void set_allocated_escrow_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_escrow_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_escrow_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_escrow_key();
+
+  public:
+  // uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
+  void clear_source_player_id() ;
+  [[nodiscard]] ::uint64_t source_player_id() const;
+  void set_source_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_player_id() const;
+  void _internal_set_source_player_id(::uint64_t value);
+
+  public:
+  // uint64 to_player_id = 2 [json_name = "toPlayerId"];
+  void clear_to_player_id() ;
+  [[nodiscard]] ::uint64_t to_player_id() const;
+  void set_to_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_to_player_id() const;
+  void _internal_set_to_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.EscrowOutInstancesRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 65,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EscrowOutInstancesRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> instance_ids_;
+    ::google::protobuf::internal::CachedSize _instance_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr escrow_key_;
+    ::uint64_t source_player_id_;
+    ::uint64_t to_player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.inventory.v1.EnsureAuctionEscrowResponse) */ {
  public:
@@ -5710,6 +6662,632 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardInstanceRequest final : publ
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeTransferEscrowResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.ConsumeTransferEscrowResponse) */ {
+ public:
+  inline ConsumeTransferEscrowResponse() : ConsumeTransferEscrowResponse(nullptr) {}
+  ~ConsumeTransferEscrowResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ConsumeTransferEscrowResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ConsumeTransferEscrowResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ConsumeTransferEscrowResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ConsumeTransferEscrowResponse(const ConsumeTransferEscrowResponse& from) : ConsumeTransferEscrowResponse(nullptr, from) {}
+  inline ConsumeTransferEscrowResponse(ConsumeTransferEscrowResponse&& from) noexcept : ConsumeTransferEscrowResponse(nullptr, ::std::move(from)) {}
+  inline ConsumeTransferEscrowResponse& operator=(const ConsumeTransferEscrowResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ConsumeTransferEscrowResponse& operator=(ConsumeTransferEscrowResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ConsumeTransferEscrowResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ConsumeTransferEscrowResponse>(&ConsumeTransferEscrowResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 39;
+  friend void swap(ConsumeTransferEscrowResponse& a, ConsumeTransferEscrowResponse& b) { a.Swap(&b); }
+  inline void Swap(ConsumeTransferEscrowResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ConsumeTransferEscrowResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ConsumeTransferEscrowResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ConsumeTransferEscrowResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ConsumeTransferEscrowResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ConsumeTransferEscrowResponse& from) { ConsumeTransferEscrowResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ConsumeTransferEscrowResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.ConsumeTransferEscrowResponse"; }
+
+  explicit ConsumeTransferEscrowResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ConsumeTransferEscrowResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ConsumeTransferEscrowResponse& from);
+  ConsumeTransferEscrowResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ConsumeTransferEscrowResponse&& from) noexcept
+      : ConsumeTransferEscrowResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.ConsumeTransferEscrowResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ConsumeTransferEscrowResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConsumeTransferEscrowRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.ConsumeTransferEscrowRequest) */ {
+ public:
+  inline ConsumeTransferEscrowRequest() : ConsumeTransferEscrowRequest(nullptr) {}
+  ~ConsumeTransferEscrowRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ConsumeTransferEscrowRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ConsumeTransferEscrowRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ConsumeTransferEscrowRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ConsumeTransferEscrowRequest(const ConsumeTransferEscrowRequest& from) : ConsumeTransferEscrowRequest(nullptr, from) {}
+  inline ConsumeTransferEscrowRequest(ConsumeTransferEscrowRequest&& from) noexcept : ConsumeTransferEscrowRequest(nullptr, ::std::move(from)) {}
+  inline ConsumeTransferEscrowRequest& operator=(const ConsumeTransferEscrowRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ConsumeTransferEscrowRequest& operator=(ConsumeTransferEscrowRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ConsumeTransferEscrowRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ConsumeTransferEscrowRequest>(&ConsumeTransferEscrowRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 38;
+  friend void swap(ConsumeTransferEscrowRequest& a, ConsumeTransferEscrowRequest& b) { a.Swap(&b); }
+  inline void Swap(ConsumeTransferEscrowRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ConsumeTransferEscrowRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ConsumeTransferEscrowRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ConsumeTransferEscrowRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ConsumeTransferEscrowRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ConsumeTransferEscrowRequest& from) { ConsumeTransferEscrowRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ConsumeTransferEscrowRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.ConsumeTransferEscrowRequest"; }
+
+  explicit ConsumeTransferEscrowRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ConsumeTransferEscrowRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ConsumeTransferEscrowRequest& from);
+  ConsumeTransferEscrowRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ConsumeTransferEscrowRequest&& from) noexcept
+      : ConsumeTransferEscrowRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kInstanceIdsFieldNumber = 2,
+    kToPlayerIdFieldNumber = 1,
+  };
+  // repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
+  [[nodiscard]] int instance_ids_size()
+      const;
+  private:
+  int _internal_instance_ids_size() const;
+
+  public:
+  void clear_instance_ids() ;
+  [[nodiscard]] ::uint64_t instance_ids(int index) const;
+  void set_instance_ids(int index, ::uint64_t value);
+  void add_instance_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& instance_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_instance_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_instance_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_instance_ids();
+
+  public:
+  // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+  void clear_to_player_id() ;
+  [[nodiscard]] ::uint64_t to_player_id() const;
+  void set_to_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_to_player_id() const;
+  void _internal_set_to_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.ConsumeTransferEscrowRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ConsumeTransferEscrowRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> instance_ids_;
+    ::google::protobuf::internal::CachedSize _instance_ids_cached_byte_size_;
+    ::uint64_t to_player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTransferInstancesResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.ClaimTransferInstancesResponse) */ {
+ public:
+  inline ClaimTransferInstancesResponse() : ClaimTransferInstancesResponse(nullptr) {}
+  ~ClaimTransferInstancesResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimTransferInstancesResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimTransferInstancesResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimTransferInstancesResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimTransferInstancesResponse(const ClaimTransferInstancesResponse& from) : ClaimTransferInstancesResponse(nullptr, from) {}
+  inline ClaimTransferInstancesResponse(ClaimTransferInstancesResponse&& from) noexcept : ClaimTransferInstancesResponse(nullptr, ::std::move(from)) {}
+  inline ClaimTransferInstancesResponse& operator=(const ClaimTransferInstancesResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimTransferInstancesResponse& operator=(ClaimTransferInstancesResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimTransferInstancesResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimTransferInstancesResponse>(&ClaimTransferInstancesResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 35;
+  friend void swap(ClaimTransferInstancesResponse& a, ClaimTransferInstancesResponse& b) { a.Swap(&b); }
+  inline void Swap(ClaimTransferInstancesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimTransferInstancesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimTransferInstancesResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimTransferInstancesResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimTransferInstancesResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimTransferInstancesResponse& from) { ClaimTransferInstancesResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimTransferInstancesResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.ClaimTransferInstancesResponse"; }
+
+  explicit ClaimTransferInstancesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimTransferInstancesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimTransferInstancesResponse& from);
+  ClaimTransferInstancesResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimTransferInstancesResponse&& from) noexcept
+      : ClaimTransferInstancesResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.ClaimTransferInstancesResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimTransferInstancesResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SettlePlayerTradeRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.inventory.v1.SettlePlayerTradeRequest) */ {
  public:
@@ -6518,6 +8096,247 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantItemsRequest final : public ::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTransferInstancesRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.ClaimTransferInstancesRequest) */ {
+ public:
+  inline ClaimTransferInstancesRequest() : ClaimTransferInstancesRequest(nullptr) {}
+  ~ClaimTransferInstancesRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimTransferInstancesRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimTransferInstancesRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimTransferInstancesRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimTransferInstancesRequest(const ClaimTransferInstancesRequest& from) : ClaimTransferInstancesRequest(nullptr, from) {}
+  inline ClaimTransferInstancesRequest(ClaimTransferInstancesRequest&& from) noexcept : ClaimTransferInstancesRequest(nullptr, ::std::move(from)) {}
+  inline ClaimTransferInstancesRequest& operator=(const ClaimTransferInstancesRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimTransferInstancesRequest& operator=(ClaimTransferInstancesRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimTransferInstancesRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimTransferInstancesRequest>(&ClaimTransferInstancesRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 34;
+  friend void swap(ClaimTransferInstancesRequest& a, ClaimTransferInstancesRequest& b) { a.Swap(&b); }
+  inline void Swap(ClaimTransferInstancesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimTransferInstancesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimTransferInstancesRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimTransferInstancesRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimTransferInstancesRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimTransferInstancesRequest& from) { ClaimTransferInstancesRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimTransferInstancesRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.ClaimTransferInstancesRequest"; }
+
+  explicit ClaimTransferInstancesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimTransferInstancesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimTransferInstancesRequest& from);
+  ClaimTransferInstancesRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimTransferInstancesRequest&& from) noexcept
+      : ClaimTransferInstancesRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemsFieldNumber = 2,
+    kIdempotencyKeyFieldNumber = 3,
+    kToPlayerIdFieldNumber = 1,
+  };
+  // repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
+  [[nodiscard]] int items_size()
+      const;
+  private:
+  int _internal_items_size() const;
+
+  public:
+  void clear_items() ;
+  [[nodiscard]] const ::pandora::inventory::v1::TransferClaimItem& items(int index) const;
+  [[nodiscard]] ::pandora::inventory::v1::TransferClaimItem* PROTOBUF_NONNULL mutable_items(int index);
+  ::pandora::inventory::v1::TransferClaimItem* PROTOBUF_NONNULL add_items();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::TransferClaimItem>&
+  items() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::TransferClaimItem>* PROTOBUF_NONNULL
+  mutable_items();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::TransferClaimItem>& _internal_items() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::TransferClaimItem>* PROTOBUF_NONNULL _internal_mutable_items();
+
+  public:
+  // string idempotency_key = 3 [json_name = "idempotencyKey"];
+  void clear_idempotency_key() ;
+  [[nodiscard]] const ::std::string& idempotency_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_idempotency_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_idempotency_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_idempotency_key();
+  void set_allocated_idempotency_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_idempotency_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_idempotency_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_idempotency_key();
+
+  public:
+  // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+  void clear_to_player_id() ;
+  [[nodiscard]] ::uint64_t to_player_id() const;
+  void set_to_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_to_player_id() const;
+  void _internal_set_to_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.ClaimTransferInstancesRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 74,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimTransferInstancesRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::inventory::v1::TransferClaimItem > items_;
+    ::google::protobuf::internal::ArenaStringPtr idempotency_key_;
+    ::uint64_t to_player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Inventory final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.inventory.v1.Inventory) */ {
  public:
@@ -7224,6 +9043,230 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesResponse final : publ
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::pandora::inventory::v1::ItemInstance > instances_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EscrowOutInstancesResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.EscrowOutInstancesResponse) */ {
+ public:
+  inline EscrowOutInstancesResponse() : EscrowOutInstancesResponse(nullptr) {}
+  ~EscrowOutInstancesResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EscrowOutInstancesResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EscrowOutInstancesResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EscrowOutInstancesResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EscrowOutInstancesResponse(const EscrowOutInstancesResponse& from) : EscrowOutInstancesResponse(nullptr, from) {}
+  inline EscrowOutInstancesResponse(EscrowOutInstancesResponse&& from) noexcept : EscrowOutInstancesResponse(nullptr, ::std::move(from)) {}
+  inline EscrowOutInstancesResponse& operator=(const EscrowOutInstancesResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EscrowOutInstancesResponse& operator=(EscrowOutInstancesResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EscrowOutInstancesResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EscrowOutInstancesResponse>(&EscrowOutInstancesResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 32;
+  friend void swap(EscrowOutInstancesResponse& a, EscrowOutInstancesResponse& b) { a.Swap(&b); }
+  inline void Swap(EscrowOutInstancesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EscrowOutInstancesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EscrowOutInstancesResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EscrowOutInstancesResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EscrowOutInstancesResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EscrowOutInstancesResponse& from) { EscrowOutInstancesResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EscrowOutInstancesResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.EscrowOutInstancesResponse"; }
+
+  explicit EscrowOutInstancesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EscrowOutInstancesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EscrowOutInstancesResponse& from);
+  EscrowOutInstancesResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EscrowOutInstancesResponse&& from) noexcept
+      : EscrowOutInstancesResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemsFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+  [[nodiscard]] int items_size()
+      const;
+  private:
+  int _internal_items_size() const;
+
+  public:
+  void clear_items() ;
+  [[nodiscard]] const ::pandora::bag::v1::BagItem& items(int index) const;
+  [[nodiscard]] ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL mutable_items(int index);
+  ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL add_items();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>&
+  items() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL
+  mutable_items();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>& _internal_items() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL _internal_mutable_items();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.EscrowOutInstancesResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EscrowOutInstancesResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::bag::v1::BagItem > items_;
     int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -10246,6 +12289,668 @@ inline ::pandora::common::v1::ErrCode MoveInstanceResponse::_internal_code() con
   return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
 }
 inline void MoveInstanceResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// EscrowOutInstancesRequest
+
+// uint64 source_player_id = 1 [json_name = "sourcePlayerId"];
+inline void EscrowOutInstancesRequest::clear_source_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t EscrowOutInstancesRequest::source_player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EscrowOutInstancesRequest.source_player_id)
+  return _internal_source_player_id();
+}
+inline void EscrowOutInstancesRequest::set_source_player_id(::uint64_t value) {
+  _internal_set_source_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EscrowOutInstancesRequest.source_player_id)
+}
+inline ::uint64_t EscrowOutInstancesRequest::_internal_source_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_player_id_;
+}
+inline void EscrowOutInstancesRequest::_internal_set_source_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_player_id_ = value;
+}
+
+// uint64 to_player_id = 2 [json_name = "toPlayerId"];
+inline void EscrowOutInstancesRequest::clear_to_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.to_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t EscrowOutInstancesRequest::to_player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EscrowOutInstancesRequest.to_player_id)
+  return _internal_to_player_id();
+}
+inline void EscrowOutInstancesRequest::set_to_player_id(::uint64_t value) {
+  _internal_set_to_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EscrowOutInstancesRequest.to_player_id)
+}
+inline ::uint64_t EscrowOutInstancesRequest::_internal_to_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.to_player_id_;
+}
+inline void EscrowOutInstancesRequest::_internal_set_to_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.to_player_id_ = value;
+}
+
+// repeated uint64 instance_ids = 3 [json_name = "instanceIds"];
+inline int EscrowOutInstancesRequest::_internal_instance_ids_size() const {
+  return _internal_instance_ids().size();
+}
+inline int EscrowOutInstancesRequest::instance_ids_size() const {
+  return _internal_instance_ids_size();
+}
+inline void EscrowOutInstancesRequest::clear_instance_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t EscrowOutInstancesRequest::instance_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EscrowOutInstancesRequest.instance_ids)
+  return _internal_instance_ids().Get(index);
+}
+inline void EscrowOutInstancesRequest::set_instance_ids(int index, ::uint64_t value) {
+  _internal_mutable_instance_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EscrowOutInstancesRequest.instance_ids)
+}
+inline void EscrowOutInstancesRequest::add_instance_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_instance_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.inventory.v1.EscrowOutInstancesRequest.instance_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& EscrowOutInstancesRequest::instance_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.inventory.v1.EscrowOutInstancesRequest.instance_ids)
+  return _internal_instance_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL EscrowOutInstancesRequest::mutable_instance_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.inventory.v1.EscrowOutInstancesRequest.instance_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_instance_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+EscrowOutInstancesRequest::_internal_instance_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+EscrowOutInstancesRequest::_internal_mutable_instance_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.instance_ids_;
+}
+
+// string escrow_key = 4 [json_name = "escrowKey"];
+inline void EscrowOutInstancesRequest::clear_escrow_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.escrow_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& EscrowOutInstancesRequest::escrow_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EscrowOutInstancesRequest.escrow_key)
+  return _internal_escrow_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EscrowOutInstancesRequest::set_escrow_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.escrow_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EscrowOutInstancesRequest.escrow_key)
+}
+inline ::std::string* PROTOBUF_NONNULL EscrowOutInstancesRequest::mutable_escrow_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_escrow_key();
+  // @@protoc_insertion_point(field_mutable:pandora.inventory.v1.EscrowOutInstancesRequest.escrow_key)
+  return _s;
+}
+inline const ::std::string& EscrowOutInstancesRequest::_internal_escrow_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.escrow_key_.Get();
+}
+inline void EscrowOutInstancesRequest::_internal_set_escrow_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.escrow_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EscrowOutInstancesRequest::_internal_mutable_escrow_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.escrow_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EscrowOutInstancesRequest::release_escrow_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.inventory.v1.EscrowOutInstancesRequest.escrow_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.escrow_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.escrow_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EscrowOutInstancesRequest::set_allocated_escrow_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.escrow_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.escrow_key_.IsDefault()) {
+    _impl_.escrow_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.inventory.v1.EscrowOutInstancesRequest.escrow_key)
+}
+
+// -------------------------------------------------------------------
+
+// EscrowOutInstancesResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void EscrowOutInstancesResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode EscrowOutInstancesResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EscrowOutInstancesResponse.code)
+  return _internal_code();
+}
+inline void EscrowOutInstancesResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EscrowOutInstancesResponse.code)
+}
+inline ::pandora::common::v1::ErrCode EscrowOutInstancesResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void EscrowOutInstancesResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// repeated .pandora.bag.v1.BagItem items = 2 [json_name = "items"];
+inline int EscrowOutInstancesResponse::_internal_items_size() const {
+  return _internal_items().size();
+}
+inline int EscrowOutInstancesResponse::items_size() const {
+  return _internal_items_size();
+}
+inline const ::pandora::bag::v1::BagItem& EscrowOutInstancesResponse::items(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EscrowOutInstancesResponse.items)
+  return _internal_items().Get(index);
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL EscrowOutInstancesResponse::mutable_items(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.inventory.v1.EscrowOutInstancesResponse.items)
+  return _internal_mutable_items()->Mutable(index);
+}
+inline ::pandora::bag::v1::BagItem* PROTOBUF_NONNULL EscrowOutInstancesResponse::add_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::bag::v1::BagItem* _add =
+      _internal_mutable_items()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.inventory.v1.EscrowOutInstancesResponse.items)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>& EscrowOutInstancesResponse::items() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.inventory.v1.EscrowOutInstancesResponse.items)
+  return _internal_items();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL
+EscrowOutInstancesResponse::mutable_items() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.inventory.v1.EscrowOutInstancesResponse.items)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_items();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>&
+EscrowOutInstancesResponse::_internal_items() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.items_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::bag::v1::BagItem>* PROTOBUF_NONNULL
+EscrowOutInstancesResponse::_internal_mutable_items() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.items_;
+}
+
+// -------------------------------------------------------------------
+
+// TransferClaimItem
+
+// uint64 instance_id = 1 [json_name = "instanceId"];
+inline void TransferClaimItem::clear_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t TransferClaimItem::instance_id() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.TransferClaimItem.instance_id)
+  return _internal_instance_id();
+}
+inline void TransferClaimItem::set_instance_id(::uint64_t value) {
+  _internal_set_instance_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.TransferClaimItem.instance_id)
+}
+inline ::uint64_t TransferClaimItem::_internal_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_id_;
+}
+inline void TransferClaimItem::_internal_set_instance_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_id_ = value;
+}
+
+// uint32 item_config_id = 2 [json_name = "itemConfigId"];
+inline void TransferClaimItem::clear_item_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t TransferClaimItem::item_config_id() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.TransferClaimItem.item_config_id)
+  return _internal_item_config_id();
+}
+inline void TransferClaimItem::set_item_config_id(::uint32_t value) {
+  _internal_set_item_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.TransferClaimItem.item_config_id)
+}
+inline ::uint32_t TransferClaimItem::_internal_item_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_config_id_;
+}
+inline void TransferClaimItem::_internal_set_item_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ClaimTransferInstancesRequest
+
+// uint64 to_player_id = 1 [json_name = "toPlayerId"];
+inline void ClaimTransferInstancesRequest::clear_to_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.to_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t ClaimTransferInstancesRequest::to_player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ClaimTransferInstancesRequest.to_player_id)
+  return _internal_to_player_id();
+}
+inline void ClaimTransferInstancesRequest::set_to_player_id(::uint64_t value) {
+  _internal_set_to_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.ClaimTransferInstancesRequest.to_player_id)
+}
+inline ::uint64_t ClaimTransferInstancesRequest::_internal_to_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.to_player_id_;
+}
+inline void ClaimTransferInstancesRequest::_internal_set_to_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.to_player_id_ = value;
+}
+
+// repeated .pandora.inventory.v1.TransferClaimItem items = 2 [json_name = "items"];
+inline int ClaimTransferInstancesRequest::_internal_items_size() const {
+  return _internal_items().size();
+}
+inline int ClaimTransferInstancesRequest::items_size() const {
+  return _internal_items_size();
+}
+inline void ClaimTransferInstancesRequest::clear_items() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.items_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::inventory::v1::TransferClaimItem& ClaimTransferInstancesRequest::items(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ClaimTransferInstancesRequest.items)
+  return _internal_items().Get(index);
+}
+inline ::pandora::inventory::v1::TransferClaimItem* PROTOBUF_NONNULL ClaimTransferInstancesRequest::mutable_items(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.inventory.v1.ClaimTransferInstancesRequest.items)
+  return _internal_mutable_items()->Mutable(index);
+}
+inline ::pandora::inventory::v1::TransferClaimItem* PROTOBUF_NONNULL ClaimTransferInstancesRequest::add_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::inventory::v1::TransferClaimItem* _add =
+      _internal_mutable_items()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.inventory.v1.ClaimTransferInstancesRequest.items)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::TransferClaimItem>& ClaimTransferInstancesRequest::items() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.inventory.v1.ClaimTransferInstancesRequest.items)
+  return _internal_items();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::TransferClaimItem>* PROTOBUF_NONNULL
+ClaimTransferInstancesRequest::mutable_items() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.inventory.v1.ClaimTransferInstancesRequest.items)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_items();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::TransferClaimItem>&
+ClaimTransferInstancesRequest::_internal_items() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.items_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::inventory::v1::TransferClaimItem>* PROTOBUF_NONNULL
+ClaimTransferInstancesRequest::_internal_mutable_items() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.items_;
+}
+
+// string idempotency_key = 3 [json_name = "idempotencyKey"];
+inline void ClaimTransferInstancesRequest::clear_idempotency_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.idempotency_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& ClaimTransferInstancesRequest::idempotency_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ClaimTransferInstancesRequest.idempotency_key)
+  return _internal_idempotency_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ClaimTransferInstancesRequest::set_idempotency_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.idempotency_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.ClaimTransferInstancesRequest.idempotency_key)
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimTransferInstancesRequest::mutable_idempotency_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_idempotency_key();
+  // @@protoc_insertion_point(field_mutable:pandora.inventory.v1.ClaimTransferInstancesRequest.idempotency_key)
+  return _s;
+}
+inline const ::std::string& ClaimTransferInstancesRequest::_internal_idempotency_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.idempotency_key_.Get();
+}
+inline void ClaimTransferInstancesRequest::_internal_set_idempotency_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.idempotency_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimTransferInstancesRequest::_internal_mutable_idempotency_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.idempotency_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ClaimTransferInstancesRequest::release_idempotency_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.inventory.v1.ClaimTransferInstancesRequest.idempotency_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.idempotency_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.idempotency_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ClaimTransferInstancesRequest::set_allocated_idempotency_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.idempotency_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.idempotency_key_.IsDefault()) {
+    _impl_.idempotency_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.inventory.v1.ClaimTransferInstancesRequest.idempotency_key)
+}
+
+// -------------------------------------------------------------------
+
+// ClaimTransferInstancesResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ClaimTransferInstancesResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode ClaimTransferInstancesResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ClaimTransferInstancesResponse.code)
+  return _internal_code();
+}
+inline void ClaimTransferInstancesResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.ClaimTransferInstancesResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ClaimTransferInstancesResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ClaimTransferInstancesResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ReleaseTransferEscrowRequest
+
+// repeated uint64 instance_ids = 1 [json_name = "instanceIds"];
+inline int ReleaseTransferEscrowRequest::_internal_instance_ids_size() const {
+  return _internal_instance_ids().size();
+}
+inline int ReleaseTransferEscrowRequest::instance_ids_size() const {
+  return _internal_instance_ids_size();
+}
+inline void ReleaseTransferEscrowRequest::clear_instance_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ReleaseTransferEscrowRequest::instance_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ReleaseTransferEscrowRequest.instance_ids)
+  return _internal_instance_ids().Get(index);
+}
+inline void ReleaseTransferEscrowRequest::set_instance_ids(int index, ::uint64_t value) {
+  _internal_mutable_instance_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.ReleaseTransferEscrowRequest.instance_ids)
+}
+inline void ReleaseTransferEscrowRequest::add_instance_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_instance_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.inventory.v1.ReleaseTransferEscrowRequest.instance_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& ReleaseTransferEscrowRequest::instance_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.inventory.v1.ReleaseTransferEscrowRequest.instance_ids)
+  return _internal_instance_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL ReleaseTransferEscrowRequest::mutable_instance_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.inventory.v1.ReleaseTransferEscrowRequest.instance_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_instance_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+ReleaseTransferEscrowRequest::_internal_instance_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+ReleaseTransferEscrowRequest::_internal_mutable_instance_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.instance_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// ReleaseTransferEscrowResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ReleaseTransferEscrowResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode ReleaseTransferEscrowResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ReleaseTransferEscrowResponse.code)
+  return _internal_code();
+}
+inline void ReleaseTransferEscrowResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.ReleaseTransferEscrowResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ReleaseTransferEscrowResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ReleaseTransferEscrowResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ConsumeTransferEscrowRequest
+
+// uint64 to_player_id = 1 [json_name = "toPlayerId"];
+inline void ConsumeTransferEscrowRequest::clear_to_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.to_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ConsumeTransferEscrowRequest::to_player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ConsumeTransferEscrowRequest.to_player_id)
+  return _internal_to_player_id();
+}
+inline void ConsumeTransferEscrowRequest::set_to_player_id(::uint64_t value) {
+  _internal_set_to_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.ConsumeTransferEscrowRequest.to_player_id)
+}
+inline ::uint64_t ConsumeTransferEscrowRequest::_internal_to_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.to_player_id_;
+}
+inline void ConsumeTransferEscrowRequest::_internal_set_to_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.to_player_id_ = value;
+}
+
+// repeated uint64 instance_ids = 2 [json_name = "instanceIds"];
+inline int ConsumeTransferEscrowRequest::_internal_instance_ids_size() const {
+  return _internal_instance_ids().size();
+}
+inline int ConsumeTransferEscrowRequest::instance_ids_size() const {
+  return _internal_instance_ids_size();
+}
+inline void ConsumeTransferEscrowRequest::clear_instance_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ConsumeTransferEscrowRequest::instance_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ConsumeTransferEscrowRequest.instance_ids)
+  return _internal_instance_ids().Get(index);
+}
+inline void ConsumeTransferEscrowRequest::set_instance_ids(int index, ::uint64_t value) {
+  _internal_mutable_instance_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.ConsumeTransferEscrowRequest.instance_ids)
+}
+inline void ConsumeTransferEscrowRequest::add_instance_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_instance_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.inventory.v1.ConsumeTransferEscrowRequest.instance_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& ConsumeTransferEscrowRequest::instance_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.inventory.v1.ConsumeTransferEscrowRequest.instance_ids)
+  return _internal_instance_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL ConsumeTransferEscrowRequest::mutable_instance_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.inventory.v1.ConsumeTransferEscrowRequest.instance_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_instance_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+ConsumeTransferEscrowRequest::_internal_instance_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+ConsumeTransferEscrowRequest::_internal_mutable_instance_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.instance_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// ConsumeTransferEscrowResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ConsumeTransferEscrowResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode ConsumeTransferEscrowResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.ConsumeTransferEscrowResponse.code)
+  return _internal_code();
+}
+inline void ConsumeTransferEscrowResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.ConsumeTransferEscrowResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ConsumeTransferEscrowResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ConsumeTransferEscrowResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = value;
 }

@@ -1,0 +1,31 @@
+// Pandora 配置表:玩家等级经验表。
+//
+// 源表:Pandora-Client-SVN/Table/角色/j_玩家等级经验.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/player_level_exp.json(tools/configtable-gen 生成)。
+// 用途:player 服务经验结算唯一数值源；客户端 CfgPlayerLevelExp 与服务端同源导出。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// PlayerLevelExpRow 玩家等级经验表一行。
+message PlayerLevelExpRow {
+  // ID 与 level 一致，作为配置表主键。
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 玩家持久化等级，从 1 开始连续递增。
+  uint32 level = 2 [(excel_col) = "等级", (excel_required) = true];
+  // 从本级升到下一级所需的级内经验；唯一末级必须为 0。
+  uint32 upgrade_exp = 3 [(excel_col) = "升级所需经验", (excel_required) = true];
+  // 到达本级前应累计获得的总经验，用于生成期/加载期一致性校验。
+  uint32 cumulative_exp = 4 [(excel_col) = "到达本级累计经验", (excel_required) = true];
+}
+
+// PlayerLevelExpTableData 玩家等级经验整表容器。
+message PlayerLevelExpTableData {
+  option (excel_file) = "角色/j_玩家等级经验.xlsx";
+  option (excel_data_start_row) = 4;
+
+  repeated PlayerLevelExpRow rows = 1;
+}

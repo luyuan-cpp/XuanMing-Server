@@ -631,9 +631,9 @@ constexpr SetReadyRequest::ParseTableT_ SetReadyRequest::InternalGenerateParseTa
       0, // no _extensions_
       4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967282,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -644,32 +644,27 @@ constexpr SetReadyRequest::ParseTableT_ SetReadyRequest::InternalGenerateParseTa
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       // uint32 hero_id = 4 [json_name = "heroId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetReadyRequest, _impl_.hero_id_), 3>(),
-       {32, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetReadyRequest, _impl_.hero_id_), 2>(),
+       {32, 2, 0,
         PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.hero_id_)}},
       // uint64 team_id = 1 [json_name = "teamId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetReadyRequest, _impl_.team_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.team_id_)}},
-      // uint64 player_id = 2 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetReadyRequest, _impl_.player_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.player_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // bool ready = 3 [json_name = "ready"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SetReadyRequest, _impl_.ready_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SetReadyRequest, _impl_.ready_), 1>(),
+       {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.ready_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 team_id = 1 [json_name = "teamId"];
       {PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 player_id = 2 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool ready = 3 [json_name = "ready"];
-      {PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.ready_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.ready_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 hero_id = 4 [json_name = "heroId"];
-      {PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.hero_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SetReadyRequest, _impl_.hero_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -683,7 +678,6 @@ inline constexpr SetReadyRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         team_id_{::uint64_t{0u}},
-        player_id_{::uint64_t{0u}},
         ready_{false},
         hero_id_{0u} {}
 
@@ -1077,11 +1071,11 @@ constexpr LeaveTeamRequest::ParseTableT_ LeaveTeamRequest::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(LeaveTeamRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      1, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967294,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      1,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1091,10 +1085,6 @@ constexpr LeaveTeamRequest::ParseTableT_ LeaveTeamRequest::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::pandora::team::v1::LeaveTeamRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 2 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LeaveTeamRequest, _impl_.player_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(LeaveTeamRequest, _impl_.player_id_)}},
       // uint64 team_id = 1 [json_name = "teamId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LeaveTeamRequest, _impl_.team_id_), 0>(),
        {8, 0, 0,
@@ -1104,8 +1094,6 @@ constexpr LeaveTeamRequest::ParseTableT_ LeaveTeamRequest::InternalGenerateParse
     }}, {{
       // uint64 team_id = 1 [json_name = "teamId"];
       {PROTOBUF_FIELD_OFFSET(LeaveTeamRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 player_id = 2 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(LeaveTeamRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1118,8 +1106,7 @@ inline constexpr LeaveTeamRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        team_id_{::uint64_t{0u}},
-        player_id_{::uint64_t{0u}} {}
+        team_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr LeaveTeamRequest::LeaveTeamRequest(::_pbi::ConstantInitialized,
@@ -1227,9 +1214,9 @@ constexpr KickRequest::ParseTableT_ KickRequest::InternalGenerateParseTable_(con
       0, // no _extensions_
       3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967290,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1244,23 +1231,18 @@ constexpr KickRequest::ParseTableT_ KickRequest::InternalGenerateParseTable_(con
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickRequest, _impl_.team_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(KickRequest, _impl_.team_id_)}},
-      // uint64 captain_id = 2 [json_name = "captainId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickRequest, _impl_.captain_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(KickRequest, _impl_.captain_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickRequest, _impl_.target_player_id_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickRequest, _impl_.target_player_id_), 1>(),
+       {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(KickRequest, _impl_.target_player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 team_id = 1 [json_name = "teamId"];
       {PROTOBUF_FIELD_OFFSET(KickRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 captain_id = 2 [json_name = "captainId"];
-      {PROTOBUF_FIELD_OFFSET(KickRequest, _impl_.captain_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
-      {PROTOBUF_FIELD_OFFSET(KickRequest, _impl_.target_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(KickRequest, _impl_.target_player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1274,7 +1256,6 @@ inline constexpr KickRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         team_id_{::uint64_t{0u}},
-        captain_id_{::uint64_t{0u}},
         target_player_id_{::uint64_t{0u}} {}
 
 template <typename>
@@ -1383,9 +1364,9 @@ constexpr InviteRequest::ParseTableT_ InviteRequest::InternalGenerateParseTable_
       0, // no _extensions_
       3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967290,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1400,23 +1381,18 @@ constexpr InviteRequest::ParseTableT_ InviteRequest::InternalGenerateParseTable_
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteRequest, _impl_.team_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(InviteRequest, _impl_.team_id_)}},
-      // uint64 inviter_id = 2 [json_name = "inviterId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteRequest, _impl_.inviter_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(InviteRequest, _impl_.inviter_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteRequest, _impl_.target_player_id_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteRequest, _impl_.target_player_id_), 1>(),
+       {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(InviteRequest, _impl_.target_player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 team_id = 1 [json_name = "teamId"];
       {PROTOBUF_FIELD_OFFSET(InviteRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 inviter_id = 2 [json_name = "inviterId"];
-      {PROTOBUF_FIELD_OFFSET(InviteRequest, _impl_.inviter_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
-      {PROTOBUF_FIELD_OFFSET(InviteRequest, _impl_.target_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(InviteRequest, _impl_.target_player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1430,7 +1406,6 @@ inline constexpr InviteRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         team_id_{::uint64_t{0u}},
-        inviter_id_{::uint64_t{0u}},
         target_player_id_{::uint64_t{0u}} {}
 
 template <typename>
@@ -1926,11 +1901,11 @@ constexpr AcceptInviteRequest::ParseTableT_ AcceptInviteRequest::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      3, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967289,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1940,28 +1915,21 @@ constexpr AcceptInviteRequest::ParseTableT_ AcceptInviteRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::team::v1::AcceptInviteRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcceptInviteRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.player_id_)}},
       // uint64 team_id = 2 [json_name = "teamId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcceptInviteRequest, _impl_.team_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcceptInviteRequest, _impl_.team_id_), 0>(),
+       {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.team_id_)}},
       // uint64 invite_id = 3 [json_name = "inviteId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcceptInviteRequest, _impl_.invite_id_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcceptInviteRequest, _impl_.invite_id_), 1>(),
+       {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.invite_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 team_id = 2 [json_name = "teamId"];
-      {PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 invite_id = 3 [json_name = "inviteId"];
-      {PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.invite_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.invite_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1974,7 +1942,6 @@ inline constexpr AcceptInviteRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}},
         team_id_{::uint64_t{0u}},
         invite_id_{::uint64_t{0u}} {}
 
@@ -4133,13 +4100,11 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteRequest, _impl_.team_id_),
-        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteRequest, _impl_.inviter_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteRequest, _impl_.target_player_id_),
         0,
         1,
-        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteResponse, _impl_._has_bits_),
         7, // hasbit index offset
@@ -4153,13 +4118,11 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteRequest, _impl_._has_bits_),
-        6, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteRequest, _impl_.player_id_),
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteRequest, _impl_.team_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteRequest, _impl_.invite_id_),
         0,
         1,
-        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -4169,11 +4132,9 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamRequest, _impl_.team_id_),
-        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamRequest, _impl_.player_id_),
         0,
-        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -4183,13 +4144,11 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickRequest, _impl_.team_id_),
-        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickRequest, _impl_.captain_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickRequest, _impl_.target_player_id_),
         0,
         1,
-        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -4199,15 +4158,13 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyRequest, _impl_._has_bits_),
-        7, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyRequest, _impl_.team_id_),
-        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyRequest, _impl_.ready_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyRequest, _impl_.hero_id_),
         0,
         1,
         2,
-        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -4297,24 +4254,24 @@ static const ::_pbi::MigrationSchema
         {58, sizeof(::pandora::team::v1::CreateTeamRequest)},
         {59, sizeof(::pandora::team::v1::CreateTeamResponse)},
         {68, sizeof(::pandora::team::v1::InviteRequest)},
-        {77, sizeof(::pandora::team::v1::InviteResponse)},
-        {88, sizeof(::pandora::team::v1::AcceptInviteRequest)},
-        {97, sizeof(::pandora::team::v1::AcceptInviteResponse)},
-        {104, sizeof(::pandora::team::v1::LeaveTeamRequest)},
-        {111, sizeof(::pandora::team::v1::LeaveTeamResponse)},
-        {118, sizeof(::pandora::team::v1::KickRequest)},
-        {127, sizeof(::pandora::team::v1::KickResponse)},
-        {134, sizeof(::pandora::team::v1::SetReadyRequest)},
-        {145, sizeof(::pandora::team::v1::SetReadyResponse)},
-        {152, sizeof(::pandora::team::v1::GetTeamRequest)},
-        {157, sizeof(::pandora::team::v1::GetTeamResponse)},
-        {164, sizeof(::pandora::team::v1::GetMyTeamRequest)},
-        {165, sizeof(::pandora::team::v1::GetMyTeamResponse)},
-        {174, sizeof(::pandora::team::v1::ListMyPendingInvitesRequest)},
-        {175, sizeof(::pandora::team::v1::PendingInvite)},
-        {186, sizeof(::pandora::team::v1::ListMyPendingInvitesResponse)},
-        {193, sizeof(::pandora::team::v1::TeamUpdateEvent)},
-        {208, sizeof(::pandora::team::v1::TeamInviteEvent)},
+        {75, sizeof(::pandora::team::v1::InviteResponse)},
+        {86, sizeof(::pandora::team::v1::AcceptInviteRequest)},
+        {93, sizeof(::pandora::team::v1::AcceptInviteResponse)},
+        {100, sizeof(::pandora::team::v1::LeaveTeamRequest)},
+        {105, sizeof(::pandora::team::v1::LeaveTeamResponse)},
+        {112, sizeof(::pandora::team::v1::KickRequest)},
+        {119, sizeof(::pandora::team::v1::KickResponse)},
+        {126, sizeof(::pandora::team::v1::SetReadyRequest)},
+        {135, sizeof(::pandora::team::v1::SetReadyResponse)},
+        {142, sizeof(::pandora::team::v1::GetTeamRequest)},
+        {147, sizeof(::pandora::team::v1::GetTeamResponse)},
+        {154, sizeof(::pandora::team::v1::GetMyTeamRequest)},
+        {155, sizeof(::pandora::team::v1::GetMyTeamResponse)},
+        {164, sizeof(::pandora::team::v1::ListMyPendingInvitesRequest)},
+        {165, sizeof(::pandora::team::v1::PendingInvite)},
+        {176, sizeof(::pandora::team::v1::ListMyPendingInvitesResponse)},
+        {183, sizeof(::pandora::team::v1::TeamUpdateEvent)},
+        {198, sizeof(::pandora::team::v1::TeamInviteEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4373,99 +4330,98 @@ const char descriptor_table_protodef_pandora_2fteam_2fv1_2fteam_2eproto[] ABSL_A
     "CreateTeamResponse\022.\n\004code\030\001 \001(\0162\032.pando"
     "ra.common.v1.ErrCodeR\004code\022\027\n\007team_id\030\002 "
     "\001(\004R\006teamId\022)\n\004team\030\003 \001(\0132\025.pandora.team"
-    ".v1.TeamR\004team\"q\n\rInviteRequest\022\027\n\007team_"
-    "id\030\001 \001(\004R\006teamId\022\035\n\ninviter_id\030\002 \001(\004R\tin"
-    "viterId\022(\n\020target_player_id\030\003 \001(\004R\016targe"
-    "tPlayerId\"\254\001\n\016InviteResponse\022.\n\004code\030\001 \001"
-    "(\0162\032.pandora.common.v1.ErrCodeR\004code\022)\n\004"
-    "team\030\002 \001(\0132\025.pandora.team.v1.TeamR\004team\022"
-    "\033\n\tinvite_id\030\003 \001(\004R\010inviteId\022\"\n\rexpires_"
-    "at_ms\030\004 \001(\003R\013expiresAtMs\"h\n\023AcceptInvite"
-    "Request\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\027\n\007"
-    "team_id\030\002 \001(\004R\006teamId\022\033\n\tinvite_id\030\003 \001(\004"
-    "R\010inviteId\"q\n\024AcceptInviteResponse\022.\n\004co"
-    "de\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004co"
-    "de\022)\n\004team\030\002 \001(\0132\025.pandora.team.v1.TeamR"
-    "\004team\"H\n\020LeaveTeamRequest\022\027\n\007team_id\030\001 \001"
-    "(\004R\006teamId\022\033\n\tplayer_id\030\002 \001(\004R\010playerId\""
-    "n\n\021LeaveTeamResponse\022.\n\004code\030\001 \001(\0162\032.pan"
-    "dora.common.v1.ErrCodeR\004code\022)\n\004team\030\002 \001"
-    "(\0132\025.pandora.team.v1.TeamR\004team\"o\n\013KickR"
-    "equest\022\027\n\007team_id\030\001 \001(\004R\006teamId\022\035\n\ncapta"
-    "in_id\030\002 \001(\004R\tcaptainId\022(\n\020target_player_"
-    "id\030\003 \001(\004R\016targetPlayerId\"i\n\014KickResponse"
+    ".v1.TeamR\004team\"d\n\rInviteRequest\022\027\n\007team_"
+    "id\030\001 \001(\004R\006teamId\022(\n\020target_player_id\030\003 \001"
+    "(\004R\016targetPlayerIdJ\004\010\002\020\003R\ninviter_id\"\254\001\n"
+    "\016InviteResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\022)\n\004team\030\002 \001(\0132\025."
+    "pandora.team.v1.TeamR\004team\022\033\n\tinvite_id\030"
+    "\003 \001(\004R\010inviteId\022\"\n\rexpires_at_ms\030\004 \001(\003R\013"
+    "expiresAtMs\"\\\n\023AcceptInviteRequest\022\027\n\007te"
+    "am_id\030\002 \001(\004R\006teamId\022\033\n\tinvite_id\030\003 \001(\004R\010"
+    "inviteIdJ\004\010\001\020\002R\tplayer_id\"q\n\024AcceptInvit"
+    "eResponse\022.\n\004code\030\001 \001(\0162\032.pandora.common"
+    ".v1.ErrCodeR\004code\022)\n\004team\030\002 \001(\0132\025.pandor"
+    "a.team.v1.TeamR\004team\"<\n\020LeaveTeamRequest"
+    "\022\027\n\007team_id\030\001 \001(\004R\006teamIdJ\004\010\002\020\003R\tplayer_"
+    "id\"n\n\021LeaveTeamResponse\022.\n\004code\030\001 \001(\0162\032."
+    "pandora.common.v1.ErrCodeR\004code\022)\n\004team\030"
+    "\002 \001(\0132\025.pandora.team.v1.TeamR\004team\"b\n\013Ki"
+    "ckRequest\022\027\n\007team_id\030\001 \001(\004R\006teamId\022(\n\020ta"
+    "rget_player_id\030\003 \001(\004R\016targetPlayerIdJ\004\010\002"
+    "\020\003R\ncaptain_id\"i\n\014KickResponse\022.\n\004code\030\001"
+    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022)"
+    "\n\004team\030\002 \001(\0132\025.pandora.team.v1.TeamR\004tea"
+    "m\"j\n\017SetReadyRequest\022\027\n\007team_id\030\001 \001(\004R\006t"
+    "eamId\022\024\n\005ready\030\003 \001(\010R\005ready\022\027\n\007hero_id\030\004"
+    " \001(\rR\006heroIdJ\004\010\002\020\003R\tplayer_id\"m\n\020SetRead"
+    "yResponse\022.\n\004code\030\001 \001(\0162\032.pandora.common"
+    ".v1.ErrCodeR\004code\022)\n\004team\030\002 \001(\0132\025.pandor"
+    "a.team.v1.TeamR\004team\")\n\016GetTeamRequest\022\027"
+    "\n\007team_id\030\001 \001(\004R\006teamId\"l\n\017GetTeamRespon"
+    "se\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
+    "CodeR\004code\022)\n\004team\030\002 \001(\0132\025.pandora.team."
+    "v1.TeamR\004team\"#\n\020GetMyTeamRequestJ\004\010\001\020\002R"
+    "\tplayer_id\"\220\001\n\021GetMyTeamResponse\022.\n\004code"
+    "\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code"
+    "\022 \n\014has_team_msg\030\002 \001(\010R\nhasTeamMsg\022)\n\004te"
+    "am\030\003 \001(\0132\025.pandora.team.v1.TeamR\004team\"\035\n"
+    "\033ListMyPendingInvitesRequest\"\210\001\n\rPending"
+    "Invite\022\027\n\007team_id\030\001 \001(\004R\006teamId\022\033\n\tinvit"
+    "e_id\030\002 \001(\004R\010inviteId\022\035\n\ninviter_id\030\003 \001(\004"
+    "R\tinviterId\022\"\n\rexpires_at_ms\030\004 \001(\003R\013expi"
+    "resAtMs\"\210\001\n\034ListMyPendingInvitesResponse"
     "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
-    "deR\004code\022)\n\004team\030\002 \001(\0132\025.pandora.team.v1"
-    ".TeamR\004team\"v\n\017SetReadyRequest\022\027\n\007team_i"
-    "d\030\001 \001(\004R\006teamId\022\033\n\tplayer_id\030\002 \001(\004R\010play"
-    "erId\022\024\n\005ready\030\003 \001(\010R\005ready\022\027\n\007hero_id\030\004 "
-    "\001(\rR\006heroId\"m\n\020SetReadyResponse\022.\n\004code\030"
-    "\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022"
-    ")\n\004team\030\002 \001(\0132\025.pandora.team.v1.TeamR\004te"
-    "am\")\n\016GetTeamRequest\022\027\n\007team_id\030\001 \001(\004R\006t"
-    "eamId\"l\n\017GetTeamResponse\022.\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCodeR\004code\022)\n\004team"
-    "\030\002 \001(\0132\025.pandora.team.v1.TeamR\004team\"#\n\020G"
-    "etMyTeamRequestJ\004\010\001\020\002R\tplayer_id\"\220\001\n\021Get"
-    "MyTeamResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
-    "ommon.v1.ErrCodeR\004code\022 \n\014has_team_msg\030\002"
-    " \001(\010R\nhasTeamMsg\022)\n\004team\030\003 \001(\0132\025.pandora"
-    ".team.v1.TeamR\004team\"\035\n\033ListMyPendingInvi"
-    "tesRequest\"\210\001\n\rPendingInvite\022\027\n\007team_id\030"
-    "\001 \001(\004R\006teamId\022\033\n\tinvite_id\030\002 \001(\004R\010invite"
-    "Id\022\035\n\ninviter_id\030\003 \001(\004R\tinviterId\022\"\n\rexp"
-    "ires_at_ms\030\004 \001(\003R\013expiresAtMs\"\210\001\n\034ListMy"
-    "PendingInvitesResponse\022.\n\004code\030\001 \001(\0162\032.p"
-    "andora.common.v1.ErrCodeR\004code\0228\n\007invite"
-    "s\030\002 \003(\0132\036.pandora.team.v1.PendingInviteR"
-    "\007invites\"\211\002\n\017TeamUpdateEvent\022)\n\004team\030\001 \001"
-    "(\0132\025.pandora.team.v1.TeamR\004team\022 \n\014by_pl"
-    "ayer_id\030\003 \001(\004R\nbyPlayerId\022 \n\014to_player_i"
-    "d\030\004 \001(\004R\ntoPlayerId\022\023\n\005ts_ms\030\005 \001(\003R\004tsMs"
-    "\0229\n\006reason\030\n \001(\0162!.pandora.team.v1.TeamU"
-    "pdateReasonR\006reason\022\033\n\tinvite_id\030\013 \001(\004R\010"
-    "inviteIdJ\004\010\002\020\003J\004\010\006\020\nR\016change_summary\"\307\001\n"
-    "\017TeamInviteEvent\022\027\n\007team_id\030\001 \001(\004R\006teamI"
-    "d\022\033\n\tinvite_id\030\002 \001(\004R\010inviteId\022\035\n\ninvite"
-    "r_id\030\003 \001(\004R\tinviterId\022 \n\014to_player_id\030\004 "
-    "\001(\004R\ntoPlayerId\022\023\n\005ts_ms\030\005 \001(\003R\004tsMs\022\"\n\r"
-    "expires_at_ms\030\006 \001(\003R\013expiresAtMsJ\004\010\007\020\n*\242"
-    "\001\n\tTeamState\022\032\n\026TEAM_STATE_UNSPECIFIED\020\000"
-    "\022\026\n\022TEAM_STATE_FORMING\020\001\022\024\n\020TEAM_STATE_R"
-    "EADY\020\002\022\027\n\023TEAM_STATE_MATCHING\020\003\022\030\n\024TEAM_"
-    "STATE_IN_BATTLE\020\004\022\030\n\024TEAM_STATE_DISBANDE"
-    "D\020\005*Z\n\021TeamPushEventType\022$\n TEAM_PUSH_EV"
-    "ENT_TYPE_UNSPECIFIED\020\000\022\037\n\033TEAM_PUSH_EVEN"
-    "T_TYPE_INVITE\020\001*\205\003\n\020TeamUpdateReason\022\"\n\036"
-    "TEAM_UPDATE_REASON_UNSPECIFIED\020\000\022$\n TEAM"
-    "_UPDATE_REASON_MEMBER_JOINED\020\001\022\"\n\036TEAM_U"
-    "PDATE_REASON_MEMBER_LEFT\020\002\022$\n TEAM_UPDAT"
-    "E_REASON_MEMBER_KICKED\020\003\022#\n\037TEAM_UPDATE_"
-    "REASON_MEMBER_READY\020\004\022#\n\037TEAM_UPDATE_REA"
-    "SON_HERO_CHANGED\020\005\022\'\n#TEAM_UPDATE_REASON"
-    "_CAPTAIN_TRANSFER\020\006\022$\n TEAM_UPDATE_REASO"
-    "N_STATE_CHANGED\020\007\022 \n\034TEAM_UPDATE_REASON_"
-    "DISBANDED\020\010\022\"\n\036TEAM_UPDATE_REASON_INVITE"
-    "_SENT\020\t2\215\006\n\013TeamService\022U\n\nCreateTeam\022\"."
-    "pandora.team.v1.CreateTeamRequest\032#.pand"
-    "ora.team.v1.CreateTeamResponse\022I\n\006Invite"
-    "\022\036.pandora.team.v1.InviteRequest\032\037.pando"
-    "ra.team.v1.InviteResponse\022[\n\014AcceptInvit"
-    "e\022$.pandora.team.v1.AcceptInviteRequest\032"
-    "%.pandora.team.v1.AcceptInviteResponse\022R"
-    "\n\tLeaveTeam\022!.pandora.team.v1.LeaveTeamR"
-    "equest\032\".pandora.team.v1.LeaveTeamRespon"
-    "se\022C\n\004Kick\022\034.pandora.team.v1.KickRequest"
-    "\032\035.pandora.team.v1.KickResponse\022O\n\010SetRe"
-    "ady\022 .pandora.team.v1.SetReadyRequest\032!."
-    "pandora.team.v1.SetReadyResponse\022L\n\007GetT"
-    "eam\022\037.pandora.team.v1.GetTeamRequest\032 .p"
-    "andora.team.v1.GetTeamResponse\022R\n\tGetMyT"
-    "eam\022!.pandora.team.v1.GetMyTeamRequest\032\""
-    ".pandora.team.v1.GetMyTeamResponse\022s\n\024Li"
-    "stMyPendingInvites\022,.pandora.team.v1.Lis"
-    "tMyPendingInvitesRequest\032-.pandora.team."
-    "v1.ListMyPendingInvitesResponseb\006proto3"
+    "deR\004code\0228\n\007invites\030\002 \003(\0132\036.pandora.team"
+    ".v1.PendingInviteR\007invites\"\211\002\n\017TeamUpdat"
+    "eEvent\022)\n\004team\030\001 \001(\0132\025.pandora.team.v1.T"
+    "eamR\004team\022 \n\014by_player_id\030\003 \001(\004R\nbyPlaye"
+    "rId\022 \n\014to_player_id\030\004 \001(\004R\ntoPlayerId\022\023\n"
+    "\005ts_ms\030\005 \001(\003R\004tsMs\0229\n\006reason\030\n \001(\0162!.pan"
+    "dora.team.v1.TeamUpdateReasonR\006reason\022\033\n"
+    "\tinvite_id\030\013 \001(\004R\010inviteIdJ\004\010\002\020\003J\004\010\006\020\nR\016"
+    "change_summary\"\307\001\n\017TeamInviteEvent\022\027\n\007te"
+    "am_id\030\001 \001(\004R\006teamId\022\033\n\tinvite_id\030\002 \001(\004R\010"
+    "inviteId\022\035\n\ninviter_id\030\003 \001(\004R\tinviterId\022"
+    " \n\014to_player_id\030\004 \001(\004R\ntoPlayerId\022\023\n\005ts_"
+    "ms\030\005 \001(\003R\004tsMs\022\"\n\rexpires_at_ms\030\006 \001(\003R\013e"
+    "xpiresAtMsJ\004\010\007\020\n*\242\001\n\tTeamState\022\032\n\026TEAM_S"
+    "TATE_UNSPECIFIED\020\000\022\026\n\022TEAM_STATE_FORMING"
+    "\020\001\022\024\n\020TEAM_STATE_READY\020\002\022\027\n\023TEAM_STATE_M"
+    "ATCHING\020\003\022\030\n\024TEAM_STATE_IN_BATTLE\020\004\022\030\n\024T"
+    "EAM_STATE_DISBANDED\020\005*Z\n\021TeamPushEventTy"
+    "pe\022$\n TEAM_PUSH_EVENT_TYPE_UNSPECIFIED\020\000"
+    "\022\037\n\033TEAM_PUSH_EVENT_TYPE_INVITE\020\001*\205\003\n\020Te"
+    "amUpdateReason\022\"\n\036TEAM_UPDATE_REASON_UNS"
+    "PECIFIED\020\000\022$\n TEAM_UPDATE_REASON_MEMBER_"
+    "JOINED\020\001\022\"\n\036TEAM_UPDATE_REASON_MEMBER_LE"
+    "FT\020\002\022$\n TEAM_UPDATE_REASON_MEMBER_KICKED"
+    "\020\003\022#\n\037TEAM_UPDATE_REASON_MEMBER_READY\020\004\022"
+    "#\n\037TEAM_UPDATE_REASON_HERO_CHANGED\020\005\022\'\n#"
+    "TEAM_UPDATE_REASON_CAPTAIN_TRANSFER\020\006\022$\n"
+    " TEAM_UPDATE_REASON_STATE_CHANGED\020\007\022 \n\034T"
+    "EAM_UPDATE_REASON_DISBANDED\020\010\022\"\n\036TEAM_UP"
+    "DATE_REASON_INVITE_SENT\020\t2\215\006\n\013TeamServic"
+    "e\022U\n\nCreateTeam\022\".pandora.team.v1.Create"
+    "TeamRequest\032#.pandora.team.v1.CreateTeam"
+    "Response\022I\n\006Invite\022\036.pandora.team.v1.Inv"
+    "iteRequest\032\037.pandora.team.v1.InviteRespo"
+    "nse\022[\n\014AcceptInvite\022$.pandora.team.v1.Ac"
+    "ceptInviteRequest\032%.pandora.team.v1.Acce"
+    "ptInviteResponse\022R\n\tLeaveTeam\022!.pandora."
+    "team.v1.LeaveTeamRequest\032\".pandora.team."
+    "v1.LeaveTeamResponse\022C\n\004Kick\022\034.pandora.t"
+    "eam.v1.KickRequest\032\035.pandora.team.v1.Kic"
+    "kResponse\022O\n\010SetReady\022 .pandora.team.v1."
+    "SetReadyRequest\032!.pandora.team.v1.SetRea"
+    "dyResponse\022L\n\007GetTeam\022\037.pandora.team.v1."
+    "GetTeamRequest\032 .pandora.team.v1.GetTeam"
+    "Response\022R\n\tGetMyTeam\022!.pandora.team.v1."
+    "GetMyTeamRequest\032\".pandora.team.v1.GetMy"
+    "TeamResponse\022s\n\024ListMyPendingInvites\022,.p"
+    "andora.team.v1.ListMyPendingInvitesReque"
+    "st\032-.pandora.team.v1.ListMyPendingInvite"
+    "sResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_deps[1] = {
@@ -4475,7 +4431,7 @@ static ::absl::once_flag descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto = {
     false,
     false,
-    4799,
+    4737,
     descriptor_table_protodef_pandora_2fteam_2fv1_2fteam_2eproto,
     "pandora/team/v1/team.proto",
     &descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_once,
@@ -6312,7 +6268,7 @@ PROTOBUF_NOINLINE void InviteRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     ::memset(&_impl_.team_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.target_player_id_) -
         reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.target_player_id_));
@@ -6349,17 +6305,8 @@ PROTOBUF_NOINLINE void InviteRequest::Clear() {
     }
   }
 
-  // uint64 inviter_id = 2 [json_name = "inviterId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (this_._internal_inviter_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          2, this_._internal_inviter_id(), target);
-    }
-  }
-
   // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_target_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6392,7 +6339,7 @@ PROTOBUF_NOINLINE void InviteRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint64 team_id = 1 [json_name = "teamId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_team_id() != 0) {
@@ -6400,15 +6347,8 @@ PROTOBUF_NOINLINE void InviteRequest::Clear() {
             this_._internal_team_id());
       }
     }
-    // uint64 inviter_id = 2 [json_name = "inviterId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_inviter_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_inviter_id());
-      }
-    }
     // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_target_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_target_player_id());
@@ -6432,18 +6372,13 @@ void InviteRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_team_id() != 0) {
         _this->_impl_.team_id_ = from._impl_.team_id_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_inviter_id() != 0) {
-        _this->_impl_.inviter_id_ = from._impl_.inviter_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_target_player_id() != 0) {
         _this->_impl_.target_player_id_ = from._impl_.target_player_id_;
       }
@@ -6806,10 +6741,10 @@ PROTOBUF_NDEBUG_INLINE AcceptInviteRequest::Impl_::Impl_(
 inline void AcceptInviteRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
+               offsetof(Impl_, team_id_),
            0,
            offsetof(Impl_, invite_id_) -
-               offsetof(Impl_, player_id_) +
+               offsetof(Impl_, team_id_) +
                sizeof(Impl_::invite_id_));
 }
 AcceptInviteRequest::~AcceptInviteRequest() {
@@ -6860,10 +6795,10 @@ PROTOBUF_NOINLINE void AcceptInviteRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.team_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.invite_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.invite_id_));
+        reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.invite_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6888,17 +6823,8 @@ PROTOBUF_NOINLINE void AcceptInviteRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // uint64 team_id = 2 [json_name = "teamId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_team_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6907,7 +6833,7 @@ PROTOBUF_NOINLINE void AcceptInviteRequest::Clear() {
   }
 
   // uint64 invite_id = 3 [json_name = "inviteId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_invite_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6940,23 +6866,16 @@ PROTOBUF_NOINLINE void AcceptInviteRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // uint64 player_id = 1 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint64 team_id = 2 [json_name = "teamId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_team_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_team_id());
       }
     }
     // uint64 invite_id = 3 [json_name = "inviteId"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_invite_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_invite_id());
@@ -6980,18 +6899,13 @@ void AcceptInviteRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_team_id() != 0) {
         _this->_impl_.team_id_ = from._impl_.team_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_invite_id() != 0) {
         _this->_impl_.invite_id_ = from._impl_.invite_id_;
       }
@@ -7017,9 +6931,9 @@ void AcceptInviteRequest::InternalSwap(AcceptInviteRequest* PROTOBUF_RESTRICT PR
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.invite_id_)
       + sizeof(AcceptInviteRequest::_impl_.invite_id_)
-      - PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
+      - PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.team_id_)>(
+          reinterpret_cast<char*>(&_impl_.team_id_),
+          reinterpret_cast<char*>(&other->_impl_.team_id_));
 }
 
 ::google::protobuf::Metadata AcceptInviteRequest::GetMetadata() const {
@@ -7301,12 +7215,7 @@ PROTOBUF_NDEBUG_INLINE LeaveTeamRequest::Impl_::Impl_(
 
 inline void LeaveTeamRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, team_id_),
-           0,
-           offsetof(Impl_, player_id_) -
-               offsetof(Impl_, team_id_) +
-               sizeof(Impl_::player_id_));
+  _impl_.team_id_ = {};
 }
 LeaveTeamRequest::~LeaveTeamRequest() {
   // @@protoc_insertion_point(destructor:pandora.team.v1.LeaveTeamRequest)
@@ -7355,12 +7264,7 @@ PROTOBUF_NOINLINE void LeaveTeamRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    ::memset(&_impl_.team_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.player_id_) -
-        reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.player_id_));
-  }
+  _impl_.team_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -7393,15 +7297,6 @@ PROTOBUF_NOINLINE void LeaveTeamRequest::Clear() {
     }
   }
 
-  // uint64 player_id = 2 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          2, this_._internal_player_id(), target);
-    }
-  }
-
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7425,21 +7320,13 @@ PROTOBUF_NOINLINE void LeaveTeamRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+   {
     // uint64 team_id = 1 [json_name = "teamId"];
+    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_team_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_team_id());
-      }
-    }
-    // uint64 player_id = 2 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
       }
     }
   }
@@ -7460,16 +7347,9 @@ void LeaveTeamRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_team_id() != 0) {
-        _this->_impl_.team_id_ = from._impl_.team_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_team_id() != 0) {
+      _this->_impl_.team_id_ = from._impl_.team_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -7489,12 +7369,7 @@ void LeaveTeamRequest::InternalSwap(LeaveTeamRequest* PROTOBUF_RESTRICT PROTOBUF
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(LeaveTeamRequest, _impl_.player_id_)
-      + sizeof(LeaveTeamRequest::_impl_.player_id_)
-      - PROTOBUF_FIELD_OFFSET(LeaveTeamRequest, _impl_.team_id_)>(
-          reinterpret_cast<char*>(&_impl_.team_id_),
-          reinterpret_cast<char*>(&other->_impl_.team_id_));
+  swap(_impl_.team_id_, other->_impl_.team_id_);
 }
 
 ::google::protobuf::Metadata LeaveTeamRequest::GetMetadata() const {
@@ -7831,7 +7706,7 @@ PROTOBUF_NOINLINE void KickRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     ::memset(&_impl_.team_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.target_player_id_) -
         reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.target_player_id_));
@@ -7868,17 +7743,8 @@ PROTOBUF_NOINLINE void KickRequest::Clear() {
     }
   }
 
-  // uint64 captain_id = 2 [json_name = "captainId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (this_._internal_captain_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          2, this_._internal_captain_id(), target);
-    }
-  }
-
   // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_target_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -7911,7 +7777,7 @@ PROTOBUF_NOINLINE void KickRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint64 team_id = 1 [json_name = "teamId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_team_id() != 0) {
@@ -7919,15 +7785,8 @@ PROTOBUF_NOINLINE void KickRequest::Clear() {
             this_._internal_team_id());
       }
     }
-    // uint64 captain_id = 2 [json_name = "captainId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_captain_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_captain_id());
-      }
-    }
     // uint64 target_player_id = 3 [json_name = "targetPlayerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_target_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_target_player_id());
@@ -7951,18 +7810,13 @@ void KickRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_team_id() != 0) {
         _this->_impl_.team_id_ = from._impl_.team_id_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_captain_id() != 0) {
-        _this->_impl_.captain_id_ = from._impl_.captain_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_target_player_id() != 0) {
         _this->_impl_.target_player_id_ = from._impl_.target_player_id_;
       }
@@ -8327,7 +8181,7 @@ PROTOBUF_NOINLINE void SetReadyRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     ::memset(&_impl_.team_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.hero_id_) -
         reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.hero_id_));
@@ -8364,17 +8218,8 @@ PROTOBUF_NOINLINE void SetReadyRequest::Clear() {
     }
   }
 
-  // uint64 player_id = 2 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          2, this_._internal_player_id(), target);
-    }
-  }
-
   // bool ready = 3 [json_name = "ready"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_ready() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -8383,7 +8228,7 @@ PROTOBUF_NOINLINE void SetReadyRequest::Clear() {
   }
 
   // uint32 hero_id = 4 [json_name = "heroId"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_hero_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -8416,7 +8261,7 @@ PROTOBUF_NOINLINE void SetReadyRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // uint64 team_id = 1 [json_name = "teamId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_team_id() != 0) {
@@ -8424,21 +8269,14 @@ PROTOBUF_NOINLINE void SetReadyRequest::Clear() {
             this_._internal_team_id());
       }
     }
-    // uint64 player_id = 2 [json_name = "playerId"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
     // bool ready = 3 [json_name = "ready"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_ready() != 0) {
         total_size += 2;
       }
     }
     // uint32 hero_id = 4 [json_name = "heroId"];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_hero_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_hero_id());
@@ -8462,23 +8300,18 @@ void SetReadyRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_team_id() != 0) {
         _this->_impl_.team_id_ = from._impl_.team_id_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_ready() != 0) {
         _this->_impl_.ready_ = from._impl_.ready_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_hero_id() != 0) {
         _this->_impl_.hero_id_ = from._impl_.hero_id_;
       }

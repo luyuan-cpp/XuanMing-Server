@@ -46,7 +46,9 @@ message ChatMessage {
 }
 
 message SendMessageRequest {
-  uint64      sender_id  = 1;
+  // sender_id 已删:发送者以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "sender_id";
   ChatChannel channel    = 2;
   uint64      target_id  = 3;
   string      content    = 4;
@@ -59,7 +61,9 @@ message SendMessageResponse {
 }
 
 message PullHistoryRequest {
-  uint64      player_id = 1;
+  // player_id 已删:身份以 JWT x-pandora-player-id 为准(R5);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   ChatChannel channel   = 2;
   uint64      peer_id   = 3;  // 私聊用,世界/队伍为 0
   int32       limit     = 4;  // ≤ 100

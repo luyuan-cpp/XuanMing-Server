@@ -38,6 +38,15 @@ lint:
 breaking:
   use:
     - FILE
+    # 2026-07-22 R5 自报身份字段删除后调整:
+    # FILE 自带的 FIELD_NO_DELETE 会把"已 reserved(编号+名字)后删除"也判为 breaking,
+    # 但 CLAUDE.md §5.4 / §9 不变量 17 认可的删除路径正是 reserved 后删字段。
+    # 换成 UNLESS 变体:只有"删了但没 reserved 编号/名字"才算 breaking,
+    # 与项目约定对齐;误删(未 reserved)仍会被拦。
+    - FIELD_NO_DELETE_UNLESS_NUMBER_RESERVED
+    - FIELD_NO_DELETE_UNLESS_NAME_RESERVED
+  except:
+    - FIELD_NO_DELETE
 
 deps:
   # googleapis:提供 google/api/annotations.proto(http 注解)

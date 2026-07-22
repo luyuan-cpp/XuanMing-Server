@@ -21,6 +21,7 @@
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/arenastring.h"
+#include "google/protobuf/generated_message_bases.h"
 #include "google/protobuf/generated_message_tctable_decl.h"
 #include "google/protobuf/generated_message_util.h"
 #include "google/protobuf/metadata_lite.h"
@@ -810,19 +811,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferLeaderRequest final : publi
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kTargetIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 target_id = 2 [json_name = "targetId"];
   void clear_target_id() ;
   [[nodiscard]] ::uint64_t target_id() const;
@@ -837,7 +827,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferLeaderRequest final : publi
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -866,7 +856,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferLeaderRequest final : publi
         const TransferLeaderRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t target_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -1224,20 +1213,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetOfficerRequest final : public ::
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kTargetIdFieldNumber = 2,
     kIsOfficerFieldNumber = 3,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 target_id = 2 [json_name = "targetId"];
   void clear_target_id() ;
   [[nodiscard]] ::uint64_t target_id() const;
@@ -1262,7 +1240,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetOfficerRequest final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1291,7 +1269,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetOfficerRequest final : public ::
         const SetOfficerRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t target_id_;
     bool is_officer_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -1650,19 +1627,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RejectJoinRequest final : public ::
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kRequestIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 request_id = 2 [json_name = "requestId"];
   void clear_request_id() ;
   [[nodiscard]] ::uint64_t request_id() const;
@@ -1677,7 +1643,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RejectJoinRequest final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1706,7 +1672,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RejectJoinRequest final : public ::
         const RejectJoinRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t request_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2088,20 +2053,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListJoinRequestsRequest final : pub
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kCursorFieldNumber = 2,
     kLimitFieldNumber = 3,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 cursor = 2 [json_name = "cursor"];
   void clear_cursor() ;
   [[nodiscard]] ::uint64_t cursor() const;
@@ -2126,7 +2080,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListJoinRequestsRequest final : pub
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2155,7 +2109,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListJoinRequestsRequest final : pub
         const ListJoinRequestsRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t cursor_;
     ::int32_t limit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -2366,11 +2319,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveGuildResponse final : public :
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveGuildRequest final : public ::google::protobuf::Message
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveGuildRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:pandora.guild.v1.LeaveGuildRequest) */ {
  public:
   inline LeaveGuildRequest() : LeaveGuildRequest(nullptr) {}
-  ~LeaveGuildRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
   void operator delete(LeaveGuildRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
@@ -2442,50 +2394,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveGuildRequest final : public ::
 
   [[nodiscard]] LeaveGuildRequest* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<LeaveGuildRequest>(arena);
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<LeaveGuildRequest>(arena);
   }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const LeaveGuildRequest& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const LeaveGuildRequest& from) { LeaveGuildRequest::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const LeaveGuildRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const LeaveGuildRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
 
   public:
   [[nodiscard]] bool IsInitialized() const {
     return true;
   }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(LeaveGuildRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
@@ -2513,24 +2432,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveGuildRequest final : public ::
   // nested types ----------------------------------------------------
 
   // accessors -------------------------------------------------------
-  enum : int {
-    kPlayerIdFieldNumber = 1,
-  };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:pandora.guild.v1.LeaveGuildRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<0, 0,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2547,22 +2453,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveGuildRequest final : public ::
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const LeaveGuildRequest& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
   friend struct ::TableStruct_pandora_2fguild_2fv1_2fguild_2eproto;
 };
 // -------------------------------------------------------------------
@@ -2916,19 +2806,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickMemberRequest final : public ::
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kTargetIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 target_id = 2 [json_name = "targetId"];
   void clear_target_id() ;
   [[nodiscard]] ::uint64_t target_id() const;
@@ -2943,7 +2822,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickMemberRequest final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2972,7 +2851,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickMemberRequest final : public ::
         const KickMemberRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t target_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3997,11 +3875,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Guild final : public ::google::prot
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMyGuildRequest final : public ::google::protobuf::Message
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMyGuildRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:pandora.guild.v1.GetMyGuildRequest) */ {
  public:
   inline GetMyGuildRequest() : GetMyGuildRequest(nullptr) {}
-  ~GetMyGuildRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
   void operator delete(GetMyGuildRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
@@ -4073,50 +3950,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMyGuildRequest final : public ::
 
   [[nodiscard]] GetMyGuildRequest* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<GetMyGuildRequest>(arena);
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<GetMyGuildRequest>(arena);
   }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const GetMyGuildRequest& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const GetMyGuildRequest& from) { GetMyGuildRequest::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const GetMyGuildRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const GetMyGuildRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
 
   public:
   [[nodiscard]] bool IsInitialized() const {
     return true;
   }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(GetMyGuildRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
@@ -4144,24 +3988,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMyGuildRequest final : public ::
   // nested types ----------------------------------------------------
 
   // accessors -------------------------------------------------------
-  enum : int {
-    kPlayerIdFieldNumber = 1,
-  };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:pandora.guild.v1.GetMyGuildRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<0, 0,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4178,22 +4009,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMyGuildRequest final : public ::
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const GetMyGuildRequest& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
   friend struct ::TableStruct_pandora_2fguild_2fv1_2fguild_2eproto;
 };
 // -------------------------------------------------------------------
@@ -4600,11 +4415,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DisbandGuildResponse final : public
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DisbandGuildRequest final : public ::google::protobuf::Message
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DisbandGuildRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:pandora.guild.v1.DisbandGuildRequest) */ {
  public:
   inline DisbandGuildRequest() : DisbandGuildRequest(nullptr) {}
-  ~DisbandGuildRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
   void operator delete(DisbandGuildRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
@@ -4676,50 +4490,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DisbandGuildRequest final : public 
 
   [[nodiscard]] DisbandGuildRequest* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<DisbandGuildRequest>(arena);
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<DisbandGuildRequest>(arena);
   }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const DisbandGuildRequest& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const DisbandGuildRequest& from) { DisbandGuildRequest::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const DisbandGuildRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const DisbandGuildRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
 
   public:
   [[nodiscard]] bool IsInitialized() const {
     return true;
   }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(DisbandGuildRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
@@ -4747,24 +4528,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DisbandGuildRequest final : public 
   // nested types ----------------------------------------------------
 
   // accessors -------------------------------------------------------
-  enum : int {
-    kPlayerIdFieldNumber = 1,
-  };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:pandora.guild.v1.DisbandGuildRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<0, 0,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4781,22 +4549,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DisbandGuildRequest final : public 
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const DisbandGuildRequest& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
   friend struct ::TableStruct_pandora_2fguild_2fv1_2fguild_2eproto;
 };
 // -------------------------------------------------------------------
@@ -5163,7 +4915,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateGuildRequest final : public :
   // accessors -------------------------------------------------------
   enum : int {
     kNameFieldNumber = 2,
-    kPlayerIdFieldNumber = 1,
   };
   // string name = 2 [json_name = "name"];
   void clear_name() ;
@@ -5180,21 +4931,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateGuildRequest final : public :
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:pandora.guild.v1.CreateGuildRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 48,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5224,7 +4965,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateGuildRequest final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr name_;
-    ::uint64_t player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5581,19 +5321,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApproveJoinRequest final : public :
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kRequestIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 request_id = 2 [json_name = "requestId"];
   void clear_request_id() ;
   [[nodiscard]] ::uint64_t request_id() const;
@@ -5608,7 +5337,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApproveJoinRequest final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5637,7 +5366,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApproveJoinRequest final : public :
         const ApproveJoinRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t request_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -6007,19 +5735,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyJoinRequest final : public ::g
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kGuildIdFieldNumber = 2,
   };
-  // uint64 player_id = 1 [json_name = "playerId"];
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 guild_id = 2 [json_name = "guildId"];
   void clear_guild_id() ;
   [[nodiscard]] ::uint64_t guild_id() const;
@@ -6034,7 +5751,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyJoinRequest final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -6063,7 +5780,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyJoinRequest final : public ::g
         const ApplyJoinRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t guild_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -7489,30 +7205,6 @@ inline void GuildJoinRequest::_internal_set_created_ms(::int64_t value) {
 
 // CreateGuildRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void CreateGuildRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t CreateGuildRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.CreateGuildRequest.player_id)
-  return _internal_player_id();
-}
-inline void CreateGuildRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.CreateGuildRequest.player_id)
-}
-inline ::uint64_t CreateGuildRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void CreateGuildRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // string name = 2 [json_name = "name"];
 inline void CreateGuildRequest::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
@@ -7633,35 +7325,11 @@ inline void CreateGuildResponse::_internal_set_guild_id(::uint64_t value) {
 
 // ApplyJoinRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void ApplyJoinRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t ApplyJoinRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.ApplyJoinRequest.player_id)
-  return _internal_player_id();
-}
-inline void ApplyJoinRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.ApplyJoinRequest.player_id)
-}
-inline ::uint64_t ApplyJoinRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void ApplyJoinRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 guild_id = 2 [json_name = "guildId"];
 inline void ApplyJoinRequest::clear_guild_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.guild_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t ApplyJoinRequest::guild_id() const {
   // @@protoc_insertion_point(field_get:pandora.guild.v1.ApplyJoinRequest.guild_id)
@@ -7669,7 +7337,7 @@ inline ::uint64_t ApplyJoinRequest::guild_id() const {
 }
 inline void ApplyJoinRequest::set_guild_id(::uint64_t value) {
   _internal_set_guild_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.guild.v1.ApplyJoinRequest.guild_id)
 }
 inline ::uint64_t ApplyJoinRequest::_internal_guild_id() const {
@@ -7737,35 +7405,11 @@ inline void ApplyJoinResponse::_internal_set_request_id(::uint64_t value) {
 
 // ApproveJoinRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void ApproveJoinRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t ApproveJoinRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.ApproveJoinRequest.player_id)
-  return _internal_player_id();
-}
-inline void ApproveJoinRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.ApproveJoinRequest.player_id)
-}
-inline ::uint64_t ApproveJoinRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void ApproveJoinRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 request_id = 2 [json_name = "requestId"];
 inline void ApproveJoinRequest::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t ApproveJoinRequest::request_id() const {
   // @@protoc_insertion_point(field_get:pandora.guild.v1.ApproveJoinRequest.request_id)
@@ -7773,7 +7417,7 @@ inline ::uint64_t ApproveJoinRequest::request_id() const {
 }
 inline void ApproveJoinRequest::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.guild.v1.ApproveJoinRequest.request_id)
 }
 inline ::uint64_t ApproveJoinRequest::_internal_request_id() const {
@@ -7817,35 +7461,11 @@ inline void ApproveJoinResponse::_internal_set_code(::pandora::common::v1::ErrCo
 
 // RejectJoinRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void RejectJoinRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t RejectJoinRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.RejectJoinRequest.player_id)
-  return _internal_player_id();
-}
-inline void RejectJoinRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.RejectJoinRequest.player_id)
-}
-inline ::uint64_t RejectJoinRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void RejectJoinRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 request_id = 2 [json_name = "requestId"];
 inline void RejectJoinRequest::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t RejectJoinRequest::request_id() const {
   // @@protoc_insertion_point(field_get:pandora.guild.v1.RejectJoinRequest.request_id)
@@ -7853,7 +7473,7 @@ inline ::uint64_t RejectJoinRequest::request_id() const {
 }
 inline void RejectJoinRequest::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.guild.v1.RejectJoinRequest.request_id)
 }
 inline ::uint64_t RejectJoinRequest::_internal_request_id() const {
@@ -7897,30 +7517,6 @@ inline void RejectJoinResponse::_internal_set_code(::pandora::common::v1::ErrCod
 
 // LeaveGuildRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void LeaveGuildRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t LeaveGuildRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.LeaveGuildRequest.player_id)
-  return _internal_player_id();
-}
-inline void LeaveGuildRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.LeaveGuildRequest.player_id)
-}
-inline ::uint64_t LeaveGuildRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void LeaveGuildRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // -------------------------------------------------------------------
 
 // LeaveGuildResponse
@@ -7953,35 +7549,11 @@ inline void LeaveGuildResponse::_internal_set_code(::pandora::common::v1::ErrCod
 
 // KickMemberRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void KickMemberRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t KickMemberRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.KickMemberRequest.player_id)
-  return _internal_player_id();
-}
-inline void KickMemberRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.KickMemberRequest.player_id)
-}
-inline ::uint64_t KickMemberRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void KickMemberRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 target_id = 2 [json_name = "targetId"];
 inline void KickMemberRequest::clear_target_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t KickMemberRequest::target_id() const {
   // @@protoc_insertion_point(field_get:pandora.guild.v1.KickMemberRequest.target_id)
@@ -7989,7 +7561,7 @@ inline ::uint64_t KickMemberRequest::target_id() const {
 }
 inline void KickMemberRequest::set_target_id(::uint64_t value) {
   _internal_set_target_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.guild.v1.KickMemberRequest.target_id)
 }
 inline ::uint64_t KickMemberRequest::_internal_target_id() const {
@@ -8033,30 +7605,6 @@ inline void KickMemberResponse::_internal_set_code(::pandora::common::v1::ErrCod
 
 // DisbandGuildRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void DisbandGuildRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t DisbandGuildRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.DisbandGuildRequest.player_id)
-  return _internal_player_id();
-}
-inline void DisbandGuildRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.DisbandGuildRequest.player_id)
-}
-inline ::uint64_t DisbandGuildRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void DisbandGuildRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // -------------------------------------------------------------------
 
 // DisbandGuildResponse
@@ -8089,35 +7637,11 @@ inline void DisbandGuildResponse::_internal_set_code(::pandora::common::v1::ErrC
 
 // TransferLeaderRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void TransferLeaderRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t TransferLeaderRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.TransferLeaderRequest.player_id)
-  return _internal_player_id();
-}
-inline void TransferLeaderRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.TransferLeaderRequest.player_id)
-}
-inline ::uint64_t TransferLeaderRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void TransferLeaderRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 target_id = 2 [json_name = "targetId"];
 inline void TransferLeaderRequest::clear_target_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t TransferLeaderRequest::target_id() const {
   // @@protoc_insertion_point(field_get:pandora.guild.v1.TransferLeaderRequest.target_id)
@@ -8125,7 +7649,7 @@ inline ::uint64_t TransferLeaderRequest::target_id() const {
 }
 inline void TransferLeaderRequest::set_target_id(::uint64_t value) {
   _internal_set_target_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.guild.v1.TransferLeaderRequest.target_id)
 }
 inline ::uint64_t TransferLeaderRequest::_internal_target_id() const {
@@ -8169,35 +7693,11 @@ inline void TransferLeaderResponse::_internal_set_code(::pandora::common::v1::Er
 
 // SetOfficerRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void SetOfficerRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t SetOfficerRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.SetOfficerRequest.player_id)
-  return _internal_player_id();
-}
-inline void SetOfficerRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.SetOfficerRequest.player_id)
-}
-inline ::uint64_t SetOfficerRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void SetOfficerRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 target_id = 2 [json_name = "targetId"];
 inline void SetOfficerRequest::clear_target_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t SetOfficerRequest::target_id() const {
   // @@protoc_insertion_point(field_get:pandora.guild.v1.SetOfficerRequest.target_id)
@@ -8205,7 +7705,7 @@ inline ::uint64_t SetOfficerRequest::target_id() const {
 }
 inline void SetOfficerRequest::set_target_id(::uint64_t value) {
   _internal_set_target_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.guild.v1.SetOfficerRequest.target_id)
 }
 inline ::uint64_t SetOfficerRequest::_internal_target_id() const {
@@ -8221,7 +7721,7 @@ inline void SetOfficerRequest::_internal_set_target_id(::uint64_t value) {
 inline void SetOfficerRequest::clear_is_officer() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_officer_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline bool SetOfficerRequest::is_officer() const {
   // @@protoc_insertion_point(field_get:pandora.guild.v1.SetOfficerRequest.is_officer)
@@ -8229,7 +7729,7 @@ inline bool SetOfficerRequest::is_officer() const {
 }
 inline void SetOfficerRequest::set_is_officer(bool value) {
   _internal_set_is_officer(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.guild.v1.SetOfficerRequest.is_officer)
 }
 inline bool SetOfficerRequest::_internal_is_officer() const {
@@ -8426,30 +7926,6 @@ inline void GetGuildResponse::set_allocated_guild(::pandora::guild::v1::Guild* P
 // -------------------------------------------------------------------
 
 // GetMyGuildRequest
-
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void GetMyGuildRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t GetMyGuildRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.GetMyGuildRequest.player_id)
-  return _internal_player_id();
-}
-inline void GetMyGuildRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.GetMyGuildRequest.player_id)
-}
-inline ::uint64_t GetMyGuildRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void GetMyGuildRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
 
 // -------------------------------------------------------------------
 
@@ -8764,35 +8240,11 @@ inline void ListMembersResponse::_internal_set_next_cursor(::uint64_t value) {
 
 // ListJoinRequestsRequest
 
-// uint64 player_id = 1 [json_name = "playerId"];
-inline void ListJoinRequestsRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t ListJoinRequestsRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:pandora.guild.v1.ListJoinRequestsRequest.player_id)
-  return _internal_player_id();
-}
-inline void ListJoinRequestsRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:pandora.guild.v1.ListJoinRequestsRequest.player_id)
-}
-inline ::uint64_t ListJoinRequestsRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void ListJoinRequestsRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 cursor = 2 [json_name = "cursor"];
 inline void ListJoinRequestsRequest::clear_cursor() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cursor_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t ListJoinRequestsRequest::cursor() const {
   // @@protoc_insertion_point(field_get:pandora.guild.v1.ListJoinRequestsRequest.cursor)
@@ -8800,7 +8252,7 @@ inline ::uint64_t ListJoinRequestsRequest::cursor() const {
 }
 inline void ListJoinRequestsRequest::set_cursor(::uint64_t value) {
   _internal_set_cursor(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:pandora.guild.v1.ListJoinRequestsRequest.cursor)
 }
 inline ::uint64_t ListJoinRequestsRequest::_internal_cursor() const {
@@ -8816,7 +8268,7 @@ inline void ListJoinRequestsRequest::_internal_set_cursor(::uint64_t value) {
 inline void ListJoinRequestsRequest::clear_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.limit_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::int32_t ListJoinRequestsRequest::limit() const {
   // @@protoc_insertion_point(field_get:pandora.guild.v1.ListJoinRequestsRequest.limit)
@@ -8824,7 +8276,7 @@ inline ::int32_t ListJoinRequestsRequest::limit() const {
 }
 inline void ListJoinRequestsRequest::set_limit(::int32_t value) {
   _internal_set_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.guild.v1.ListJoinRequestsRequest.limit)
 }
 inline ::int32_t ListJoinRequestsRequest::_internal_limit() const {

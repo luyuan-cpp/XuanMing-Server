@@ -55,8 +55,9 @@ message Group {
 }
 
 message CreateGroupRequest {
-  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。建群者成为 OWNER。
-  uint64 player_id = 1;
+  // player_id 已删:建群者以 JWT ctx 为准(成为 OWNER);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   string name      = 2;
   repeated uint64 member_ids = 3;  // 初始成员(可选,含建群者外的玩家;总数 ≤ 上限)
 }
@@ -67,7 +68,9 @@ message CreateGroupResponse {
 }
 
 message InviteToGroupRequest {
-  uint64 player_id = 1;  // 操作人(JWT ctx 覆盖),须群成员
+  // player_id 已删:操作人以 JWT ctx 为准(须群成员);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 group_id  = 2;
   uint64 target_id = 3;  // 被拉入的玩家
 }
@@ -77,7 +80,9 @@ message InviteToGroupResponse {
 }
 
 message LeaveGroupRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖;OWNER 退群须先转让或解散
+  // player_id 已删:身份以 JWT ctx 为准(OWNER 退群须先转让或解散);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 group_id  = 2;
 }
 
@@ -86,7 +91,9 @@ message LeaveGroupResponse {
 }
 
 message KickFromGroupRequest {
-  uint64 player_id = 1;  // 群主(JWT ctx 覆盖)
+  // player_id 已删:群主以 JWT ctx 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 group_id  = 2;
   uint64 target_id = 3;
 }
@@ -96,7 +103,9 @@ message KickFromGroupResponse {
 }
 
 message DisbandGroupRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖;仅 OWNER
+  // player_id 已删:身份以 JWT ctx 为准(仅 OWNER);字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 group_id  = 2;
 }
 
@@ -105,7 +114,9 @@ message DisbandGroupResponse {
 }
 
 message TransferOwnerRequest {
-  uint64 player_id = 1;  // 现任群主(JWT ctx 覆盖)
+  // player_id 已删:现任群主以 JWT ctx 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
   uint64 group_id  = 2;
   uint64 target_id = 3;  // 新群主(须为本群成员)
 }
@@ -133,7 +144,9 @@ message ListGroupMembersResponse {
 }
 
 message ListMyGroupsRequest {
-  uint64 player_id = 1;  // JWT ctx 覆盖
+  // player_id 已删:身份以 JWT ctx 为准;字段号 1 勿复用(老客户端仍会发)。
+  reserved 1;
+  reserved "player_id";
 }
 
 message ListMyGroupsResponse {

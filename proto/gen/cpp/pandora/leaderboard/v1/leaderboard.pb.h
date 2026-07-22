@@ -1567,6 +1567,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BoardOptions final : public ::googl
   enum : int {
     kTtlSecondsFieldNumber = 1,
     kMaxSizeFieldNumber = 2,
+    kEstimateBucketWidthFieldNumber = 5,
     kTieBreakByTimeFieldNumber = 3,
     kAscendingFieldNumber = 4,
   };
@@ -1588,6 +1589,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BoardOptions final : public ::googl
   private:
   ::int64_t _internal_max_size() const;
   void _internal_set_max_size(::int64_t value);
+
+  public:
+  // int64 estimate_bucket_width = 5 [json_name = "estimateBucketWidth"];
+  void clear_estimate_bucket_width() ;
+  [[nodiscard]] ::int64_t estimate_bucket_width() const;
+  void set_estimate_bucket_width(::int64_t value);
+
+  private:
+  ::int64_t _internal_estimate_bucket_width() const;
+  void _internal_set_estimate_bucket_width(::int64_t value);
 
   public:
   // bool tie_break_by_time = 3 [json_name = "tieBreakByTime"];
@@ -1614,7 +1625,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BoardOptions final : public ::googl
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1645,6 +1656,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BoardOptions final : public ::googl
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::int64_t ttl_seconds_;
     ::int64_t max_size_;
+    ::int64_t estimate_bucket_width_;
     bool tie_break_by_time_;
     bool ascending_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3277,6 +3289,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankResponse final : public ::go
     kEntryFieldNumber = 3,
     kCodeFieldNumber = 1,
     kFoundFieldNumber = 2,
+    kEstimatedFieldNumber = 4,
+    kTotalSubmittersFieldNumber = 5,
   };
   // .pandora.leaderboard.v1.LeaderboardEntry entry = 3 [json_name = "entry"];
   [[nodiscard]] bool has_entry()
@@ -3314,11 +3328,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankResponse final : public ::go
   void _internal_set_found(bool value);
 
   public:
+  // bool estimated = 4 [json_name = "estimated"];
+  void clear_estimated() ;
+  [[nodiscard]] bool estimated() const;
+  void set_estimated(bool value);
+
+  private:
+  bool _internal_estimated() const;
+  void _internal_set_estimated(bool value);
+
+  public:
+  // int64 total_submitters = 5 [json_name = "totalSubmitters"];
+  void clear_total_submitters() ;
+  [[nodiscard]] ::int64_t total_submitters() const;
+  void set_total_submitters(::int64_t value);
+
+  private:
+  ::int64_t _internal_total_submitters() const;
+  void _internal_set_total_submitters(::int64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.leaderboard.v1.GetRankResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3350,6 +3384,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankResponse final : public ::go
     ::pandora::leaderboard::v1::LeaderboardEntry* PROTOBUF_NULLABLE entry_;
     int code_;
     bool found_;
+    bool estimated_;
+    ::int64_t total_submitters_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5402,7 +5438,7 @@ inline void BoardOptions::_internal_set_max_size(::int64_t value) {
 inline void BoardOptions::clear_tie_break_by_time() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.tie_break_by_time_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline bool BoardOptions::tie_break_by_time() const {
   // @@protoc_insertion_point(field_get:pandora.leaderboard.v1.BoardOptions.tie_break_by_time)
@@ -5410,7 +5446,7 @@ inline bool BoardOptions::tie_break_by_time() const {
 }
 inline void BoardOptions::set_tie_break_by_time(bool value) {
   _internal_set_tie_break_by_time(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:pandora.leaderboard.v1.BoardOptions.tie_break_by_time)
 }
 inline bool BoardOptions::_internal_tie_break_by_time() const {
@@ -5426,7 +5462,7 @@ inline void BoardOptions::_internal_set_tie_break_by_time(bool value) {
 inline void BoardOptions::clear_ascending() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ascending_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline bool BoardOptions::ascending() const {
   // @@protoc_insertion_point(field_get:pandora.leaderboard.v1.BoardOptions.ascending)
@@ -5434,7 +5470,7 @@ inline bool BoardOptions::ascending() const {
 }
 inline void BoardOptions::set_ascending(bool value) {
   _internal_set_ascending(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:pandora.leaderboard.v1.BoardOptions.ascending)
 }
 inline bool BoardOptions::_internal_ascending() const {
@@ -5444,6 +5480,30 @@ inline bool BoardOptions::_internal_ascending() const {
 inline void BoardOptions::_internal_set_ascending(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ascending_ = value;
+}
+
+// int64 estimate_bucket_width = 5 [json_name = "estimateBucketWidth"];
+inline void BoardOptions::clear_estimate_bucket_width() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.estimate_bucket_width_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::int64_t BoardOptions::estimate_bucket_width() const {
+  // @@protoc_insertion_point(field_get:pandora.leaderboard.v1.BoardOptions.estimate_bucket_width)
+  return _internal_estimate_bucket_width();
+}
+inline void BoardOptions::set_estimate_bucket_width(::int64_t value) {
+  _internal_set_estimate_bucket_width(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.leaderboard.v1.BoardOptions.estimate_bucket_width)
+}
+inline ::int64_t BoardOptions::_internal_estimate_bucket_width() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.estimate_bucket_width_;
+}
+inline void BoardOptions::_internal_set_estimate_bucket_width(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.estimate_bucket_width_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -6591,6 +6651,54 @@ inline void GetRankResponse::set_allocated_entry(::pandora::leaderboard::v1::Lea
 
   _impl_.entry_ = reinterpret_cast<::pandora::leaderboard::v1::LeaderboardEntry*>(value);
   // @@protoc_insertion_point(field_set_allocated:pandora.leaderboard.v1.GetRankResponse.entry)
+}
+
+// bool estimated = 4 [json_name = "estimated"];
+inline void GetRankResponse::clear_estimated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.estimated_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool GetRankResponse::estimated() const {
+  // @@protoc_insertion_point(field_get:pandora.leaderboard.v1.GetRankResponse.estimated)
+  return _internal_estimated();
+}
+inline void GetRankResponse::set_estimated(bool value) {
+  _internal_set_estimated(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.leaderboard.v1.GetRankResponse.estimated)
+}
+inline bool GetRankResponse::_internal_estimated() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.estimated_;
+}
+inline void GetRankResponse::_internal_set_estimated(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.estimated_ = value;
+}
+
+// int64 total_submitters = 5 [json_name = "totalSubmitters"];
+inline void GetRankResponse::clear_total_submitters() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_submitters_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::int64_t GetRankResponse::total_submitters() const {
+  // @@protoc_insertion_point(field_get:pandora.leaderboard.v1.GetRankResponse.total_submitters)
+  return _internal_total_submitters();
+}
+inline void GetRankResponse::set_total_submitters(::int64_t value) {
+  _internal_set_total_submitters(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.leaderboard.v1.GetRankResponse.total_submitters)
+}
+inline ::int64_t GetRankResponse::_internal_total_submitters() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_submitters_;
+}
+inline void GetRankResponse::_internal_set_total_submitters(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_submitters_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -116,6 +116,7 @@ enum ErrCode {
   ERR_INVENTORY_IDEMPOTENCY_CONFLICT = 7015; // idempotency_key 复用到不同请求(指纹不一致)
   ERR_INVENTORY_CAPACITY_FULL  = 7016; // 背包格子已满(装备实例数达上限)
   ERR_INVENTORY_SLOT_OCCUPIED  = 7017; // 目标格子已被占用 / 越界(移动实例)
+  ERR_INVENTORY_INSTANCE_BOUND = 7018; // 绑定实例不可托管转移(邮件 transfer 扣出拒)
 
   // 8000-8999 dialogue
   ERR_DIALOGUE_NOT_FOUND       = 8001;
@@ -165,6 +166,8 @@ enum ErrCode {
   ERR_MAIL_NO_ATTACHMENT       = 9603;  // 该邮件无附件可领
   ERR_MAIL_ALREADY_CLAIMED     = 9604;  // 附件已领取(幂等命中)
   ERR_MAIL_BOX_FULL            = 9605;  // 收件箱已满(写入侧上限,§9 不变量 18)
+  ERR_MAIL_ATTACHMENT_UNSUPPORTED = 9606;  // 附件形态未识别(oneof body 未设置/新分支旧端不认),领取 fail-closed 保持未领
+  ERR_MAIL_CLAIM_IN_PROGRESS      = 9607;  // DS 三段式领取意图已创建,旧直连 ClaimMail 互斥拒(bag phase 2)
 
   // 10000-10999 data_service
   ERR_DATA_VERSION_MISMATCH    = 10001;
@@ -186,4 +189,23 @@ enum ErrCode {
   ERR_LEADERBOARD_INVALID_BOARD    = 13003;  // BoardKey 非法(board_type / scope 缺失)
   ERR_LEADERBOARD_SETTLE_CONFLICT  = 13004;  // settle_idempotency_key 复用到不同请求
   ERR_LEADERBOARD_REWARD_FAILED    = 13005;  // 结算发奖失败(inventory 不可用 / 扣发异常)
+
+  // 14000-14999 bag(背包域,bag-domain.md;五要件受信写)
+  ERR_BAG_EPOCH_FENCED          = 14001;  // owner_epoch 落后于 bag_meta(失租旧写,整批拒;调用方停写重查 owner)
+  ERR_BAG_GENERATION_MISMATCH   = 14002;  // 活动段代际不符(切代后迟到写,fail-closed 整批拒;刷新配置重查)
+  ERR_BAG_SEQ_CONFLICT          = 14003;  // journal_seq 非法(批内乱序 / 与水位冲突且非纯重放)
+  ERR_BAG_CAPACITY_FULL         = 14004;  // 目标段容量不足(入包 / 转移 / 产出)
+  ERR_BAG_QUOTA_EXCEEDED        = 14005;  // 超出 journal 额度(单批 / 单窗上限,反作弊封顶)
+  ERR_BAG_IDEMPOTENCY_CONFLICT  = 14006;  // idempotency_key 复用到不同内容(指纹不一致)
+  ERR_BAG_ITEM_NOT_FOUND        = 14007;  // 扣除 / 转移的物品不存在或数量不足(整批拒)
+  ERR_BAG_CHECKPOINT_STALE      = 14008;  // checkpoint covered_seq 回退或超出已确认水位
+  ERR_BAG_SECTION_NOT_ALLOWED   = 14009;  // 段类型不合法(GetSections 查随身段 / checkpoint 含后端驻留段等)
+  ERR_BAG_CAPACITY_MAXED        = 14010;  // 容量扩容档位已购罄 / 达硬上限(§5.3;不可再买,非"袋满")
+
+  // 15000-15999 owner(每玩家 owner 权威,owner-authority.md;§9.22)
+  ERR_OWNER_EPOCH_CONFLICT    = 15001;  // expect_epoch 不等于当前(响应带当前记录,重查再决策,禁盲重试)
+  ERR_OWNER_BARRIER_NOT_OPEN  = 15002;  // now < admit_not_before(带 retry_after_ms,退避重试,§9.23 WAIT)
+  ERR_OWNER_IDENTITY_MISMATCH = 15003;  // epoch/operation/实例四元组与记录不一致(fail-closed 拒)
+  ERR_OWNER_LEASE_REGRESSED   = 15004;  // 续租实例身份不符或试图回退 deadline(旧实例纪元续租拒)
+  ERR_OWNER_INVALID_OPERATION = 15005;  // operation_id 非法(必须 UUIDv4)或目标类型/身份不完整
 }
