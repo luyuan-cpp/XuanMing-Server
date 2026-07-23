@@ -545,3 +545,42 @@ func TestDSTicketSigner_TTLBounds(t *testing.T) {
 		t.Fatalf("missing active_kid must fail startup")
 	}
 }
+
+// R6 复审 P0-3:v2 票据 sjti claim 签发/验签往返——sjti 必须原样保留(兑换点会话复核
+// 依赖它),不签 sjti 的票(兼容窗)验签后为空。
+func TestDSTicketV2_SessionJTIRoundtrip(t *testing.T) {
+	pemBytes, pub, _ := newV2TestKeyPair(t)
+	signer := newV2TestSigner(t, pemBytes)
+	verifier := newV2TestVerifier(t, pub)
+
+	target := DSTicketTarget{
+		DSPodName: "hub-1", DSInstanceUID: "uid-1", DSInstanceEpoch: 3,
+		ReleaseTrack: ReleaseTrackStable, HubAssignmentID: "assign-1",
+		SessionJTI: "sess-jti-abc",
+	}
+	tok, _, err := signer.SignHubTicket(7, 0, 0, 0, "ticket-jti-1", target)
+	if err != nil {
+		t.Fatalf("sign with session jti: %v", err)
+	}
+	claims, err := verifier.Verify(tok)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if claims.SessJTI != "sess-jti-abc" {
+		t.Fatalf("sjti must roundtrip, got %q", claims.SessJTI)
+	}
+
+	// 不带 sjti(兼容窗):验签后为空,不得凭空出现。
+	target.SessionJTI = ""
+	tok2, _, err := signer.SignHubTicket(7, 0, 0, 0, "ticket-jti-2", target)
+	if err != nil {
+		t.Fatalf("sign without session jti: %v", err)
+	}
+	claims2, err := verifier.Verify(tok2)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if claims2.SessJTI != "" {
+		t.Fatalf("compat ticket must carry empty sjti, got %q", claims2.SessJTI)
+	}
+}

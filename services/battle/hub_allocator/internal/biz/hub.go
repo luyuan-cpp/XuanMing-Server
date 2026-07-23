@@ -29,7 +29,9 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	pmw "github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
+	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
@@ -79,9 +81,10 @@ type HubTicketBinding struct {
 	// SourceMatchID:Battle→Hub 回流 fence(pkg/auth DSTicketClaims*.SourceMatchID)。
 	// 仅 AssignHub 回流路径 >0;Transfer/迁移重签为 0。
 	SourceMatchID uint64
-	// SessionJTI:请求方登录会话 jti(R6 复审 P0-3,盖进 v2 票据 sjti claim;
-	// login VerifyDSTicket 在线核销时复核会话现行性)。仅 AssignHub(login 透传)非空;
-	// Transfer/迁移重签无请求方会话上下文,为空 = 兼容窗,票据不参与 sjti 判定。
+	// SessionJTI:请求方登录会话 jti(R6 复审 P0-3 → R7 收口,盖进 v2 票据 sjti claim;
+	// login VerifyDSTicket 在线核销时复核会话现行性)。AssignHub(login 透传)、
+	// Transfer(请求方会话证据)、迁移重签(会话权威当前代)均应非空;
+	// 空只剩 dev 无证据链路,prod 兑换点(RequireTicketSessionCurrent)对空 sjti 硬拒。
 	SessionJTI string
 }
 
@@ -111,6 +114,16 @@ type HubUsecase struct {
 	// (owner-authority.md migrate ①/③④;见 biz/owner_authority.go)。
 	ownerAuth     OwnerAuthority
 	ownerAdmitted sync.Map
+
+	// sessGateRequireSJTI 票据 sjti 绑定强制门(R7 收口,SetSessionGateRequireSJTI 注入)。
+	// false(默认)= 兼容档:ACK 收到空 sjti 告警放行;true = 硬拒(旧 DS 排空后激活)。
+	sessGateRequireSJTI bool
+
+	// sessGate 会话现行性权威只读视图(R7 复审 P0-3,SetSessionGate 注入;nil = dev 无权威)。
+	// 两个用途:①系统发起的迁移重签(migratePlayer)读玩家当前会话 jti 签进 sjti claim
+	// (推送目标就是当前会话持有者);②AcknowledgeAdmission 入场确认时复核票据携带的
+	// sjti 仍是当前一代(v2 Hub 本地验票不经 Login 在线兑换,此处是唯一在线会话门)。
+	sessGate sessiongate.Gate
 	// requireHeartbeatReady:播种分片镜像时先置 warming,等首个通过 Guard 的 Hub DS 心跳才转 ready
 	// (审核 P1:agones PATCH/进程拉起成功 ≠ DS 已真正鉴权回调,不能直接当 ready 否则会把玩家路由到
 	// 一个从未成功心跳的 Hub)。mode=agones 置 true;mock/local 不置(无真实心跳/保 dev 自测不坏)。
@@ -178,6 +191,38 @@ func (u *HubUsecase) SetAuthTTL(d time.Duration) { u.authTTL = d }
 
 // SetReleaseTrackPolicy 注入 player_id 级确定性 cohort 策略。
 func (u *HubUsecase) SetReleaseTrackPolicy(p releasetrack.Policy) { u.releasePolicy = p }
+
+// SetSessionGate 注入会话现行性权威只读视图(R7 复审 P0-3;nil = dev 无权威)。
+// 迁移重签取玩家当前会话 jti 签进 sjti;AcknowledgeAdmission 复核票据 sjti 现行性。
+func (u *HubUsecase) SetSessionGate(g sessiongate.Gate) { u.sessGate = g }
+
+// SetSessionGateRequireSJTI 设置票据 sjti 绑定强制门(R7 收口,默认 false=兼容档)。
+// false:空 sjti 告警放行(旧 Hub DS/旧签发面残票混版兼容);true:空 sjti 硬拒。
+// 激活前提:全 fleet Hub DS 已转发 sjti、旧 DS 排空、等满一个票据最大 TTL。
+func (u *HubUsecase) SetSessionGateRequireSJTI(require bool) { u.sessGateRequireSJTI = require }
+
+// migrateResignSessionJTI 为系统发起的迁移重签解析玩家当前会话 jti(R7 复审 P0-3)。
+// 返回 (jti, ok):
+//   - sessGate nil(dev 无权威)→ ("", true):签空 sjti,与无权威部署语义一致;
+//   - 权威不可达 → ("", false):fail-closed,本 tick 跳过,下个 tick 重试;
+//   - 无会话(已登出)→ ("", true):照常完成服务端搬迁,签空 sjti——该票在 prod
+//     兑换点必拒,但玩家重登后 login 会按新归属重发新票,推送对象本就不存在;
+//   - 有会话 → (当前 jti, true):推送目标就是当前会话持有者,票据绑定其代际。
+func (u *HubUsecase) migrateResignSessionJTI(ctx context.Context, playerID uint64) (string, bool) {
+	if u.sessGate == nil {
+		return "", true
+	}
+	jti, found, err := u.sessGate.CurrentJTI(ctx, playerID)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "migrate_resign_session_gate_unavailable",
+			"player_id", playerID, "err", err)
+		return "", false
+	}
+	if !found {
+		return "", true
+	}
+	return jti, true
+}
 
 // authTTLDur 返回授权键 TTL:main 已注入用注入值;未注入(测试/兜底)回退 2×shardTTL,
 // 绝不返回 0(0 = Redis 永不过期,授权键会泄漏)。
@@ -860,6 +905,32 @@ func (u *HubUsecase) TransferToLineForPlayer(ctx context.Context, playerID uint6
 	return res, nil
 }
 
+// requireCallerSessionCurrent(R7 收口 P0-4):玩家侧写路径临界区内的会话终检。
+// RPC 入口的 SessionCurrent 中间件只保证"进门时现行",到内部占坑/CAS 之间是开放窗口;
+// 本检查在副作用临界点复核请求方自证 jti(Envoy 验签 payload 头)仍是权威当前代。
+// callerJTI 空(内网直连/dev 无证据)或 sessGate nil → 跳过,保持 dev 语义。
+func (u *HubUsecase) requireCallerSessionCurrent(ctx context.Context, playerID uint64) error {
+	callerJTI := pmw.SessionJTIFromContext(ctx)
+	if u.sessGate == nil || callerJTI == "" {
+		return nil
+	}
+	cur, found, err := u.sessGate.CurrentJTI(ctx, playerID)
+	if err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"session authority unavailable during hub line transfer")
+	}
+	if !found {
+		return errcode.New(errcode.ErrUnauthorized,
+			"player %d has no current session; hub line transfer rejected", playerID)
+	}
+	if cur != callerJTI {
+		plog.With(ctx).Warnw("msg", "hub_transfer_session_superseded", "player_id", playerID)
+		return errcode.New(errcode.ErrSessionSuperseded,
+			"hub line transfer requested by a superseded session")
+	}
+	return nil
+}
+
 // transferToLineInner 做目标解析 + 满员判定 + 委托内部 TransferHub。
 func (u *HubUsecase) transferToLineInner(ctx context.Context, playerID uint64, targetShardID uint32) (*TransferToLineResult, error) {
 	assignment, found, err := u.repo.GetAssignment(ctx, playerID)
@@ -906,8 +977,22 @@ func (u *HubUsecase) transferToLineInner(ctx context.Context, playerID uint64, t
 		return nil, errcode.New(errcode.ErrHubLineFull, "line shard_id=%d is full", targetShardID)
 	}
 
+	// R7 收口(P0-4):进入不可逆迁移(占新→切归属→退旧)前的会话终检。入口中间件
+	// 检查后到此处的窗口内若发生顶号,旧会话请求在这里被拒,零 assignment/容量/清退
+	// 副作用。此检查到 CAS 之间的残余毫秒窗由下面的 post-check + 票据绑请求方 jti
+	//(transferResult)+ ACK 消费点复核(AcknowledgeAdmission)三层兜底。
+	if err := u.requireCallerSessionCurrent(ctx, playerID); err != nil {
+		return nil, err
+	}
+
 	tr, err := u.TransferHub(ctx, playerID, uint64(targetShardID))
 	if err != nil {
+		return nil, err
+	}
+	// post-check:CAS 已落地后复核。此刻发现被顶,说明轮换落在上面终检与 CAS 之间的
+	// 毫秒窗内——归属已切换(由清退链/新会话下次 resolve 收敛),但绝不把票交给旧设备
+	//(票本就绑旧 jti,兑换点必拒;扣留只是提前失败)。
+	if err := u.requireCallerSessionCurrent(ctx, playerID); err != nil {
 		return nil, err
 	}
 	lineNo := lineNoOfShard(shards, assignment.Region, assignmentTrack, targetShardID)
@@ -1200,10 +1285,44 @@ type AcknowledgeDepartureResult struct {
 }
 
 // AcknowledgeAdmission 把本地已验签 Hub DSTicket 对应 reservation 原子转为 connected owner。
+// ticketSessionJTI 为票据 sjti claim(R7 复审 P0-3):v2 Hub 本地验票不经 Login 在线兑换,
+// ACK 是唯一在线权威接触点,装配 sessGate 后在消费 reservation 之前复核会话现行性。
 func (u *HubUsecase) AcknowledgeAdmission(ctx context.Context, playerID uint64, assignmentID, pod,
-	admissionID string, admissionSeq uint64, cred *HubCredential) (*AcknowledgeAdmissionResult, error) {
+	admissionID string, admissionSeq uint64, ticketSessionJTI string,
+	cred *HubCredential) (*AcknowledgeAdmissionResult, error) {
 	if u.authRepo == nil || cred == nil {
 		return nil, errcode.New(errcode.ErrUnauthorized, "hub admission requires model B authority")
+	}
+	// R7 复审 P0-3:会话现行性前置复核,失败时不消费 reservation、不产生任何副作用。
+	// 空 sjti 由 require_ticket_sjti 门控制(R7 收口,P0-5 滚动兼容):默认兼容档告警
+	// 放行(旧 Hub DS 不转发 sjti/旧签发面残票,行为与旧版一致);全 fleet DS 排空 +
+	// 票据最大 TTL 过后由运维置 true 硬拒。非空 sjti 无论档位都全量复核,不可达 fail-closed。
+	if u.sessGate != nil {
+		if ticketSessionJTI == "" {
+			if u.sessGateRequireSJTI {
+				return nil, errcode.New(errcode.ErrUnauthorized,
+					"hub admission ticket lacks session binding (sjti); reissue required")
+			}
+			plog.With(ctx).Warnw("msg", "hub_admission_missing_sjti_tolerated",
+				"player_id", playerID, "assignment_id", assignmentID, "pod", pod,
+				"hint", "混版兼容窗;旧 DS 排空后开 session_gate.require_ticket_sjti 收口")
+		} else {
+			curJTI, curFound, gerr := u.sessGate.CurrentJTI(ctx, playerID)
+			if gerr != nil {
+				return nil, errcode.NewCause(errcode.ErrUnavailable, gerr,
+					"session authority unavailable during hub admission")
+			}
+			if !curFound {
+				return nil, errcode.New(errcode.ErrUnauthorized,
+					"player %d has no current session; hub admission rejected", playerID)
+			}
+			if curJTI != ticketSessionJTI {
+				plog.With(ctx).Warnw("msg", "hub_admission_session_superseded",
+					"player_id", playerID, "assignment_id", assignmentID, "pod", pod)
+				return nil, errcode.New(errcode.ErrSessionSuperseded,
+					"hub admission ticket was issued for a superseded session")
+			}
+		}
 	}
 	assignment, found, err := u.repo.GetAssignment(ctx, playerID)
 	if err != nil {
@@ -1237,6 +1356,37 @@ func (u *HubUsecase) AcknowledgeAdmission(ctx context.Context, playerID uint64, 
 	}
 	if !result.Admitted {
 		return &AcknowledgeAdmissionResult{Admitted: false}, nil
+	}
+	// R7 收口(P0-2):durable ledger 写是入场线性化点,写成功后必须再复核一次会话现行性,
+	// 关闭「预检通过 → 消费 reservation 之间轮换」的 TOCTOU:任何发生在本复核之前的顶号
+	// 都会被检出并 exact 回退刚建立的 connected owner(AcknowledgeDeparture 同 identity,
+	// 幂等),DS 收到非 OK 必 Kick、不开 spawn gate。本复核之后的轮换 = 正常「已在 Hub 中
+	// 被顶号」,由 successor 替换(新 admission 更大 seq 接管)+ push 顶号清退链处理。
+	// 回退本身失败也拒绝:seat 残留由 DS Kick 后的物理 Logout proof(Departure 幂等重试)
+	// 收敛,绝不向已判定非现行的会话开门。空 sjti(兼容窗放行)无绑定可比,跳过。
+	if u.sessGate != nil && ticketSessionJTI != "" {
+		curJTI, curFound, gerr := u.sessGate.CurrentJTI(ctx, playerID)
+		if gerr != nil || !curFound || curJTI != ticketSessionJTI {
+			if _, derr := u.authRepo.AcknowledgeDeparture(ctx, pod, id, reservation,
+				admissionID, admissionSeq, time.Now().UnixMilli(), u.shardTTL()); derr != nil {
+				plog.With(ctx).Errorw("msg", "hub_admission_postcheck_revert_failed",
+					"player_id", playerID, "assignment_id", assignmentID, "pod", pod, "err", derr,
+					"hint", "connected owner 残留,等待 DS Kick 后物理 Logout proof 收敛")
+			}
+			switch {
+			case gerr != nil:
+				return nil, errcode.NewCause(errcode.ErrUnavailable, gerr,
+					"session authority unavailable during hub admission post-check")
+			case !curFound:
+				return nil, errcode.New(errcode.ErrUnauthorized,
+					"player %d session vanished during hub admission; spawn refused", playerID)
+			default:
+				plog.With(ctx).Warnw("msg", "hub_admission_postcheck_superseded",
+					"player_id", playerID, "assignment_id", assignmentID, "pod", pod)
+				return nil, errcode.New(errcode.ErrSessionSuperseded,
+					"hub admission superseded by a newer login before spawn gate opened")
+			}
+		}
 	}
 	// assignment 与 {pod} ledger 不同 slot：ACK 后必须再查一次。若 Transfer/Release
 	// 已赢得 CAS，保留 exact connected owner 并拒绝开放 spawn gate。DS 收到拒绝后必须
@@ -2240,7 +2390,11 @@ func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uin
 
 func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord) (*TransferResult, error) {
 	// Hub→Hub 切换/重签:玩家已在大厅,无 Battle 回流 fence。
-	token, expMs, err := u.signHubTicket(ctx, playerID, roleID, assignment, 0, "" /* Transfer 重签:无请求方会话上下文(兼容窗) */)
+	// R7 复审 P0-3:重签票绑定**请求方**会话 jti(Envoy 验签 payload 头,中间件提取)。
+	// 用请求方自证的 jti 而非权威当前代:若调用方已被顶,签出的票携带旧 jti,
+	// 兑换点必拒——绝不把绑定新会话的有效票交给旧设备。空(内网直连/dev 无证据)
+	// → 签空 sjti,prod 兑换点硬拒,dev(无会话权威)放行。
+	token, expMs, err := u.signHubTicket(ctx, playerID, roleID, assignment, 0, pmw.SessionJTIFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -2589,11 +2743,16 @@ func (u *HubUsecase) drainAndMigrate(ctx context.Context, shard *hubv1.HubShardS
 func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, target *hubv1.HubShardStorageRecord) bool {
 	// 复核玩家仍在 from 分片(避免与玩家自身 Release/Transfer 竞争)。
 	assign, found, err := u.repo.GetAssignment(ctx, playerID)
-	if err != nil || !found {
-		u.removeShardMember(ctx, from.HubPodName, playerID) // 已不在此分片,清理残留索引
+	if err != nil {
+		// 读权威失败 ≠ 玩家已离开:此时删索引会让该玩家永远退出 drain 扫描(§9.22
+		// UNKNOWN 不得当 OFFLINE)。保留索引,下个 tick 重试。
+		plog.With(ctx).Warnw("msg", "drain_assignment_read_failed", "player_id", playerID, "err", err)
 		return false
 	}
-	resumedTransferCleanup := assign.GetTransferCleanupPending()
+	if !found {
+		u.removeShardMember(ctx, from.HubPodName, playerID) // 确认已不在此分片,清理残留索引
+		return false
+	}
 	if assign.GetTransferCleanupPending() || assign.GetReleaseCleanupPending() {
 		var stillFound bool
 		assign, stillFound, err = u.resumeAssignmentCleanup(ctx, playerID, assign.GetAssignmentId())
@@ -2607,20 +2766,31 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		}
 	}
 	if assign.HubPodName != from.HubPodName {
-		u.removeShardMember(ctx, from.HubPodName, playerID)
-		if resumedTransferCleanup &&
-			target != nil && assign.GetHubPodName() == target.GetHubPodName() {
+		if target != nil && assign.GetHubPodName() == target.GetHubPodName() {
 			// A crash/physical-departure wait can complete the durable cleanup on a
 			// later drain tick. Publish that exact already-selected target instead
 			// of treating the old source member as a stale index and losing the only
 			// migration notification. Refresh an expired target reservation first.
+			//
+			// R7 收口(P1):通知未送达之前,玩家必须留在源 member 索引里(drain 扫描的
+			// 唯一来源)。上面 resumeAssignmentCleanup 完成 owner cleanup 时会把源索引
+			// 一并清掉,因此本分支任何失败路径都要**重新加回**源索引(幂等 best-effort),
+			// 否则玩家退出扫描,"下个 tick 重试"永不发生 = 迁移通知永久丢失。
+			// 进入条件也不再依赖"本 tick 恰好恢复了 cleanup"(上一次失败尝试可能已把
+			// cleanup 做完,pending 位已清):凡「仍在源索引 + 归属已在 drain 目标」都按
+			// 补发通知处理;对玩家自迁到同一目标的罕见崩溃残留,重复 migrate 推送指向
+			// 其当前精确归属,客户端契约容忍重复,索引随之收敛。
+			keepScanned := func() bool {
+				u.addShardMember(ctx, from.HubPodName, playerID)
+				return false
+			}
 			current, reusable, routeErr := u.assignmentRoutable(ctx, playerID, assign)
 			if routeErr != nil || (!reusable && !assignmentSameInstance(assign, &current)) {
-				return false
+				return keepScanned()
 			}
 			ensured, ensureErr := u.ensureExistingAssignmentSeat(ctx, playerID, assign, &current)
 			if ensureErr != nil {
-				return false
+				return keepScanned()
 			}
 			next := proto.Clone(assign).(*hubv1.HubAssignmentStorageRecord)
 			next.HubAddr, next.ShardId, next.Region = ensured.HubAddr, ensured.ShardID, ensured.Region
@@ -2629,15 +2799,24 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 			swapped, swapErr := u.repo.CompareAndSwapAssignment(ctx, playerID, assign, next,
 				u.assignmentSagaTTL())
 			if swapErr != nil || !swapped {
-				return false
+				return keepScanned()
 			}
-			token, _, signErr := u.signHubTicket(ctx, playerID, next.GetRoleId(), next, 0, "" /* 迁移重签:无请求方会话上下文(兼容窗) */)
+			sessJTI, jok := u.migrateResignSessionJTI(ctx, playerID)
+			if !jok {
+				return keepScanned() // 会话权威不可达:回源索引,下个 tick 重扫补发(迁移已落地)
+			}
+			token, _, signErr := u.signHubTicket(ctx, playerID, next.GetRoleId(), next, 0, sessJTI)
 			if signErr != nil {
-				return false
+				return keepScanned() // 同上:回源索引,重扫重试
 			}
 			u.pushMigrate(ctx, playerID, from, authoritativeShard(target, ensured), token)
+			// 通知路径已走完(push 本身 best-effort,失败兜底 = 清退链 + 客户端 resolve),
+			// 此时才清源索引,退出 drain 扫描。
+			u.removeShardMember(ctx, from.HubPodName, playerID)
 			return true
 		}
+		// 归属在其它分片(玩家自身 Release/Transfer 已带走),纯陈旧索引,清理。
+		u.removeShardMember(ctx, from.HubPodName, playerID)
 		return false
 	}
 	if u.authRepo != nil && !assignmentBindingV2Complete(assign, playerID) {
@@ -2678,7 +2857,12 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		}
 		cleanupRegistered = true
 	}
-	token, _, terr := u.signHubTicket(ctx, playerID, assign.RoleId, newAssign, 0, "" /* 迁移重签:无请求方会话上下文(兼容窗) */)
+	sessJTI, jok := u.migrateResignSessionJTI(ctx, playerID)
+	if !jok {
+		u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
+		return false // 会话权威不可达:fail-closed,下个 tick 重试
+	}
+	token, _, terr := u.signHubTicket(ctx, playerID, assign.RoleId, newAssign, 0, sessJTI)
 	if terr != nil {
 		plog.With(ctx).Warnw("msg", "migrate_sign_ticket_failed", "player_id", playerID, "err", terr)
 		u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
@@ -2705,6 +2889,9 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		if err != nil || !stillFound {
 			plog.With(ctx).Warnw("msg", "drain_migration_owner_cleanup_failed",
 				"player_id", playerID, "from", from.HubPodName, "to", target.HubPodName, "err", err)
+			// R7 收口(P1):CAS 已落地但 cleanup/通知未完成;cleanup 可能已部分清掉源
+			// member 索引,重新加回保证下个 tick 仍能扫到该玩家补发通知(幂等 best-effort)。
+			u.addShardMember(ctx, from.HubPodName, playerID)
 			return false
 		}
 	} else {

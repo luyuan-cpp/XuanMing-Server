@@ -127,8 +127,13 @@ func isDupErr(err error) bool {
 //	jti        string  session JWT 的 jti(便于将来 jti 黑名单)
 //	device_id  string  当前设备
 //	exp_ms     int64   session 过期 unix ms
+//	gen        uint64  MySQL 分配的登录单调代际(R7 收口;0/缺失 = 无定序权威旧写入)
 type SessionRepo interface {
-	Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration) error
+	// Set 写入/覆盖玩家会话。gen>0 时为条件写:仅当现存 gen 缺失或小于本次 gen 才
+	// 覆盖,否则返回 ErrSessionSuperseded(并发登录中已有更新一代完成写入,本次
+	// 登录必须失败,不得交付凭据)。gen==0 = 无 MySQL 定序权威(dev 裸跑),保持
+	// 历史无条件覆盖语义。
+	Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration, gen uint64) error
 	Delete(ctx context.Context, playerID uint64) error
 	// GetJTI 读当前 session 的 jti(P0 修复 2026-07-15,session 现行性门)。
 	// found=false = 无 session(已登出/过期/从未登录)。
@@ -152,15 +157,45 @@ func sessKey(playerID uint64) string {
 	return fmt.Sprintf("pandora:sess:%d", playerID)
 }
 
-func (r *RedisSessionRepo) Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration) error {
+// setIfNewerGenScript:单 key 原子「代际比较 + 覆盖」(R7 收口,并发 Login 定序)。
+// 现存 gen 缺失/更小 → 覆盖并刷 TTL,返回 1;否则零写入返回 0(本次登录已被更新
+// 一代顶掉)。gen 由 MySQL player_session_generations 单调分配,两存储收敛到最高代际。
+var setIfNewerGenScript = redis.NewScript(`
+local cur = redis.call('HGET', KEYS[1], 'gen')
+if cur and tonumber(cur) >= tonumber(ARGV[5]) then
+	return 0
+end
+redis.call('HSET', KEYS[1],
+	'token', ARGV[1], 'jti', ARGV[2], 'device_id', ARGV[3], 'exp_ms', ARGV[4], 'gen', ARGV[5])
+redis.call('PEXPIRE', KEYS[1], ARGV[6])
+return 1
+`)
+
+func (r *RedisSessionRepo) Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration, gen uint64) error {
 	key := sessKey(playerID)
+	expMs := time.Now().Add(ttl).UnixMilli()
+	if gen > 0 {
+		n, err := setIfNewerGenScript.Run(ctx, r.rdb, []string{key},
+			token, jti, deviceID, expMs, gen, ttl.Milliseconds()).Int64()
+		if err != nil {
+			return errcode.New(errcode.ErrInternal, "redis sess set: %v", err)
+		}
+		if n == 0 {
+			return errcode.New(errcode.ErrSessionSuperseded,
+				"login superseded by a newer concurrent login (player %d gen %d)", playerID, gen)
+		}
+		return nil
+	}
+	// gen==0:dev 裸跑无 MySQL 定序权威,保持历史无条件覆盖;同时清掉可能残留的
+	// gen 字段,避免陈旧代际把后续 dev 登录当成"被顶"拒绝。
 	pipe := r.rdb.TxPipeline()
 	pipe.HSet(ctx, key,
 		"token", token,
 		"jti", jti,
 		"device_id", deviceID,
-		"exp_ms", time.Now().Add(ttl).UnixMilli(),
+		"exp_ms", expMs,
 	)
+	pipe.HDel(ctx, key, "gen")
 	pipe.Expire(ctx, key, ttl)
 	if _, err := pipe.Exec(ctx); err != nil {
 		return errcode.New(errcode.ErrInternal, "redis sess set: %v", err)

@@ -495,6 +495,22 @@ func main() {
 	// 客户端面 method 的 jti 必须是 login 会话权威当前一代;内部/DS RPC 无 payload 头放行。
 	sessGate, sgClose := sessiongate.MustBuild(cfg.Node.RedisClient, cfg.SessionGate.Require)
 	defer sgClose()
+	// R7 复审 P0-3:biz 也持有 session gate——迁移重签取当前会话 jti 签进 sjti;
+	// AcknowledgeAdmission 在消费 reservation 前后双复核票据 sjti 现行性(R7 收口 P0-2)。
+	uc.SetSessionGate(sessGate)
+	// R7 收口(P0-5):票据 sjti 绑定强制门分阶段激活。默认兼容档(空 sjti 告警放行,
+	// 旧 Hub DS/旧签发面残票混版可用);全 fleet DS 转发 sjti + 旧 DS 排空 + 等满票据
+	// 最大 TTL 后置 session_gate.require_ticket_sjti=true 收口。
+	uc.SetSessionGateRequireSJTI(cfg.SessionGate.RequireTicketSJTI)
+	if sessGate != nil {
+		if cfg.SessionGate.RequireTicketSJTI {
+			helper.Infow("msg", "hub_admission_sjti_require_active",
+				"note", "空 sjti 硬拒;前提=全 fleet DS 已转发 sjti 且旧票已过期")
+		} else {
+			helper.Infow("msg", "hub_admission_sjti_tolerant",
+				"note", "空 sjti 告警放行(混版兼容窗);排空后开 session_gate.require_ticket_sjti")
+		}
+	}
 
 	grpcSrv := server.NewGRPCServer(&cfg, svc, sessGate)
 	httpSrv := server.NewHTTPServer(&cfg)

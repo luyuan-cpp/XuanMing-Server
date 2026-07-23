@@ -2007,7 +2007,9 @@ func (u *MatchUsecase) GetMatchProgress(ctx context.Context, callerID, id uint64
 				return nil, false, err
 			}
 			prog := matchToProgress(m)
-			u.refreshBattleTicket(ctx, m, callerID, prog)
+			if rerr := u.refreshBattleTicket(ctx, m, callerID, prog); rerr != nil {
+				return nil, false, rerr
+			}
 			return prog, true, nil
 		}
 		if t, found, err := u.repo.GetTicket(ctx, id); err != nil {
@@ -2031,7 +2033,9 @@ func (u *MatchUsecase) GetMatchProgress(ctx context.Context, callerID, id uint64
 					}
 					// 票据已撮合进 match,caller 既是票据成员即本局成员,直接给 match 进度。
 					prog := matchToProgress(m)
-					u.refreshBattleTicket(ctx, m, callerID, prog)
+					if rerr := u.refreshBattleTicket(ctx, m, callerID, prog); rerr != nil {
+						return nil, false, rerr
+					}
 					return prog, true, nil
 				}
 			}
@@ -2089,26 +2093,34 @@ func (u *MatchUsecase) GetMatchProgress(ctx context.Context, callerID, id uint64
 // refreshBattleTicket 在 READY 阶段为发起查询的本人现签一张新的 battle DSTicket(新 jti)，
 // 覆盖 prog 里来自存储的票字段。这样换手机 / 掉线重连每次都拿新 jti，不会撞 DS 侧 jti 一次性
 // 防重放；票 sub 锁定调用者本人。
-// 守卫：callerID!=0 且 stage=READY 且有 ds_addr 且 caller 是本局成员才签；任何不满足或签发失败
-// 都保留存储票字段(dev/stub 兜底，绝不让查询失败)。
-func (u *MatchUsecase) refreshBattleTicket(ctx context.Context, m *matchv1.MatchStorageRecord, callerID uint64, prog *matchv1.MatchProgress) {
+// 守卫：callerID!=0 且 stage=READY 且有 ds_addr 且 caller 是本局成员才签。
+//
+// R7 收口(P1):签发链在场但 SignBattleTicket 失败时不再降级保留存储旧票——存量票
+// 绑定的是 claim 时刻的 sjti,顶号换机后必被 DS 兑换点拒绝(或撞 jti 一次性防重放),
+// 把它交出去只会让客户端拿着废票撞墙。改为整个查询 fail-closed(可重试 Unavailable),
+// 客户端按既有错误路径退避重查,签发恢复即拿到新票。
+// allocationFromMatch 不完整(legacy/dev 记录无持久化 allocation)保留旧行为:告警 +
+// 沿用存储票字段,不阻断 dev 联调。
+func (u *MatchUsecase) refreshBattleTicket(ctx context.Context, m *matchv1.MatchStorageRecord, callerID uint64, prog *matchv1.MatchProgress) error {
 	if callerID == 0 || m.Stage != stageReady || m.BattleDsAddr == "" {
-		return
+		return nil
 	}
 	if memberIndex(m.Members, callerID) < 0 {
-		return // 非本局成员，不签票
+		return nil // 非本局成员，不签票
 	}
 	allocation, ok := allocationFromMatch(m)
 	if !ok {
 		plog.With(ctx).Warnw("msg", "resign_battle_ticket_missing_persisted_target", "match_id", m.MatchId, "player_id", callerID)
-		return
+		return nil
 	}
 	token, err := u.allocator.SignBattleTicket(ctx, callerID, m.MatchId, allocation)
 	if err != nil {
 		plog.With(ctx).Warnw("msg", "resign_battle_ticket_failed", "match_id", m.MatchId, "player_id", callerID, "err", err)
-		return
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"battle ticket resign unavailable for match %d; retry", m.GetMatchId())
 	}
 	prog.BattleTicket = token
+	return nil
 }
 
 // ── 后台撮合循环 ──────────────────────────────────────────────────────────────

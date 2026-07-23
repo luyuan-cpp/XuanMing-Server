@@ -254,15 +254,17 @@ func isSessionFenceClose(err error) bool {
 }
 
 // drainBuffer 把投递缓冲中游标 > cursor 的帧全部投递,随后做 gap 终检,返回推进后的游标。
-// 拉取、发送或 gap 终检失败返回 (当前游标, err):游标不推进,下次重试不漏。
+// 拉取、发送或 gap 检查失败返回 (当前游标, err):游标不推进,下次重试不漏。
 //
-// gap 终检(R4 复审 P1-2,fail-closed):检查必须放在**拉空之后**而不是拉取之前——
-// 修剪只删 score 前缀,任何在「检查后~分页间隙」被修剪/滑出读窗而未投递的帧,
-// 在拉空时刻必然满足 LostSince(cursor) > cursor(fl 哨兵持久,跨重连不丢证据),
-// 消除旧实现「建流时检一次,此后游标越过缺口永不再报」的漏报窗口。
+// gap 检查分两层(R7 复审 P1-1 收口):
+//   - 每页发送前预检:resync 信号必须先于越过缺口的帧到达客户端,否则多页补推期间
+//     断流重连会让客户端 last_seen_ms 越过缺口,缺口从此永不回补(详见循环内注释);
+//   - 拉空后终检(R4 复审 P1-2,fail-closed):兜住「最后一页预检后~拉空」间隙内被
+//     修剪/滑出读窗而未投递的帧——fl 哨兵持久,跨重连不丢证据。
+//
 // 检测失败返回错误(不得当「无丢失」继续,否则游标越过缺口后 resync 永远无法触发)。
-// 检出丢失:发一帧 resync 信号(ts_ms=0,不推进客户端游标),本地游标跳到丢失上界,
-// 同一段丢失只信号一次;此后 fl 再次越过游标(新的丢失)会再次触发。
+// 检出丢失:发一帧 resync 信号(ts_ms=0,不推进客户端游标),基线跳到丢失上界,
+// 同一段丢失只信号一次;此后 fl 再次越过基线(新的丢失)会再次触发。
 // cursor=0(首连拉空且缓冲无帧)不检:新客户端无增量历史,交付契约从当下开始。
 //
 // 会话 fencing(R5 复审 P0-4;R6 复审收紧为**逐帧**):每帧 Send 之前复核会话现行性
@@ -275,8 +277,12 @@ func isSessionFenceClose(err error) bool {
 // 游标不动);顶号/登出错误由调用方判别关流。逐帧一次 HGET 的代价只在有帧可投时发生,
 // 稳态推送低频(每玩家每秒 0~几条),重连补推最坏 512 帧一次性多 512 次点查,可承受。
 func (u *PushUsecase) drainBuffer(ctx context.Context, slot *StreamSlot, playerID uint64, cursor int64, sess SessionInfo) (int64, error) {
-	// entry 是本轮进入时的游标:gap 终检的比较基线(R5 复审 P1-1,见拉空后注释)。
+	// entry 是本轮进入时的游标:gap 检查的初始基线(R5 复审 P1-1,见拉空后注释)。
 	entry := cursor
+	// baseline 随已信号的丢失上界推进,同一段丢失只信号一次;首连(entry<=0)从首页
+	// 交付上界开始。lostBound 记录本轮已信号丢失的最大上界,拉空后一次性推进游标。
+	baseline := entry
+	var lostBound int64
 	for {
 		if err := ctx.Err(); err != nil {
 			return cursor, nil
@@ -287,6 +293,30 @@ func (u *PushUsecase) drainBuffer(ctx context.Context, slot *StreamSlot, playerI
 		}
 		if len(frames) == 0 {
 			break
+		}
+		// 每页发送前 gap 预检(R7 复审 P1-1):resync 信号必须**先于**越过缺口的帧
+		// 到达客户端。旧实现只在拉空后终检,多页补推期间客户端游标已被幸存帧推过
+		// 缺口;若 resync 帧发出前流断开重连,新流 last_seen_ms 已越过缺口,而服务端
+		// 本地游标未持久化、重连后按客户端游标重建基线,fl 哨兵证据虽在却再也不会
+		// 触发针对该缺口的信号——permanent miss。先信号后发帧,任何时刻断流客户端
+		// 要么未越过缺口(重连回补),要么已收到 resync(全量校正),漏报窗口闭合。
+		// 预检失败按拉取失败语义返回:fail-closed,游标不动,不越过潜在缺口。
+		if baseline > 0 {
+			lost, lerr := u.offline.LostSince(ctx, playerID, baseline)
+			if lerr != nil {
+				return cursor, lerr
+			}
+			if lost > baseline {
+				plog.With(ctx).Warnw("msg", "push_gap_resync_signaled",
+					"player_id", playerID, "baseline", baseline, "cursor", cursor, "lost_up_to", lost)
+				if serr := slot.stream.Send(&pushv1.PushFrame{Topic: ResyncTopic}); serr != nil {
+					return cursor, serr
+				}
+				baseline = lost
+				if lost > lostBound {
+					lostBound = lost
+				}
+			}
 		}
 		for _, f := range frames {
 			if err := ctx.Err(); err != nil {
@@ -302,17 +332,17 @@ func (u *PushUsecase) drainBuffer(ctx context.Context, slot *StreamSlot, playerI
 			}
 			cursor = f.ScoreMs
 		}
+		if baseline <= 0 {
+			// 首连:无增量历史,契约从首页交付上界开始,后续页起才做预检。
+			baseline = cursor
+		}
 	}
-	// gap 终检基线用**进入时游标**而非拉空后的游标(R5 复审 P1-1):丢失帧与幸存帧
+	// gap 终检兜底(R5 复审 P1-2):覆盖「最后一页预检后~拉空」间隙内新发生的修剪。
+	// 基线用随信号推进的 baseline 而非拉空后游标(R5 复审 P1-1):丢失帧与幸存帧
 	// 交错时(如丢 1001、幸存 1002),拉空后游标已被幸存帧推进到 1002,fl=1001 不再
-	// 大于游标——丢失被幸存帧"掩护"成永久漏报。entry 基线下 fl > entry 即报;
-	// 信号后游标跳到 max(当前, lost),下一轮 entry ≥ 丢失上界,同一段丢失仍只信号一次。
-	// entry<=0(首连)沿用拉空后游标当基线:首连无增量历史,契约从当下开始,只报
-	// "刚交付窗口内"发生的确定丢失;首连且缓冲无帧(基线仍 0)连检测都不做。
-	baseline := entry
-	if baseline <= 0 {
-		baseline = cursor
-	}
+	// 大于游标——丢失会被幸存帧"掩护"成永久漏报。已信号段(baseline 已跳到丢失上界)
+	// 不重复信号;首连且缓冲无帧(baseline 仍 0)连检测都不做。
+	// 检测失败返回错误(不得当「无丢失」继续,否则游标越过缺口后 resync 永远无法触发)。
 	if baseline <= 0 || ctx.Err() != nil {
 		return cursor, nil
 	}
@@ -326,9 +356,13 @@ func (u *PushUsecase) drainBuffer(ctx context.Context, slot *StreamSlot, playerI
 		if serr := slot.stream.Send(&pushv1.PushFrame{Topic: ResyncTopic}); serr != nil {
 			return cursor, serr
 		}
-		if lost > cursor {
-			cursor = lost
+		if lost > lostBound {
+			lostBound = lost
 		}
+	}
+	// 游标跳到已信号丢失上界:防止下一轮把同一段丢失再次当缺口信号。
+	if lostBound > cursor {
+		cursor = lostBound
 	}
 	return cursor, nil
 }

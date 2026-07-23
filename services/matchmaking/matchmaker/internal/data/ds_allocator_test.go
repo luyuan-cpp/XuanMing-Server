@@ -2,10 +2,15 @@ package data
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/battleabort"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
@@ -87,6 +92,85 @@ func TestSignBattleTicketWithoutSignerFailsClosed(t *testing.T) {
 	g := &GrpcDSAllocator{}
 	if _, err := g.SignBattleTicket(t.Context(), 42, 9001, &model.BattleAllocation{}); err == nil {
 		t.Fatal("SignBattleTicket() without any signer must fail closed")
+	}
+}
+
+// signFakeSessionGate 可编程会话现行性权威 fake(R7 复审 P0-2 测试用)。
+type signFakeSessionGate struct {
+	jti   string
+	found bool
+	err   error
+}
+
+func (g *signFakeSessionGate) CurrentJTI(context.Context, uint64) (string, bool, error) {
+	return g.jti, g.found, g.err
+}
+
+// battleTicketSJTI 从签出的 JWT 里解出 sjti claim(不验签,测试只关心签发内容)。
+func battleTicketSJTI(t *testing.T, token string) string {
+	t.Helper()
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		t.Fatalf("token is not a JWT: %q", token)
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	var claims struct {
+		SessJTI string `json:"sjti"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		t.Fatalf("unmarshal claims: %v", err)
+	}
+	return claims.SessJTI
+}
+
+// R7 复审 P0-2:装配 session gate 后,READY 票必须把签发时刻玩家的当前会话 jti 签进
+// sjti;权威不可达 fail-closed 拒签;已登出玩家扣票。确定性:gate 状态逐步切换断言。
+func TestSignBattleTicketBindsCurrentSessionJTI(t *testing.T) {
+	pemBytes, _, kid, err := auth.GenerateDSTicketKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateDSTicketKeyPair: %v", err)
+	}
+	v2, err := auth.NewDSTicketSigner(auth.DSTicketSignerConfig{PrivateKeyPEM: pemBytes, ActiveKid: kid})
+	if err != nil {
+		t.Fatalf("NewDSTicketSigner: %v", err)
+	}
+	allocation := &model.BattleAllocation{Target: placement.Target{
+		PodName: "battle-1", InstanceUID: "uid-1", InstanceEpoch: 3,
+		AllocationID: "550e8400-e29b-41d4-a716-446655440000", ReleaseTrack: "stable",
+	}}
+	gate := &signFakeSessionGate{jti: "jti-A", found: true}
+	g := &GrpcDSAllocator{v2: v2, sessGate: gate}
+
+	// ① 有现行会话:sjti = 签发时刻的当前 jti。
+	token, err := g.SignBattleTicket(t.Context(), 42, 9001, allocation)
+	if err != nil {
+		t.Fatalf("SignBattleTicket: %v", err)
+	}
+	if got := battleTicketSJTI(t, token); got != "jti-A" {
+		t.Fatalf("sjti = %q, want jti-A", got)
+	}
+	// ② 会话轮换后签发:新票绑定新 jti(旧票在兑换点由 login 权威拒绝)。
+	gate.jti = "jti-B"
+	token, err = g.SignBattleTicket(t.Context(), 42, 9001, allocation)
+	if err != nil {
+		t.Fatalf("SignBattleTicket after rotation: %v", err)
+	}
+	if got := battleTicketSJTI(t, token); got != "jti-B" {
+		t.Fatalf("sjti after rotation = %q, want jti-B", got)
+	}
+	// ③ 权威不可达:fail-closed 拒签,不得盲签无会话绑定的票。
+	gate.err = errors.New("redis down")
+	if _, err := g.SignBattleTicket(t.Context(), 42, 9001, allocation); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("gate outage must fail closed, code=%v err=%v", errcode.As(err), err)
+	}
+	gate.err = nil
+	// ④ 已登出(无会话):扣票,重登链会用新会话重签。
+	gate.found = false
+	if _, err := g.SignBattleTicket(t.Context(), 42, 9001, allocation); errcode.As(err) != errcode.ErrUnauthorized {
+		t.Fatalf("logged-out player must be withheld, code=%v err=%v", errcode.As(err), err)
 	}
 }
 

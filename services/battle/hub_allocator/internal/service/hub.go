@@ -197,7 +197,8 @@ func (s *HubService) AcknowledgeAdmission(ctx context.Context, req *hubv1.Acknow
 		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 	result, err := s.uc.AcknowledgeAdmission(ctx, req.GetPlayerId(), req.GetAssignmentId(),
-		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(), hubCredentialFromGuard(cred))
+		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(), req.GetSessionJti(),
+		hubCredentialFromGuard(cred))
 	if err != nil {
 		return &hubv1.AcknowledgeAdmissionResponse{Code: toProtoCode(err)}, nil
 	}

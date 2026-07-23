@@ -283,6 +283,61 @@ func TestResolvePlayerMatchContext_StartSagaHandsOffToQueued(t *testing.T) {
 	}
 }
 
+// failingResignAllocator:SignBattleTicket 恒失败(签发链在场但故障),其余委托 stub。
+type failingResignAllocator struct {
+	DSAllocator
+}
+
+func (a *failingResignAllocator) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation) (string, error) {
+	return "", errcode.New(errcode.ErrUnavailable, "signer down")
+}
+
+// R7 收口(P1):READY 重签失败必须让查询 fail-closed(可重试),绝不降级返回存储旧票
+// ——存量票绑定 claim 时刻的 sjti,顶号换机后必被 DS 兑换点拒绝,交出去只会让客户端
+// 拿废票撞墙。签发恢复后查询即拿到新 jti 票。
+func TestGetMatchProgress_ResignFailureWithholdsStoredTicket(t *testing.T) {
+	f := newFixture(t, 9600)
+	ctx := context.Background()
+	const (
+		playerID = uint64(4601)
+		ticketID = uint64(9611)
+		matchID  = uint64(9601)
+	)
+	m := &matchv1.MatchStorageRecord{
+		MatchId: matchID, Stage: stageReady,
+		TicketIds:    []uint64{ticketID},
+		Members:      []*matchv1.MatchMemberStorageRecord{{PlayerId: playerID, TeamId: ticketID}},
+		BattleDsAddr: "10.0.0.9:7777",
+		BattleTicket: "stale-stored-ticket-bound-to-old-sjti",
+		BattleTarget: &matchv1.MatchBattleTargetStorageRecord{
+			DsAddr: "10.0.0.9:7777", DsPodName: "battle-1", DsInstanceUid: "uid-b1",
+			DsInstanceEpoch: 3, AllocationId: "alloc-1", ReleaseTrack: "stable",
+		},
+	}
+	if err := f.repo.CreateMatch(ctx, m, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+
+	// ① 签发失败:查询整体 fail-closed,旧票绝不外泄。
+	failUC := NewMatchUsecase(f.repo, nil, f.pusher, &failingResignAllocator{DSAllocator: NewStubDSAllocator("127.0.0.1:7777")}, &fakeIDGen{next: 1}, nil, f.cfg)
+	prog, err := failUC.GetMatchProgress(ctx, playerID, matchID)
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("resign failure must fail the query, prog=%+v code=%v err=%v", prog, errcode.As(err), err)
+	}
+	if prog != nil {
+		t.Fatalf("no progress (with stale ticket) may leak on resign failure, got %+v", prog)
+	}
+
+	// ② 签发正常(stub):现签新票覆盖存储旧票。
+	prog, err = f.uc.GetMatchProgress(ctx, playerID, matchID)
+	if err != nil {
+		t.Fatalf("healthy resign query err: %v", err)
+	}
+	if prog.GetBattleTicket() == "" || prog.GetBattleTicket() == "stale-stored-ticket-bound-to-old-sjti" {
+		t.Fatalf("healthy path must deliver a freshly signed ticket, got %q", prog.GetBattleTicket())
+	}
+}
+
 func TestGetMatchProgress_ReadsAcceptedDurableStartOperationBeforeTicketExists(t *testing.T) {
 	f := newFixture(t, 9000)
 	ctx := context.Background()

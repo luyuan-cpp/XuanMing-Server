@@ -62,7 +62,7 @@ type fakeSessionRepo struct {
 
 func newFakeSessionRepo() *fakeSessionRepo { return &fakeSessionRepo{jti: map[uint64]string{}} }
 
-func (f *fakeSessionRepo) Set(_ context.Context, playerID uint64, _, jti, _ string, _ time.Duration) error {
+func (f *fakeSessionRepo) Set(_ context.Context, playerID uint64, _, jti, _ string, _ time.Duration, _ uint64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.jti == nil { // 零值可用:嵌入方(rotatingSessionRepo 等)不经构造函数
@@ -155,7 +155,7 @@ type fakeHubAssigner struct {
 	gotSourceMatchID uint64
 }
 
-func (f *fakeHubAssigner) AssignHub(_ context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64) (*data.HubAssignment, error) {
+func (f *fakeHubAssigner) AssignHub(_ context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64, _ string) (*data.HubAssignment, error) {
 	f.gotPlayerID = playerID
 	f.gotRegion = region
 	f.gotTeamID = teamID
@@ -397,7 +397,7 @@ func TestIssueDSTicket_CellRoute(t *testing.T) {
 	tu.SetBattleTicketAuthorizer(&battleTicketAuthorizerFake{})
 	tu.SetCellRouter(singleCellRouter(t, 5, 55))
 
-	issued, err := tu.IssueDSTicket(context.Background(), 42, string(auth.DSTypeBattle), 9001)
+	issued, err := tu.IssueDSTicket(context.Background(), 42, string(auth.DSTypeBattle), 9001, "")
 	if err != nil {
 		t.Fatalf("IssueDSTicket: %v", err)
 	}
@@ -420,7 +420,7 @@ func TestIssueDSTicket_NilRouterZeroCell(t *testing.T) {
 	verifier, _ := auth.NewVerifier(cfg)
 	tu := NewTicketUsecase(signer, verifier, nil) // 不调 SetCellRouter
 
-	issued, err := tu.IssueDSTicket(context.Background(), 42, string(auth.DSTypeHub), 0)
+	issued, err := tu.IssueDSTicket(context.Background(), 42, string(auth.DSTypeHub), 0, "")
 	if err != nil {
 		t.Fatalf("IssueDSTicket: %v", err)
 	}
@@ -519,7 +519,7 @@ func newSelectRoleUsecase(t *testing.T, allowedRoleIDs []uint32, devAllowAnyRole
 // SelectRole 一律拒绝(fail-closed,防改包客户端签任意 role_id 进 hub 票据)。
 func TestSelectRole_EmptyWhitelistFailClosed(t *testing.T) {
 	uc := newSelectRoleUsecase(t, nil, false)
-	_, _, _, err := uc.SelectRole(context.Background(), 42, 7)
+	_, _, _, err := uc.SelectRole(context.Background(), 42, 7, "")
 	if errcode.As(err) != errcode.ErrInvalidState {
 		t.Fatalf("empty whitelist should fail-closed with ErrInvalidState, got %v", err)
 	}
@@ -529,14 +529,14 @@ func TestSelectRole_EmptyWhitelistFailClosed(t *testing.T) {
 // 只校验非 0(dev 宽松语义,回退自签票据路径)。
 func TestSelectRole_EmptyWhitelistDevAllowAnyRole(t *testing.T) {
 	uc := newSelectRoleUsecase(t, nil, true)
-	addr, ticket, _, err := uc.SelectRole(context.Background(), 42, 7)
+	addr, ticket, _, err := uc.SelectRole(context.Background(), 42, 7, "")
 	if err != nil {
 		t.Fatalf("dev_allow_any_role should accept non-zero role_id, got %v", err)
 	}
 	if addr == "" || ticket == "" {
 		t.Fatalf("want fallback addr+ticket, got addr=%q ticket=%q", addr, ticket)
 	}
-	if _, _, _, err := uc.SelectRole(context.Background(), 42, 0); errcode.As(err) != errcode.ErrInvalidArg {
+	if _, _, _, err := uc.SelectRole(context.Background(), 42, 0, ""); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("role_id=0 should be ErrInvalidArg, got %v", err)
 	}
 }
@@ -545,10 +545,10 @@ func TestSelectRole_EmptyWhitelistDevAllowAnyRole(t *testing.T) {
 // 与 dev_allow_any_role 无关——开关只对空白名单生效)。
 func TestSelectRole_Whitelist(t *testing.T) {
 	uc := newSelectRoleUsecase(t, []uint32{1, 2}, true)
-	if _, _, _, err := uc.SelectRole(context.Background(), 42, 2); err != nil {
+	if _, _, _, err := uc.SelectRole(context.Background(), 42, 2, ""); err != nil {
 		t.Fatalf("whitelisted role should pass, got %v", err)
 	}
-	if _, _, _, err := uc.SelectRole(context.Background(), 42, 9); errcode.As(err) != errcode.ErrInvalidArg {
+	if _, _, _, err := uc.SelectRole(context.Background(), 42, 9, ""); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("non-whitelisted role should be ErrInvalidArg, got %v", err)
 	}
 }

@@ -266,10 +266,10 @@ func TestHubBindingActivationRejectsLegacyTicketAndSelfSigning(t *testing.T) {
 		uc := NewTicketUsecase(signer, verifier, nil)
 		uc.SetHubAssignmentBindingPolicy(true, &bindingCheckerFake{})
 		uc.SetBattleTicketAuthorizer(&battleTicketAuthorizerFake{})
-		if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeHub), 0); errcode.As(err) != errcode.ErrUnavailable {
+		if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeHub), 0, ""); errcode.As(err) != errcode.ErrUnavailable {
 			t.Fatalf("hub issue code=%v err=%v", errcode.As(err), err)
 		}
-		if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001); err != nil {
+		if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001, ""); err != nil {
 			t.Fatalf("battle issue must remain available: %v", err)
 		}
 	})
@@ -278,12 +278,12 @@ func TestHubBindingActivationRejectsLegacyTicketAndSelfSigning(t *testing.T) {
 func TestIssueBattleDSTicketRequiresRosterAuthorizationBeforeSigning(t *testing.T) {
 	signer, verifier := newTicketTestPair(t)
 	uc := NewTicketUsecase(signer, verifier, nil)
-	if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001); errcode.As(err) != errcode.ErrUnavailable {
+	if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001, ""); errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("missing authorizer code=%v err=%v", errcode.As(err), err)
 	}
 	reject := &battleTicketAuthorizerFake{err: errcode.New(errcode.ErrPermissionDeny, "not in roster")}
 	uc.SetBattleTicketAuthorizer(reject)
-	if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001); errcode.As(err) != errcode.ErrPermissionDeny {
+	if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001, ""); errcode.As(err) != errcode.ErrPermissionDeny {
 		t.Fatalf("non-member code=%v err=%v", errcode.As(err), err)
 	}
 	if reject.calls.Load() != 1 {
@@ -291,12 +291,12 @@ func TestIssueBattleDSTicketRequiresRosterAuthorizationBeforeSigning(t *testing.
 	}
 	allow := &battleTicketAuthorizerFake{}
 	uc.SetBattleTicketAuthorizer(allow)
-	if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001); err != nil {
+	if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001, ""); err != nil {
 		t.Fatalf("authorized battle ticket: %v", err)
 	}
 	empty := &battleTicketAuthorizerFake{returnEmpty: true}
 	uc.SetBattleTicketAuthorizer(empty)
-	if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001); errcode.As(err) != errcode.ErrUnavailable {
+	if _, err := uc.IssueDSTicket(context.Background(), 1001, string(auth.DSTypeBattle), 9001, ""); errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("empty authoritative address code=%v err=%v", errcode.As(err), err)
 	}
 }
@@ -339,7 +339,7 @@ func TestLoginBindingActivationNeverFallsBackToSelfSignedHubTicket(t *testing.T)
 	t.Run("allocator-not-configured", func(t *testing.T) {
 		uc := newTestUsecase(t, nil)
 		uc.SetRequireHubAssignmentBinding(true)
-		if _, _, _, err := uc.ResolveHubEndpoint(context.Background(), 1001); errcode.As(err) != errcode.ErrUnavailable {
+		if _, _, _, err := uc.ResolveHubEndpoint(context.Background(), 1001, ""); errcode.As(err) != errcode.ErrUnavailable {
 			t.Fatalf("code=%v err=%v", errcode.As(err), err)
 		}
 	})
@@ -348,7 +348,7 @@ func TestLoginBindingActivationNeverFallsBackToSelfSignedHubTicket(t *testing.T)
 		hub := &fakeHubAssigner{err: errcode.New(errcode.ErrHubNoAvailable, "full")}
 		uc := newTestUsecase(t, hub)
 		uc.SetRequireHubAssignmentBinding(true)
-		if _, _, _, err := uc.ResolveHubEndpoint(context.Background(), 1001); errcode.As(err) != errcode.ErrUnavailable {
+		if _, _, _, err := uc.ResolveHubEndpoint(context.Background(), 1001, ""); errcode.As(err) != errcode.ErrUnavailable {
 			t.Fatalf("code=%v err=%v", errcode.As(err), err)
 		}
 	})
@@ -366,7 +366,7 @@ func TestLoginBindingActivationNeverFallsBackToSelfSignedHubTicket(t *testing.T)
 		}
 		hub.res.HubTicket = legacy
 		uc.SetRequireHubAssignmentBinding(true)
-		if _, _, _, err := uc.ResolveHubEndpoint(context.Background(), 1001); errcode.As(err) != errcode.ErrUnavailable {
+		if _, _, _, err := uc.ResolveHubEndpoint(context.Background(), 1001, ""); errcode.As(err) != errcode.ErrUnavailable {
 			t.Fatalf("code=%v err=%v", errcode.As(err), err)
 		}
 	})
@@ -394,7 +394,7 @@ func TestLoginBindingActivationNeverFallsBackToSelfSignedHubTicket(t *testing.T)
 		}
 		hub.res.HubTicket = bound
 		uc.SetRequireHubAssignmentBinding(true)
-		addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 1001)
+		addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 1001, "")
 		if err != nil || addr != hub.res.HubDSAddr || ticket != bound {
 			t.Fatalf("addr=%q ticketMatch=%v err=%v", addr, ticket == bound, err)
 		}

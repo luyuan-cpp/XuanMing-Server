@@ -67,5 +67,19 @@ CREATE TABLE IF NOT EXISTS `player_roles` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 玩家已选角色(选角权威数据)';
 
+-- 会话代际持久化(R7 复审 P0-4,2026-07-23):login 每次成功登录把新 session jti 落库
+-- (fail-closed,落库失败登录失败)。业务写事务(如 player_roles UPSERT)在同一事务内
+-- SELECT ... FOR UPDATE 复核本表,把「角色写」与「登录轮换」放进同一 InnoDB 串行化域,
+-- 消除 R6 版 Redis precommit 与 COMMIT 之间的跨存储窗口。
+-- 既有库需手动补建本表(login 启动期 CheckTables 会 fail-fast 提示)。
+CREATE TABLE IF NOT EXISTS `player_session_generations` (
+    `player_id`  BIGINT UNSIGNED NOT NULL,
+    `sess_jti`   VARCHAR(64)     NOT NULL COMMENT '当前会话 JWT 的 jti(uuid v4)',
+    `generation` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '登录单调代际(每次 Login upsert +1,并发登录定序权威)',
+    `updated_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家会话代际(登录定序 + 业务写事务 fencing;每玩家 1 行,量级被玩家数有界)';
+
 -- 注:开发期账号不在此 init.sql 写入(bcrypt cost 不固定,且需要应用层 hash)。
 -- login 开 dev_skip_password / dev_auto_register 时,客户端首次登录即自动懒注册账号。

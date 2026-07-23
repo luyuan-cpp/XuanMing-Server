@@ -63,10 +63,11 @@ type tableEntry struct {
 // registry 是全库表登记清单(与 CLAUDE.md §9.24 同步;新表未登记 → 检查失败)。
 var registry = map[string]map[string]tableEntry{
 	"pandora_account": {
-		"accounts":        {Class: classBounded},
-		"player_roles":    {Class: classBounded},
-		"account_devices": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_last_login", Columns: []string{"last_login_at"}}}, SweepSQL: "DELETE FROM account_devices WHERE last_login_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
-		"account_bans":    {Class: classExempt}, // 运营合规审计,量级 = 运营操作数
+		"accounts":                   {Class: classBounded},
+		"player_roles":               {Class: classBounded},
+		"player_session_generations": {Class: classBounded}, // 每玩家 1 行(登录定序+SetRole fencing 权威),被玩家数有界
+		"account_devices":            {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_last_login", Columns: []string{"last_login_at"}}}, SweepSQL: "DELETE FROM account_devices WHERE last_login_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
+		"account_bans":               {Class: classExempt}, // 运营合规审计,量级 = 运营操作数
 	},
 	"pandora_player": {
 		"players":              {Class: classBounded},

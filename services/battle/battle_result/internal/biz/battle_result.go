@@ -185,6 +185,8 @@ func (u *BattleResultUsecase) ReportResult(ctx context.Context, result *battlev1
 
 // ReportAuthorizedResult 是 Redis-authority 同步入口。terminalRelease 必须来自 service
 // 已完成 Guard + active 校验的服务端快照；它与战绩同事务提交，不从 BattleResult 请求体补值。
+// roster 精确校验通过后,reportResult 会先用 terminalRelease 携带的 canonical
+// game_mode/map_id 覆盖请求体,再做 MMR 决策与落库(DS 伪报 game_mode/map_id 无效)。
 func (u *BattleResultUsecase) ReportAuthorizedResult(
 	ctx context.Context,
 	result *battlev1.BattleResult,
@@ -232,12 +234,29 @@ func validateAuthorizedResultRoster(result *battlev1.BattleResult, authoritative
 	return nil
 }
 
+// canonicalGameModePVECoop 是 PVE walk-in 部署的 canonical game_mode
+// (decision-dungeon-entry-modes.md §4:matchmaker-pve game_mode: "pve_coop")。
+// 只允许与 TerminalReleaseRecord.GameMode(canonical BattleStorageRecord 来源)比较,
+// 绝不与 DS 请求体 result.game_mode 比较(§9.6 DS 请求字段不可作 MMR 安全依据)。
+const canonicalGameModePVECoop = "pve_coop"
+
 func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1.BattleResult, terminalRelease *data.TerminalReleaseRecord, finalProgressSeq uint64) (bool, error) {
 	if result == nil || result.GetMatchId() == 0 {
 		return false, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
 	if len(result.GetStats()) == 0 {
 		return false, errcode.New(errcode.ErrInvalidArg, "stats required for match %d", result.GetMatchId())
+	}
+
+	// 权威字段覆盖(§9.6 数值不信 DS):授权同步路径(terminalRelease 非空)下,
+	// game_mode/map_id 一律以 canonical BattleStorageRecord(经 AuthorizeResult 随
+	// terminalRelease 带入)为准,在任何 MMR/DB/outbox 副作用之前覆盖 DS 请求体。
+	// canonical game_mode 为空(滚动升级前旧局)也照覆盖为空:宁可少存元数据,
+	// 也不把不可信请求字段伪装成权威事实。legacy/内部路径(terminalRelease==nil)
+	// 无权威可用,保持请求原值(该路径本就不受 canonical 保护,行为不变)。
+	if terminalRelease != nil {
+		result.GameMode = terminalRelease.GameMode
+		result.MapId = terminalRelease.MapID
 	}
 
 	// 正常结算:outcome 缺省补 NORMAL
@@ -249,11 +268,21 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 	// ABANDONED 是补偿语义:权威路径是 ds.lifecycle → HandleAbandoned(delta 全 0,不掉段)。
 	// 此处兜底:若 battle.result 误报 / 伪造 Outcome=ABANDONED,强制 delta 全 0,
 	// 防止 DS 不可信地通过 abandoned 改玩家段位(不变量 §4/§6)。
-	if result.GetOutcome() == battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED {
+	//
+	// canonical pve_coop(仅授权路径可判定)永不算 Elo:PVE 副本没有对手结构,
+	// 成功/失败/平局的 NORMAL 结算一律 mmr_delta=0,且不触碰 MMR reader。
+	// 判定依据只能是 terminalRelease.GameMode(canonical);canonical 为空(旧局)
+	// 保持保守旧行为照算 Elo,绝不用 DS 请求 game_mode 降级跳过 MMR。
+	switch {
+	case result.GetOutcome() == battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED:
 		for _, s := range result.GetStats() {
 			s.MmrDelta = 0
 		}
-	} else {
+	case terminalRelease != nil && terminalRelease.GameMode == canonicalGameModePVECoop:
+		for _, s := range result.GetStats() {
+			s.MmrDelta = 0
+		}
+	default:
 		u.assignMMR(ctx, result)
 	}
 

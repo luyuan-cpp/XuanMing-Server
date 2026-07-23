@@ -3,11 +3,16 @@ package biz
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/go-kratos/kratos/v2/transport"
+
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	pmw "github.com/luyuancpp/pandora/pkg/middleware"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
@@ -460,7 +465,7 @@ func TestAssignHub_LazySeedAndLeastLoaded(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
+	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, "")
 	if err != nil {
 		t.Fatalf("AssignHub err: %v", err)
 	}
@@ -488,14 +493,14 @@ func TestAssignHub_SourceMatchFenceIntoTicket(t *testing.T) {
 	uc, _, signer := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 9001); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 9001, ""); err != nil {
 		t.Fatalf("AssignHub with fence err: %v", err)
 	}
 	if signer.lastBinding.SourceMatchID != 9001 {
 		t.Fatalf("signed binding source_match_id = %d, want 9001", signer.lastBinding.SourceMatchID)
 	}
 	// 幂等重签(同玩家再次 AssignHub,普通登录无 fence)→ 本次票据不携带旧 fence。
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("second assign err: %v", err)
 	}
 	if signer.lastBinding.SourceMatchID != 0 {
@@ -507,11 +512,11 @@ func TestAssignHub_Idempotent(t *testing.T) {
 	uc, repo, signer := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
+	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, "")
 	if err != nil {
 		t.Fatalf("first assign err: %v", err)
 	}
-	r2, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
+	r2, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, "")
 	if err != nil {
 		t.Fatalf("second assign err: %v", err)
 	}
@@ -535,7 +540,7 @@ func TestAssignHub_SpreadAcrossShards(t *testing.T) {
 	// 3 个玩家应分散到 3 个分片(每次选最空)
 	pods := map[string]bool{}
 	for i := uint64(1); i <= 3; i++ {
-		res, err := uc.AssignHub(ctx, i, "global", 0, 0, 0)
+		res, err := uc.AssignHub(ctx, i, "global", 0, 0, 0, "")
 		if err != nil {
 			t.Fatalf("assign p%d err: %v", i, err)
 		}
@@ -555,10 +560,10 @@ func TestAssignHub_CapacityFull(t *testing.T) {
 	uc, _, _ := newTestUsecase(1, 1) // 1 分片,容量 1
 	ctx := context.Background()
 
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("first assign err: %v", err)
 	}
-	_, err := uc.AssignHub(ctx, 1002, "global", 0, 0, 0)
+	_, err := uc.AssignHub(ctx, 1002, "global", 0, 0, 0, "")
 	if err == nil {
 		t.Fatal("want capacity-full error")
 	}
@@ -571,11 +576,11 @@ func TestAssignHub_TeammateColocation(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	r1, err := uc.AssignHub(ctx, 1001, "global", 7, 0, 0) // team 7
+	r1, err := uc.AssignHub(ctx, 1001, "global", 7, 0, 0, "") // team 7
 	if err != nil {
 		t.Fatalf("p1 assign err: %v", err)
 	}
-	r2, err := uc.AssignHub(ctx, 1002, "global", 7, 0, 0) // same team
+	r2, err := uc.AssignHub(ctx, 1002, "global", 7, 0, 0, "") // same team
 	if err != nil {
 		t.Fatalf("p2 assign err: %v", err)
 	}
@@ -591,7 +596,7 @@ func TestReleaseHub_DecrementAndIdempotent(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
+	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, "")
 	if err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
@@ -614,7 +619,7 @@ func TestTransferHub_MoveBetweenShards(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0) // shard 1
+	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, "") // shard 1
 	if err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
@@ -670,7 +675,7 @@ func TestTransferHub_SetAssignmentFailRollback(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0) // 落在 shard 1
+	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, "") // 落在 shard 1
 	if err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
@@ -749,7 +754,7 @@ func TestHeartbeat_KnownShardNoCommand(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 	// 先 assign 触发种子,再心跳已知分片
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
 	now := time.Now().UnixMilli()
@@ -768,7 +773,7 @@ func TestHeartbeat_KnownShardNoCommand(t *testing.T) {
 func TestSweepOnce_MarksStaleDraining(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
 	pod := "pandora-hub-global-1"
@@ -799,7 +804,7 @@ func TestSweepOnce_SkipsNeverHeartbeated(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 	// 仅 assign(Mock 种子 last_heartbeat_ms=0,从不进 active)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
 	if err := uc.sweepOnce(ctx); err != nil {
@@ -814,7 +819,7 @@ func TestSweepOnce_SkipsNeverHeartbeated(t *testing.T) {
 
 func TestAssignHub_InvalidPlayer(t *testing.T) {
 	uc, _, _ := newTestUsecase(500, 3)
-	if _, err := uc.AssignHub(context.Background(), 0, "global", 0, 0, 0); err == nil {
+	if _, err := uc.AssignHub(context.Background(), 0, "global", 0, 0, 0, ""); err == nil {
 		t.Fatal("want invalid-arg error for player_id 0")
 	} else if errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("want ErrInvalidArg, got %d", errcode.As(err))
@@ -975,7 +980,7 @@ func TestHeartbeat_ReviveLivenessDrainOnHealthyReport(t *testing.T) {
 func TestHeartbeat_ReviveAfterSweepFalsePositive(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
 	pod := "pandora-hub-global-1"
@@ -1276,5 +1281,119 @@ func TestTransferToLineForPlayer_NilCheckerDevModeAllows(t *testing.T) {
 
 	if _, err := uc.TransferToLineForPlayer(ctx, 1001, 2); err != nil {
 		t.Fatalf("nil checker (dev mode) should allow transfer, err: %v", err)
+	}
+}
+
+// ── R7 收口(P0-4):TransferToLine 临界区会话终检 ────────────────────────────────
+
+// transferHeader/transferTransport:伪造 Kratos server transport,携带 Envoy 验签后
+// 的 x-pandora-jwt-payload 头(base64url JSON),模拟玩家侧请求的会话自证。
+type transferHeader map[string][]string
+
+func (h transferHeader) Get(key string) string {
+	if v := h[key]; len(v) > 0 {
+		return v[0]
+	}
+	return ""
+}
+func (h transferHeader) Set(key, value string)      { h[key] = []string{value} }
+func (h transferHeader) Add(key, value string)      { h[key] = append(h[key], value) }
+func (h transferHeader) Values(key string) []string { return h[key] }
+func (h transferHeader) Keys() []string {
+	out := make([]string, 0, len(h))
+	for k := range h {
+		out = append(out, k)
+	}
+	return out
+}
+
+type transferTransport struct{ header transferHeader }
+
+func (t *transferTransport) Kind() transport.Kind            { return transport.KindGRPC }
+func (t *transferTransport) Endpoint() string                { return "" }
+func (t *transferTransport) Operation() string               { return "/pandora.hub.v1.HubAllocatorService/TransferToLine" }
+func (t *transferTransport) RequestHeader() transport.Header { return t.header }
+func (t *transferTransport) ReplyHeader() transport.Header   { return transferHeader{} }
+
+// transferCtxWithJTI 构造带会话自证 jti 的玩家侧请求上下文。
+func transferCtxWithJTI(jti string) context.Context {
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"1001","jti":"` + jti + `"}`))
+	h := transferHeader{}
+	h.Set(pmw.MetadataKeyJWTPayload, payload)
+	return transport.NewServerContext(context.Background(), &transferTransport{header: h})
+}
+
+// 旧会话请求(caller jti 已被顶)必须在任何不可逆副作用前被拒:assignment 不动。
+// RPC 入口中间件检查后到内部占坑/CAS 之间的窗口,由本临界区终检关闭。
+func TestTransferToLine_SupersededCallerRejectedBeforeSideEffects(t *testing.T) {
+	uc, repo, _ := newTestUsecase(500, 3)
+	seedShard(repo, "hub-a", 1, 1)
+	seedShard(repo, "hub-b", 2, 1)
+	seedPlayer(repo, 1001, "hub-a", 1)
+	uc.SetSessionGate(&ackFakeSessionGate{jti: "jti-new", found: true})
+
+	ctx := transferCtxWithJTI("jti-old")
+	_, err := uc.TransferToLineForPlayer(ctx, 1001, 2)
+	if errcode.As(err) != errcode.ErrSessionSuperseded {
+		t.Fatalf("superseded caller must be rejected, code=%v err=%v", errcode.As(err), err)
+	}
+	if a, _, _ := repo.GetAssignment(context.Background(), 1001); a.GetHubPodName() != "hub-a" {
+		t.Fatalf("assignment must not move for a superseded caller, pod=%s", a.GetHubPodName())
+	}
+}
+
+// 会话权威不可达 → fail-closed 拒绝,零副作用(§9.22:UNKNOWN 不得授权归属变更)。
+func TestTransferToLine_GateOutageFailClosed(t *testing.T) {
+	uc, repo, _ := newTestUsecase(500, 3)
+	seedShard(repo, "hub-a", 1, 1)
+	seedShard(repo, "hub-b", 2, 1)
+	seedPlayer(repo, 1001, "hub-a", 1)
+	uc.SetSessionGate(&ackFakeSessionGate{err: errors.New("redis down")})
+
+	ctx := transferCtxWithJTI("jti-cur")
+	if _, err := uc.TransferToLineForPlayer(ctx, 1001, 2); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("gate outage must fail closed, code=%v err=%v", errcode.As(err), err)
+	}
+	if a, _, _ := repo.GetAssignment(context.Background(), 1001); a.GetHubPodName() != "hub-a" {
+		t.Fatalf("assignment must not move on gate outage, pod=%s", a.GetHubPodName())
+	}
+}
+
+// 现行会话正常放行(终检不误杀);CAS 后复核第二次调用同代通过。
+func TestTransferToLine_CurrentCallerAllowed(t *testing.T) {
+	uc, repo, _ := newTestUsecase(500, 3)
+	seedShard(repo, "hub-a", 1, 1)
+	seedShard(repo, "hub-b", 2, 1)
+	seedPlayer(repo, 1001, "hub-a", 1)
+	uc.SetSessionGate(&ackFakeSessionGate{jti: "jti-cur", found: true})
+
+	ctx := transferCtxWithJTI("jti-cur")
+	res, err := uc.TransferToLineForPlayer(ctx, 1001, 2)
+	if err != nil {
+		t.Fatalf("current caller transfer err: %v", err)
+	}
+	if res.NewShardID != 2 || res.NewHubTicket == "" {
+		t.Fatalf("want shard 2 with ticket, got %+v", res)
+	}
+}
+
+// 确定性交错:前置终检通过后、CAS 落地前发生顶号 → post-check 检出,扣留票据。
+// 归属已切换由清退链/新会话下次 resolve 收敛;旧设备拿不到任何可用票。
+func TestTransferToLine_PostCASRotationWithholdsTicket(t *testing.T) {
+	uc, repo, _ := newTestUsecase(500, 3)
+	seedShard(repo, "hub-a", 1, 1)
+	seedShard(repo, "hub-b", 2, 1)
+	seedPlayer(repo, 1001, "hub-a", 1)
+	// 第一次(前置终检)返回 jti-old(现行) → 通过;第二次(post-check)返回 jti-new。
+	uc.SetSessionGate(&ackFakeSessionGate{queue: []string{"jti-old", "jti-new"}, jti: "jti-new", found: true})
+
+	ctx := transferCtxWithJTI("jti-old")
+	res, err := uc.TransferToLineForPlayer(ctx, 1001, 2)
+	if errcode.As(err) != errcode.ErrSessionSuperseded {
+		t.Fatalf("post-CAS rotation must withhold the ticket, res=%+v code=%v err=%v",
+			res, errcode.As(err), err)
+	}
+	if res != nil {
+		t.Fatalf("no ticket may be delivered to a superseded caller, got %+v", res)
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
@@ -88,6 +89,21 @@ func main() {
 	db := mysqlx.MustNewClient(cfg.Node.MySQLClient)
 	defer func() { _ = db.Close() }()
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
+
+	// 启动期 schema 检查(R8 收口):守卫行表是后补的(R5 复审 P1-2/3/4),既有库不会
+	// 自动重放 init SQL;缺表时 acquirePairGuard/acquirePlayerGuard 首条 INSERT 即炸,
+	// 好友操作全量内部错误。fail-fast 并指向迁移 SQL。
+	{
+		schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if serr := mysqlx.CheckTables(schemaCtx, db,
+			"tools/migrate/migrations/pandora_social/000006_friend_guard_tables.up.sql(或重放 deploy/mysql-init/06-social-tables.sql)",
+			"friendships", "friend_requests", "blocks",
+			"friend_player_guards", "friend_pair_guards"); serr != nil {
+			helper.Errorw("msg", "mysql_schema_check_failed", "err", serr)
+			os.Exit(1)
+		}
+	}
 
 	// 4. Snowflake(request_id 生成；node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
 	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)

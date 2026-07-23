@@ -116,7 +116,7 @@ func main() {
 	}
 
 	// 5. data 层装配
-	accountRepo, roleRepo, mode, db := mustBuildAccountRepo(&cfg, helper)
+	accountRepo, roleRepo, sessionGenRepo, mode, db := mustBuildAccountRepo(&cfg, helper)
 	defer func() {
 		if db != nil {
 			_ = db.Close()
@@ -200,6 +200,29 @@ func main() {
 
 	// 6. biz + service 装配
 	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, roleRepo, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, v2Verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister, cfg.Login.AllowedRoleIDs, cfg.Login.DevAllowAnyRole)
+	// R7 复审 P0-4 + 收口:会话代际 MySQL 落库(fail-closed 定序权威),与 player_roles
+	// 同库同连接池;Login 先 MySQL 分配单调代际再条件写 Redis,并发登录确定性定序。
+	// SetRole 的 MySQL 代际强制复核由 session_generation_enforce 分阶段激活(默认只 emit)。
+	loginUC.SetSessionGenerationRepo(sessionGenRepo)
+	loginUC.SetSessionGenerationEnforce(cfg.Login.SessionGenerationEnforce)
+	if cfg.Login.SessionGenerationEnforce {
+		helper.Infow("msg", "session_generation_enforce_active",
+			"note", "SetRole 同事务复核 MySQL 会话代际;前提=全 fleet emit 且旧版本已排空")
+	} else {
+		helper.Infow("msg", "session_generation_emit_only",
+			"note", "Login 双写会话代际但 SetRole 不强制;滚动排空后开 login.session_generation_enforce")
+	}
+	// R8 收口(P0-5):票据兑换点空 sjti 强制门,与 hub_allocator 的 require_ticket_sjti
+	// 同语义。首次上线必须 false(兼容档),全 fleet 签发面必带 sjti + 旧版本排空 +
+	// 等满票据最大 TTL 后再置 true(顺序见 docs/design/session-generation-rollout.md)。
+	loginUC.SetRequireTicketSJTI(cfg.Login.RequireTicketSJTI)
+	if cfg.Login.RequireTicketSJTI {
+		helper.Infow("msg", "ticket_sjti_binding_enforced",
+			"note", "VerifyDSTicket 硬拒空 sjti 票;前提=全 fleet 签发面必带 sjti 且旧票已过期")
+	} else {
+		helper.Infow("msg", "ticket_sjti_binding_compat",
+			"note", "空 sjti 告警放行(混版兼容窗);签发面排空后开 login.require_ticket_sjti")
+	}
 
 	// owner 迁移登出释放(owner-authority.md migrate ⑤):owner_addr 空 = 不启用。
 	if cfg.Login.OwnerAddr != "" {
@@ -226,6 +249,8 @@ func main() {
 			"warn", "login.allowed_role_ids empty and dev_allow_any_role false: SelectRole will reject all requests")
 	}
 	ticketUC := biz.NewTicketUsecase(signer, verifier, jtiRepo)
+	// R7 复审 P2-1:票据兑换点会话现行性门前置到 replay marker 之前(LoginUsecase 实现)。
+	ticketUC.SetTicketSessionGate(loginUC)
 	// DSTicket v2(RS256,方案 B):配置了私钥即启用;启用后 login 侧 battle 票全部走 v2
 	// 实例绑定签发,hub 票拒签(只能由 hub_allocator 签)。加载失败直接拒绝启动(fail-closed)。
 	if cfg.Login.DSTicket.SignerEnabled() {
@@ -351,10 +376,11 @@ func main() {
 }
 
 // mustBuildAccountRepo 连 MySQL 构造账号仓储,失败致命退出。
-// 返回 (accountRepo, roleRepo, "mysql", *sql.DB)。dev 免密 / 首登自动注册由 biz 层的
+// 返回 (accountRepo, roleRepo, sessionGenRepo, "mysql", *sql.DB)。dev 免密 / 首登自动注册由 biz 层的
 // dev_skip_password / dev_auto_register 负责,不再种子固定 mock 账号。
 // roleRepo(选角权威化 2026-07-08):player_roles 表仓储,与账号表共库共连接池。
-func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, data.PlayerRoleRepo, string, sqlDBLike) {
+// sessionGenRepo(R7 复审 P0-4):player_session_generations 会话代际仓储,同库同连接池。
+func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, data.PlayerRoleRepo, data.SessionGenerationRepo, string, sqlDBLike) {
 	if cfg.Node.MySQLClient.DSN == "" {
 		h.Errorw("msg", "mysql_dsn_required", "hint", "set node.mysql_client.dsn to pandora_account DSN")
 		os.Exit(1)
@@ -372,11 +398,19 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, d
 	// 自动重放 init SQL;缺表时 SelectRole 落库必炸、Login 读已选角持续告警。fail-fast 并指向迁移 SQL。
 	schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if serr := mysqlx.CheckTables(schemaCtx, db, "deploy/mysql-init/02-account-tables.sql", "player_roles"); serr != nil {
+	if serr := mysqlx.CheckTables(schemaCtx, db, "deploy/mysql-init/02-account-tables.sql", "player_roles", "player_session_generations"); serr != nil {
 		h.Errorw("msg", "mysql_schema_check_failed", "err", serr)
 		os.Exit(1)
 	}
-	return data.NewMySQLAccountRepo(db), data.NewMySQLPlayerRoleRepo(db), "mysql", db
+	// 列级检查(R8 收口):player_session_generations 的 generation 列是 000003 迁移新增,
+	// 早期只建过旧版表的库表名检查会通过、运行期首条含 generation 的 SQL 才炸。fail-fast。
+	if serr := mysqlx.CheckColumns(schemaCtx, db,
+		"tools/migrate/migrations/pandora_account/000003_session_generations.up.sql",
+		"player_session_generations", "sess_jti", "generation"); serr != nil {
+		h.Errorw("msg", "mysql_schema_check_failed", "err", serr)
+		os.Exit(1)
+	}
+	return data.NewMySQLAccountRepo(db), data.NewMySQLPlayerRoleRepo(db), data.NewMySQLSessionGenerationRepo(db), "mysql", db
 }
 
 // mustBuildRedisRepos 按 cfg 决定是否启 Redis Session / JTI repo。

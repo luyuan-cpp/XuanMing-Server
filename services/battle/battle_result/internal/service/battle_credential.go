@@ -111,6 +111,10 @@ func (c *redisBattleCredentialStateChecker) AuthorizeResult(
 		AuthGen: cred.Gen, AuthJTI: cred.JTI, AuthExpMs: cred.ExpMs, AuthKid: cred.Kid,
 		AuthTokenSHA256: cred.TokenSHA256, AuthWriterEpoch: cred.WriterEpoch,
 		AuthorizedAtMs: nowMs, PlayerIDs: playerIDs,
+		// canonical game_mode/map_id 与 roster 同源:取自已通过上方精确比对的
+		// BattleStorageRecord 快照,不做二次 Redis 查询,也绝不用 DS 请求体补值。
+		// 滚动升级前的旧记录 game_mode 可能为空,biz 层按"canonical 未知"保守处理。
+		GameMode: battle.GetGameMode(), MapID: battle.GetMapId(),
 	}, nil
 }
 

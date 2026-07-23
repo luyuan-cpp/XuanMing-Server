@@ -41,7 +41,7 @@ func TestAssignHubCanaryPersistsActualTrackAndFallback(t *testing.T) {
 			trackCandidate("hub-canary", releasetrack.Canary, 2),
 		}}
 		uc, repo := newTrackUsecase(t, 100, fleet)
-		if _, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0, 0); err != nil {
+		if _, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0, 0, ""); err != nil {
 			t.Fatal(err)
 		}
 		assignment, found, _ := repo.GetAssignment(context.Background(), 1001)
@@ -55,7 +55,7 @@ func TestAssignHubCanaryPersistsActualTrackAndFallback(t *testing.T) {
 			trackCandidate("hub-stable", releasetrack.Stable, 1),
 		}}
 		uc, repo := newTrackUsecase(t, 100, fleet)
-		if _, err := uc.AssignHub(context.Background(), 1002, "global", 0, 0, 0); err != nil {
+		if _, err := uc.AssignHub(context.Background(), 1002, "global", 0, 0, 0, ""); err != nil {
 			t.Fatal(err)
 		}
 		assignment, _, _ := repo.GetAssignment(context.Background(), 1002)
@@ -64,7 +64,7 @@ func TestAssignHubCanaryPersistsActualTrackAndFallback(t *testing.T) {
 		}
 		// 后续 canary 出现也不能重算 cohort 把已有 stable assignment 搬轨。
 		fleet.candidates = append(fleet.candidates, trackCandidate("hub-canary", releasetrack.Canary, 2))
-		if _, err := uc.AssignHub(context.Background(), 1002, "global", 0, 0, 0); err != nil {
+		if _, err := uc.AssignHub(context.Background(), 1002, "global", 0, 0, 0, ""); err != nil {
 			t.Fatal(err)
 		}
 		again, _, _ := repo.GetAssignment(context.Background(), 1002)
@@ -79,7 +79,7 @@ func TestAssignHubStableNeverFallsForwardToCanary(t *testing.T) {
 		trackCandidate("hub-canary", releasetrack.Canary, 2),
 	}}
 	uc, _ := newTrackUsecase(t, 0, fleet)
-	_, err := uc.AssignHub(context.Background(), 1003, "global", 0, 0, 0)
+	_, err := uc.AssignHub(context.Background(), 1003, "global", 0, 0, 0, "")
 	if errcode.As(err) != errcode.ErrHubNoAvailable {
 		t.Fatalf("err=%v", err)
 	}

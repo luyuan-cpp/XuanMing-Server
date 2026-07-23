@@ -296,6 +296,72 @@ func TestOfflineBuffer_MalformedMemberSkipped(t *testing.T) {
 	}
 }
 
+// evalFailClient 包装 *redis.Client,注入 Lua 执行失败(EvalSha/Eval 皆错),其余命令
+// 正常——模拟「ZRange 读成功、markCorruptScript(fl 记账)失败」的部分失败交错。
+type evalFailClient struct {
+	*redis.Client
+}
+
+func (c *evalFailClient) failCmd(ctx context.Context) *redis.Cmd {
+	cmd := redis.NewCmd(ctx)
+	cmd.SetErr(context.DeadlineExceeded)
+	return cmd
+}
+func (c *evalFailClient) Eval(ctx context.Context, _ string, _ []string, _ ...interface{}) *redis.Cmd {
+	return c.failCmd(ctx)
+}
+func (c *evalFailClient) EvalSha(ctx context.Context, _ string, _ []string, _ ...interface{}) *redis.Cmd {
+	return c.failCmd(ctx)
+}
+
+// R7 收口(P1):fl 记账失败时,坏帧之上的好帧必须扣留——否则客户端游标越过坏帧
+// (Range 严格 >afterCursor),坏 member 永远不再被扫描,丢失成为永久静默漏报。
+// fl 记账成功后恢复全量交付,坏帧折进 fl 由 LostSince 报给 resync。
+func TestOfflineBuffer_CorruptFlFailureWithholdsFramesAbove(t *testing.T) {
+	repo, mr := newTestRepo(t, time.Minute, 0)
+	ctx := context.Background()
+	const player = uint64(901)
+
+	c1 := buffer(t, repo, player, 0, "below") // 坏帧之下的好帧
+	// 坏 member(无 %020d 前缀 = 非法格式)插在 c1 与下一好帧之间。
+	if _, err := mr.ZAdd(offlineKey(player), float64(c1+50), "corrupt-raw-member"); err != nil {
+		t.Fatalf("seed corrupt member: %v", err)
+	}
+	c2 := buffer(t, repo, player, 0, "above") // 坏帧之上的好帧
+	if c2 <= c1+50 {
+		t.Fatalf("test layout broken: c2=%d must exceed corrupt score=%d", c2, c1+50)
+	}
+
+	// ① fl 记账失败:只交付坏帧之下的帧,坏帧之上扣留(游标不得越过未记账丢失)。
+	failRdb := &evalFailClient{Client: redis.NewClient(&redis.Options{Addr: mr.Addr()})}
+	t.Cleanup(func() { _ = failRdb.Client.Close() })
+	failRepo := NewRedisOfflineCacheRepo(failRdb, time.Minute, 0)
+	got, err := failRepo.Range(ctx, player, 0)
+	if err != nil {
+		t.Fatalf("Range with failing fl accounting err=%v", err)
+	}
+	if len(got) != 1 || string(got[0].Frame.GetPayload()) != "below" {
+		t.Fatalf("must withhold frames above unrecorded loss, got=%+v", got)
+	}
+	// 坏 member 未被删除(自愈失败保留现场,下一轮重扫重试)。
+	if _, err := mr.ZScore(offlineKey(player), "corrupt-raw-member"); err != nil {
+		t.Fatalf("corrupt member must survive failed cleanup: %v", err)
+	}
+
+	// ② fl 记账成功(正常 client):全量交付 + 坏帧折进 fl,LostSince 可检出。
+	got, err = repo.Range(ctx, player, 0)
+	if err != nil {
+		t.Fatalf("Range err=%v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("after successful fl accounting both good frames deliver, got=%+v", got)
+	}
+	lost, err := repo.LostSince(ctx, player, c1)
+	if err != nil || lost != c1+50 {
+		t.Fatalf("fl must record the corrupt cursor: lost=%d err=%v want=%d", lost, err, c1+50)
+	}
+}
+
 // ── gap 检测(R4 P1-3 → R4 复审 P1-2:LostSince 返回丢失上界)────────────────────
 
 // 用例 10:条数修剪产生确定丢失 → LostSince 对被修剪区间返回丢失上界(=fl),

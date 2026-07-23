@@ -51,6 +51,26 @@ type LoginConf struct {
 	// 量级 = 运营操作数,§9.24 登记豁免)。
 	DeviceRetentionDays int `yaml:"device_retention_days,omitempty" json:"device_retention_days,omitempty"`
 
+	// SessionGenerationEnforce 是 SetRole 会话代际强制门(R7 收口,滚动发布分阶段激活)。
+	// false(默认):Login 照常把单调代际写进 MySQL(emit/双写),SetRole 只做 Redis
+	// precommit 复核;true:SetRole 同事务 FOR UPDATE 复核 MySQL 代际,确定性挡旧会话。
+	// 激活前提(顺序硬约束,提前开会误拒合法会话):
+	//   ① pandora_account 已跑 000003 迁移(player_session_generations 含 generation 列);
+	//   ② 全 fleet Login 已升级到会写代际的版本,旧版本 Pod 已排空;
+	//   ③ 观察 session_generation_persist_failed 为零后再置 true 滚动重启。
+	SessionGenerationEnforce bool `yaml:"session_generation_enforce,omitempty" json:"session_generation_enforce,omitempty"`
+
+	// RequireTicketSJTI 是 VerifyDSTicket 兑换点空 sjti 强制门(R8 收口,P0-5 滚动兼容;
+	// 与 hub_allocator 的 session_gate.require_ticket_sjti 同语义、按服务独立激活)。
+	// false(默认):不带 sjti 的票据告警放行(混版兼容窗:旧 matchmaker/旧 hub_allocator
+	// 仍持续签空 sjti 票);非空 sjti 始终强制复核会话现行性,不受本门影响。
+	// true:空 sjti 硬拒。激活前提(顺序硬约束,提前开会硬拒旧签发面的存量合法票):
+	//   ① 全 fleet matchmaker / hub_allocator 已升级为签票必带 sjti,旧版本 Pod 已排空;
+	//   ② 再等满一个票据最大 TTL(v2 RS256 上限 180s;legacy HS256 为 ds_ticket_ttl,默认 5min);
+	//   ③ 观察 ticket_missing_session_binding_compat_allow 日志为零后再置 true 滚动重启。
+	// 详见 docs/design/session-generation-rollout.md。
+	RequireTicketSJTI bool `yaml:"require_ticket_sjti,omitempty" json:"require_ticket_sjti,omitempty"`
+
 	// RequireHubAssignmentBinding 是 Hub DSTicket 归属绑定的机械激活栅栏。
 	// false(默认):滚动兼容旧的无绑定 hub 票，但带绑定票仍会严格查 Redis 当前归属。
 	// true:拒绝所有无绑定 hub 票，并禁止 login 在 hub_allocator 缺失/失败时自签回退。

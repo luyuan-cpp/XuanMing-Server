@@ -33,7 +33,7 @@ func (r *rotatingSessionRepo) GetJTI(_ context.Context, _ uint64) (string, bool,
 }
 
 func newFenceUsecase(t *testing.T, sessions interface {
-	Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration) error
+	Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration, gen uint64) error
 	Delete(ctx context.Context, playerID uint64) error
 	GetJTI(ctx context.Context, playerID uint64) (string, bool, error)
 	DeleteIfJTI(ctx context.Context, playerID uint64, jti string) (bool, error)

@@ -248,11 +248,13 @@ type serviceBattleRepo struct {
 	saveErr  error
 	saved    bool
 	terminal *data.TerminalReleaseRecord
+	// result 是首笔落库时的 BattleResult 快照(biz 覆盖 canonical 元数据之后)。
+	result *battlev1.BattleResult
 }
 
 func (r *serviceBattleRepo) SaveResult(
 	_ context.Context,
-	_ *battlev1.BattleResult,
+	result *battlev1.BattleResult,
 	_ []data.OutboxRecord,
 	_ []data.DropOutboxRecord,
 	terminal *data.TerminalReleaseRecord,
@@ -265,6 +267,7 @@ func (r *serviceBattleRepo) SaveResult(
 		return true, data.ProgressSettleInfo{}, nil
 	}
 	r.saved = true
+	r.result = proto.Clone(result).(*battlev1.BattleResult)
 	if terminal != nil {
 		copyRecord := *terminal
 		copyRecord.ID = 1
@@ -480,6 +483,80 @@ func TestReportResultRejectsRosterDriftBeforeAnySideEffect(t *testing.T) {
 					f.repo.saved, f.repo.terminal, f.reader.recorded)
 			}
 		})
+	}
+}
+
+// TestAuthorizeResultCopiesCanonicalGameModeAndMapID(测试一):AuthorizeResult 必须
+// 从已通过精确比对的 canonical BattleStorageRecord 复制 game_mode/map_id 进
+// TerminalReleaseRecord(与 roster 同源,不做二次查询、不从 DS 请求补值),
+// 且既有 credential tuple / roster 语义不退化。
+func TestAuthorizeResultCopiesCanonicalGameModeAndMapID(t *testing.T) {
+	cred, rec := validBattleCredential()
+	battle := &dsv1.BattleStorageRecord{
+		MatchId: 9, DsPodName: "battle-9", State: "running", AllocationId: "alloc-9",
+		GameserverUid: "uid-9", InstanceEpoch: 3, LastVerifiedGen: 7,
+		LastVerifiedJti: "j7", LastVerifiedWriterEpoch: auth.DSAuthWriterEpochV2,
+		PlayerIds: []uint64{2, 1}, GameMode: "pve_coop", MapId: 10,
+	}
+	checker := &redisBattleCredentialStateChecker{
+		reader: &battleAuthReaderStub{rec: rec, battle: battle, found: true},
+		now:    func() time.Time { return battleCredentialNow }, maxActiveHeartbeatAge: 30 * time.Second,
+	}
+	proof, err := checker.AuthorizeResult(context.Background(), 9, cred)
+	if err != nil {
+		t.Fatalf("AuthorizeResult err: %v", err)
+	}
+	if proof.GameMode != "pve_coop" || proof.MapID != 10 {
+		t.Fatalf("canonical metadata not copied: game_mode=%q map_id=%d", proof.GameMode, proof.MapID)
+	}
+	if !reflect.DeepEqual(proof.PlayerIDs, []uint64{1, 2}) {
+		t.Fatalf("canonical roster drifted: %v", proof.PlayerIDs)
+	}
+	if proof.MatchID != 9 || proof.AllocationID != "alloc-9" || proof.DSPodName != "battle-9" ||
+		proof.GameserverUID != "uid-9" || proof.InstanceEpoch != 3 ||
+		proof.AuthGen != 7 || proof.AuthJTI != "j7" || proof.AuthExpMs != cred.ExpMs ||
+		proof.AuthKid != "kid7" || proof.AuthTokenSHA256 != "hash7" ||
+		proof.AuthWriterEpoch != auth.DSAuthWriterEpochV2 ||
+		proof.AuthorizedAtMs != battleCredentialNow.UnixMilli() {
+		t.Fatalf("credential tuple regressed: %+v", proof)
+	}
+}
+
+// TestReportResultPersistsCanonicalPVEOverForgedRequest(测试二端到端):全链
+// Guard → AuthorizeResult(复制 canonical)→ ReportAuthorizedResult(覆盖请求体):
+// canonical pve_coop 下 DS 伪报 game_mode/map_id/mmr_delta 全部无效,落库以
+// canonical 为准且 delta 全 0,terminal release / receipt 仍正常生成。
+func TestReportResultPersistsCanonicalPVEOverForgedRequest(t *testing.T) {
+	f := newGuardedReportFixture(t)
+	f.reader.battle.GameMode = "pve_coop"
+	f.reader.battle.MapId = 10
+	req := proto.Clone(f.req).(*battlev1.ReportResultRequest)
+	req.Result.GameMode = "5v5_ranked"
+	req.Result.MapId = 99
+	req.Result.Stats[0].MmrDelta = 77
+	req.Result.Stats[1].MmrDelta = -77
+
+	resp, err := f.svc.ReportResult(guardedReportContext(f.token), req)
+	if err != nil || resp.GetCode() != commonv1.ErrCode_OK || resp.GetAlreadyRecorded() {
+		t.Fatalf("resp=%+v err=%v", resp, err)
+	}
+	if f.repo.result == nil {
+		t.Fatal("settlement result not persisted")
+	}
+	if f.repo.result.GetGameMode() != "pve_coop" || f.repo.result.GetMapId() != 10 {
+		t.Fatalf("persisted metadata not canonical: game_mode=%q map_id=%d",
+			f.repo.result.GetGameMode(), f.repo.result.GetMapId())
+	}
+	for _, s := range f.repo.result.GetStats() {
+		if s.GetMmrDelta() != 0 {
+			t.Fatalf("canonical pve player %d mmr_delta got %d want 0", s.GetPlayerId(), s.GetMmrDelta())
+		}
+	}
+	if f.repo.terminal == nil || f.repo.terminal.GameMode != "pve_coop" || f.repo.terminal.MapID != 10 {
+		t.Fatalf("terminal proof missing canonical metadata: %+v", f.repo.terminal)
+	}
+	if f.reader.recorded != 1 {
+		t.Fatalf("immediate receipt calls=%d want 1", f.reader.recorded)
 	}
 }
 

@@ -65,3 +65,47 @@ func CheckTables(ctx context.Context, db *sql.DB, migrationHint string, tables .
 	}
 	return nil
 }
+
+// CheckColumns 校验当前连接所在库(DATABASE())中给定表是否包含全部指定列(R8 收口)。
+//
+// 背景:CheckTables 只按表名判存在,识别不出「表存在但缺新增列」的半旧 schema——
+// 例如 player_session_generations 在早期版本无 generation 列,旧库只补建过旧版表时
+// 启动期表名检查通过,运行期首条含新列的 SQL 才炸。依赖新增列的服务应在启动期
+// 用本函数把列缺失也 fail-fast,错误信息指向对应迁移。
+//
+// columns 为空时直接返回 nil。列名比较不区分大小写。
+func CheckColumns(ctx context.Context, db *sql.DB, migrationHint, table string, columns ...string) error {
+	if len(columns) == 0 {
+		return nil
+	}
+	rows, err := db.QueryContext(ctx,
+		`SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?`,
+		table)
+	if err != nil {
+		return fmt.Errorf("query information_schema.columns for %s: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	present := make(map[string]struct{}, len(columns))
+	for rows.Next() {
+		var name string
+		if serr := rows.Scan(&name); serr != nil {
+			return fmt.Errorf("scan column_name: %w", serr)
+		}
+		present[strings.ToLower(name)] = struct{}{}
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return fmt.Errorf("iterate information_schema.columns: %w", rerr)
+	}
+
+	var missing []string
+	for _, c := range columns {
+		if _, ok := present[strings.ToLower(c)]; !ok {
+			missing = append(missing, c)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("表 %s 缺少列 %v:schema 是旧版本(表存在但未跑新增列迁移),请对当前库执行 %s 后再启动", table, missing, migrationHint)
+	}
+	return nil
+}

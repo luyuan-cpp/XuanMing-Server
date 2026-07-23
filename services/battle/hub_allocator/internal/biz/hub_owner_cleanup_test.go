@@ -44,7 +44,7 @@ func newOwnerCleanupFixture(t *testing.T) *ownerCleanupFixture {
 	}
 	epoch1 := activate(t, uc, authRepo, pod1, "uid-A", 42, "j42", now)
 	epoch2 := activate(t, uc, authRepo, pod2, "uid-B", 52, "j52", now)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("source assignment: %v", err)
 	}
 	source, found, err := repo.GetAssignment(ctx, 1001)
@@ -57,7 +57,7 @@ func newOwnerCleanupFixture(t *testing.T) *ownerCleanupFixture {
 		JTI: "j52", TokenSHA256: "sha-j52", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch}
 	sourceAdmissionID := uuid.NewString()
 	if got, err := uc.AcknowledgeAdmission(ctx, 1001, source.GetAssignmentId(), pod1,
-		sourceAdmissionID, 1, sourceCredential); err != nil || !got.Admitted {
+		sourceAdmissionID, 1, "", sourceCredential); err != nil || !got.Admitted {
 		t.Fatalf("source admission=%+v err=%v", got, err)
 	}
 	return &ownerCleanupFixture{uc: uc, repo: repo, authRepo: authRepo, mr: mr, source: source,
@@ -150,7 +150,7 @@ func admitRecoveredTarget(t *testing.T, f *ownerCleanupFixture, uc *HubUsecase,
 	target *hubv1.HubAssignmentStorageRecord) {
 	t.Helper()
 	got, err := uc.AcknowledgeAdmission(context.Background(), 1001,
-		target.GetAssignmentId(), target.GetHubPodName(), uuid.NewString(), 2, f.targetCredential)
+		target.GetAssignmentId(), target.GetHubPodName(), uuid.NewString(), 2, "", f.targetCredential)
 	if err != nil || !got.Admitted {
 		t.Fatalf("target admission=%+v err=%v", got, err)
 	}

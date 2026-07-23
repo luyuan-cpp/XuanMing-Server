@@ -180,3 +180,7 @@ local_hub:
 # -Prod 产物由 gen_cluster_config.ps1 机械置 true(漏配端点拒启)。
 session_gate:
   require: false
+  # 票据 sjti 绑定强制门(R7 收口,分阶段激活):false(默认)= 兼容档,ACK 收到空 sjti
+  # 告警放行(旧 Hub DS 不转发 sjti/旧签发面残票混版可用);true = 硬拒。
+  # 激活前提:全 fleet Hub DS 已转发 sjti、旧 DS 排空、等满一个票据最大 TTL。
+  require_ticket_sjti: false

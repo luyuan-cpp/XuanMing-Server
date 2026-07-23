@@ -41,6 +41,8 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 
 该路线由宿主 Go 交叉编译业务二进制,再仅用 Docker 封装/`docker save` 成离线镜像包,不走容器内 `go build` 慢路径。只有宿主 Go 不可用或 host 构建明确失败时,才报告原因并经人确认后改用容器内构建。
 
+**tar 不入库**(2026-07-23 起):离线包发布走 `publish_offline_images.ps1`(git sha 版本戳 + 制品目录不可变发布),目标机用 `fetch_offline_images.ps1` 拉取;禁止把任何 tar `git add`/`svn add`。发布线见 `docs/design/release-pipeline.md`。
+
 遇 §3 禁令、§10 红线,或要装/升级工具、改系统环境、写 secrets、碰生产、push/tag → **立刻停止报告**,等授权。
 
 **大范围改动不设文件数硬上限**:只要方向标准、正确、比原方案更好,可放手做大范围重构 / 批量改动,不必因文件数多而停手;但完成后须在汇报里如实列出改动范围、动机与验证结果,方便 review。若属于推翻既有设计决策,仍按 §7 先写 `decision-revisit` 文档等人拍板。

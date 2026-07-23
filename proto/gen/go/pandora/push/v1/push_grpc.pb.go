@@ -53,18 +53,25 @@ type PushServiceClient interface {
 	// 语义:**已受理 + 长连**(不是立即完成型 RPC)。
 	// 客户端拿到 stream 后,等待 server 推 PushFrame;直到 client 主动关闭或 server 断开。
 	//
-	// server 端流程(2026-07-22 审计 v2 拉取式投递 + 会话门,R5 注释同步实现):
+	// server 端流程(2026-07-22 审计 v2 拉取式投递 + 会话门;R7 复审 P1-1 注释同步实现):
 	//  1. 会话现行性门:请求 jti 必须是 login 会话权威(pandora:sess)当前一代,校验与
 	//     连接注册在同玩家锁内原子完成;顶号 → gRPC ABORTED(错误码 14),客户端只能转
 	//     交互登录,不得自动重登反顶。
 	//  2. 补推:从投递缓冲(redis ZSET pandora:push:offline:<player_id>,score = 每玩家
-	//     严格递增的投递游标)拉取游标 > last_seen_ms 的帧;拉空后做 gap 终检,确证丢失
-	//     则发 resync 信号帧。
+	//     严格递增的投递游标)拉取游标 > last_seen_ms 的帧。**每页拉取前**先对照修剪
+	//     哨兵(fl)检测确定丢失:检出即**先发 resync 信号帧、再发幸存帧**(同一段丢失
+	//     只信号一次,游标跳到丢失上界);解析失败的坏 member 原子折进 fl 哨兵并物理
+	//     删除,折账失败则扣发坏帧游标之上的所有帧(宁可重推,绝不静默跳过)。
 	//  3. 稳态:连接写者循环「本地唤醒信号 / 跨 Pod pub/sub 唤醒 / 30s 兜底轮询 → 拉缓冲
 	//     投递」;kafka 消费侧先把帧原子写入缓冲(单 key Lua 分配游标)再唤醒,最后 ack
 	//     ——缓冲是唯一定序与交付权威,不存在「内存索引直发」路径。
-	//  4. 每批投递前复核会话现行性(跨 Pod 顶号 fencing):轮换后产生的帧旧流零交付;
+	//  4. 每帧写出前复核会话现行性(跨 Pod 顶号 fencing):轮换后产生的帧旧流零交付;
 	//     流内另有独立看门狗周期复查,失效后取消流上下文并以可判别错误码关流。
+	//
+	// 客户端契约:收到 topic=pandora.push.resync 的信号帧,表示增量推送有确定丢失,
+	// 各业务域必须回源重拉权威快照(team/match/friend/DS recovery 已接;新增推送消费
+	// 域必须同步接入)。resync 无需 ACK:客户端游标不因信号帧前进,若信号帧本身丢失
+	// (连接断裂),重连补推会重新检出同一缺口再次发信号。
 	//
 	// 客户端流程(UE FHttpModule + 自研 grpc-web):
 	//   - HTTP POST /pandora.push.v1.PushService/Subscribe
@@ -115,18 +122,25 @@ type PushServiceServer interface {
 	// 语义:**已受理 + 长连**(不是立即完成型 RPC)。
 	// 客户端拿到 stream 后,等待 server 推 PushFrame;直到 client 主动关闭或 server 断开。
 	//
-	// server 端流程(2026-07-22 审计 v2 拉取式投递 + 会话门,R5 注释同步实现):
+	// server 端流程(2026-07-22 审计 v2 拉取式投递 + 会话门;R7 复审 P1-1 注释同步实现):
 	//  1. 会话现行性门:请求 jti 必须是 login 会话权威(pandora:sess)当前一代,校验与
 	//     连接注册在同玩家锁内原子完成;顶号 → gRPC ABORTED(错误码 14),客户端只能转
 	//     交互登录,不得自动重登反顶。
 	//  2. 补推:从投递缓冲(redis ZSET pandora:push:offline:<player_id>,score = 每玩家
-	//     严格递增的投递游标)拉取游标 > last_seen_ms 的帧;拉空后做 gap 终检,确证丢失
-	//     则发 resync 信号帧。
+	//     严格递增的投递游标)拉取游标 > last_seen_ms 的帧。**每页拉取前**先对照修剪
+	//     哨兵(fl)检测确定丢失:检出即**先发 resync 信号帧、再发幸存帧**(同一段丢失
+	//     只信号一次,游标跳到丢失上界);解析失败的坏 member 原子折进 fl 哨兵并物理
+	//     删除,折账失败则扣发坏帧游标之上的所有帧(宁可重推,绝不静默跳过)。
 	//  3. 稳态:连接写者循环「本地唤醒信号 / 跨 Pod pub/sub 唤醒 / 30s 兜底轮询 → 拉缓冲
 	//     投递」;kafka 消费侧先把帧原子写入缓冲(单 key Lua 分配游标)再唤醒,最后 ack
 	//     ——缓冲是唯一定序与交付权威,不存在「内存索引直发」路径。
-	//  4. 每批投递前复核会话现行性(跨 Pod 顶号 fencing):轮换后产生的帧旧流零交付;
+	//  4. 每帧写出前复核会话现行性(跨 Pod 顶号 fencing):轮换后产生的帧旧流零交付;
 	//     流内另有独立看门狗周期复查,失效后取消流上下文并以可判别错误码关流。
+	//
+	// 客户端契约:收到 topic=pandora.push.resync 的信号帧,表示增量推送有确定丢失,
+	// 各业务域必须回源重拉权威快照(team/match/friend/DS recovery 已接;新增推送消费
+	// 域必须同步接入)。resync 无需 ACK:客户端游标不因信号帧前进,若信号帧本身丢失
+	// (连接断裂),重连补推会重新检出同一缺口再次发信号。
 	//
 	// 客户端流程(UE FHttpModule + 自研 grpc-web):
 	//   - HTTP POST /pandora.push.v1.PushService/Subscribe

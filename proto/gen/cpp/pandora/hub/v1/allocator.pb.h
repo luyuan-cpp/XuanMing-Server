@@ -6516,6 +6516,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignHubRequest final : public ::g
   enum : int {
     kRegionFieldNumber = 2,
     kPlacementOperationIdFieldNumber = 6,
+    kSessionJtiFieldNumber = 8,
     kPlayerIdFieldNumber = 1,
     kTeamIdFieldNumber = 3,
     kPlacementVersionFieldNumber = 5,
@@ -6550,6 +6551,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignHubRequest final : public ::g
   const ::std::string& _internal_placement_operation_id() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_placement_operation_id(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_placement_operation_id();
+
+  public:
+  // string session_jti = 8 [json_name = "sessionJti"];
+  void clear_session_jti() ;
+  [[nodiscard]] const ::std::string& session_jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_session_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_session_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_session_jti();
+  void set_allocated_session_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_session_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_session_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_session_jti();
 
   public:
   // uint64 player_id = 1 [json_name = "playerId"];
@@ -6606,8 +6622,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignHubRequest final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 68,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 87,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -6637,6 +6653,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignHubRequest final : public ::g
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr region_;
     ::google::protobuf::internal::ArenaStringPtr placement_operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr session_jti_;
     ::uint64_t player_id_;
     ::uint64_t team_id_;
     ::uint64_t placement_version_;
@@ -7532,6 +7549,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AcknowledgeAdmissionRequest final :
     kHubPodNameFieldNumber = 3,
     kAdmissionIdFieldNumber = 4,
     kPlacementOperationIdFieldNumber = 7,
+    kSessionJtiFieldNumber = 9,
     kPlayerIdFieldNumber = 1,
     kAdmissionSeqFieldNumber = 5,
     kPlacementVersionFieldNumber = 6,
@@ -7597,6 +7615,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AcknowledgeAdmissionRequest final :
   ::std::string* PROTOBUF_NONNULL _internal_mutable_placement_operation_id();
 
   public:
+  // string session_jti = 9 [json_name = "sessionJti"];
+  void clear_session_jti() ;
+  [[nodiscard]] const ::std::string& session_jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_session_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_session_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_session_jti();
+  void set_allocated_session_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_session_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_session_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_session_jti();
+
+  public:
   // uint64 player_id = 1 [json_name = "playerId"];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -7641,8 +7674,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AcknowledgeAdmissionRequest final :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          0, 118,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 129,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7674,6 +7707,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AcknowledgeAdmissionRequest final :
     ::google::protobuf::internal::ArenaStringPtr hub_pod_name_;
     ::google::protobuf::internal::ArenaStringPtr admission_id_;
     ::google::protobuf::internal::ArenaStringPtr placement_operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr session_jti_;
     ::uint64_t player_id_;
     ::uint64_t admission_seq_;
     ::uint64_t placement_version_;
@@ -8835,7 +8869,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
 inline void AssignHubRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t AssignHubRequest::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AssignHubRequest.player_id)
@@ -8843,7 +8877,7 @@ inline ::uint64_t AssignHubRequest::player_id() const {
 }
 inline void AssignHubRequest::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AssignHubRequest.player_id)
 }
 inline ::uint64_t AssignHubRequest::_internal_player_id() const {
@@ -8923,7 +8957,7 @@ inline void AssignHubRequest::set_allocated_region(::std::string* PROTOBUF_NULLA
 inline void AssignHubRequest::clear_team_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t AssignHubRequest::team_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AssignHubRequest.team_id)
@@ -8931,7 +8965,7 @@ inline ::uint64_t AssignHubRequest::team_id() const {
 }
 inline void AssignHubRequest::set_team_id(::uint64_t value) {
   _internal_set_team_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AssignHubRequest.team_id)
 }
 inline ::uint64_t AssignHubRequest::_internal_team_id() const {
@@ -8947,7 +8981,7 @@ inline void AssignHubRequest::_internal_set_team_id(::uint64_t value) {
 inline void AssignHubRequest::clear_role_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t AssignHubRequest::role_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AssignHubRequest.role_id)
@@ -8955,7 +8989,7 @@ inline ::uint32_t AssignHubRequest::role_id() const {
 }
 inline void AssignHubRequest::set_role_id(::uint32_t value) {
   _internal_set_role_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AssignHubRequest.role_id)
 }
 inline ::uint32_t AssignHubRequest::_internal_role_id() const {
@@ -8971,7 +9005,7 @@ inline void AssignHubRequest::_internal_set_role_id(::uint32_t value) {
 inline void AssignHubRequest::clear_placement_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.placement_version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t AssignHubRequest::placement_version() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AssignHubRequest.placement_version)
@@ -8979,7 +9013,7 @@ inline ::uint64_t AssignHubRequest::placement_version() const {
 }
 inline void AssignHubRequest::set_placement_version(::uint64_t value) {
   _internal_set_placement_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AssignHubRequest.placement_version)
 }
 inline ::uint64_t AssignHubRequest::_internal_placement_version() const {
@@ -9059,7 +9093,7 @@ inline void AssignHubRequest::set_allocated_placement_operation_id(::std::string
 inline void AssignHubRequest::clear_source_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t AssignHubRequest::source_match_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AssignHubRequest.source_match_id)
@@ -9067,7 +9101,7 @@ inline ::uint64_t AssignHubRequest::source_match_id() const {
 }
 inline void AssignHubRequest::set_source_match_id(::uint64_t value) {
   _internal_set_source_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AssignHubRequest.source_match_id)
 }
 inline ::uint64_t AssignHubRequest::_internal_source_match_id() const {
@@ -9077,6 +9111,70 @@ inline ::uint64_t AssignHubRequest::_internal_source_match_id() const {
 inline void AssignHubRequest::_internal_set_source_match_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_match_id_ = value;
+}
+
+// string session_jti = 8 [json_name = "sessionJti"];
+inline void AssignHubRequest::clear_session_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& AssignHubRequest::session_jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.AssignHubRequest.session_jti)
+  return _internal_session_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AssignHubRequest::set_session_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.session_jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.AssignHubRequest.session_jti)
+}
+inline ::std::string* PROTOBUF_NONNULL AssignHubRequest::mutable_session_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_session_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.AssignHubRequest.session_jti)
+  return _s;
+}
+inline const ::std::string& AssignHubRequest::_internal_session_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.session_jti_.Get();
+}
+inline void AssignHubRequest::_internal_set_session_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AssignHubRequest::_internal_mutable_session_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.session_jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AssignHubRequest::release_session_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.AssignHubRequest.session_jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.session_jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.session_jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AssignHubRequest::set_allocated_session_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.session_jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.session_jti_.IsDefault()) {
+    _impl_.session_jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.AssignHubRequest.session_jti)
 }
 
 // -------------------------------------------------------------------
@@ -15247,7 +15345,7 @@ inline void HubMigrateEvent::_internal_set_ts_ms(::int64_t value) {
 inline void AcknowledgeAdmissionRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t AcknowledgeAdmissionRequest::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AcknowledgeAdmissionRequest.player_id)
@@ -15255,7 +15353,7 @@ inline ::uint64_t AcknowledgeAdmissionRequest::player_id() const {
 }
 inline void AcknowledgeAdmissionRequest::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AcknowledgeAdmissionRequest.player_id)
 }
 inline ::uint64_t AcknowledgeAdmissionRequest::_internal_player_id() const {
@@ -15463,7 +15561,7 @@ inline void AcknowledgeAdmissionRequest::set_allocated_admission_id(::std::strin
 inline void AcknowledgeAdmissionRequest::clear_admission_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.admission_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t AcknowledgeAdmissionRequest::admission_seq() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AcknowledgeAdmissionRequest.admission_seq)
@@ -15471,7 +15569,7 @@ inline ::uint64_t AcknowledgeAdmissionRequest::admission_seq() const {
 }
 inline void AcknowledgeAdmissionRequest::set_admission_seq(::uint64_t value) {
   _internal_set_admission_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AcknowledgeAdmissionRequest.admission_seq)
 }
 inline ::uint64_t AcknowledgeAdmissionRequest::_internal_admission_seq() const {
@@ -15487,7 +15585,7 @@ inline void AcknowledgeAdmissionRequest::_internal_set_admission_seq(::uint64_t 
 inline void AcknowledgeAdmissionRequest::clear_placement_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.placement_version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t AcknowledgeAdmissionRequest::placement_version() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AcknowledgeAdmissionRequest.placement_version)
@@ -15495,7 +15593,7 @@ inline ::uint64_t AcknowledgeAdmissionRequest::placement_version() const {
 }
 inline void AcknowledgeAdmissionRequest::set_placement_version(::uint64_t value) {
   _internal_set_placement_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AcknowledgeAdmissionRequest.placement_version)
 }
 inline ::uint64_t AcknowledgeAdmissionRequest::_internal_placement_version() const {
@@ -15575,7 +15673,7 @@ inline void AcknowledgeAdmissionRequest::set_allocated_placement_operation_id(::
 inline void AcknowledgeAdmissionRequest::clear_source_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t AcknowledgeAdmissionRequest::source_match_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AcknowledgeAdmissionRequest.source_match_id)
@@ -15583,7 +15681,7 @@ inline ::uint64_t AcknowledgeAdmissionRequest::source_match_id() const {
 }
 inline void AcknowledgeAdmissionRequest::set_source_match_id(::uint64_t value) {
   _internal_set_source_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AcknowledgeAdmissionRequest.source_match_id)
 }
 inline ::uint64_t AcknowledgeAdmissionRequest::_internal_source_match_id() const {
@@ -15593,6 +15691,70 @@ inline ::uint64_t AcknowledgeAdmissionRequest::_internal_source_match_id() const
 inline void AcknowledgeAdmissionRequest::_internal_set_source_match_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_match_id_ = value;
+}
+
+// string session_jti = 9 [json_name = "sessionJti"];
+inline void AcknowledgeAdmissionRequest::clear_session_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& AcknowledgeAdmissionRequest::session_jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.AcknowledgeAdmissionRequest.session_jti)
+  return _internal_session_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AcknowledgeAdmissionRequest::set_session_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.session_jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.AcknowledgeAdmissionRequest.session_jti)
+}
+inline ::std::string* PROTOBUF_NONNULL AcknowledgeAdmissionRequest::mutable_session_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_session_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.AcknowledgeAdmissionRequest.session_jti)
+  return _s;
+}
+inline const ::std::string& AcknowledgeAdmissionRequest::_internal_session_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.session_jti_.Get();
+}
+inline void AcknowledgeAdmissionRequest::_internal_set_session_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AcknowledgeAdmissionRequest::_internal_mutable_session_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.session_jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AcknowledgeAdmissionRequest::release_session_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.AcknowledgeAdmissionRequest.session_jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.session_jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.session_jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AcknowledgeAdmissionRequest::set_allocated_session_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.session_jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.session_jti_.IsDefault()) {
+    _impl_.session_jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.AcknowledgeAdmissionRequest.session_jti)
 }
 
 // -------------------------------------------------------------------

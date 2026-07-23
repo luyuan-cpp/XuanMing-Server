@@ -22,7 +22,19 @@ type PlayerRoleRepo interface {
 	GetRole(ctx context.Context, playerID uint64) (roleID uint32, err error)
 
 	// SetRole 覆盖式 upsert 玩家已选角色。幂等:重复设置同角色也成功。
-	SetRole(ctx context.Context, playerID uint64, roleID uint32) error
+	//
+	// expectedSessJTI 非空时(R7 复审 P0-4):在**同一 MySQL 事务内**,UPSERT 之后、COMMIT
+	// 之前对 player_session_generations 行做 SELECT ... FOR UPDATE,持久化会话代际与调用方
+	// jti 不一致 → 整个事务 ROLLBACK,角色写永不可见。行锁把「角色写」与「登录轮换代际写」
+	// 放进同一 InnoDB 串行化域:新登录把新 jti 落库(Login fail-closed 保证先于凭据交付)后,
+	// 旧会话的角色写事务必然读到新 jti 而回滚——不再存在 R6 版「Redis precommit 通过与
+	// COMMIT 之间被轮换」的跨存储窗口。
+	// 兼容窗:该玩家行不存在(部署前登录的存量会话,尚未经过一次新 Login 落库)时,退化为
+	// 仅 precommit 复核(与 R6 行为一致);下一次登录后即进入强 fencing。
+	//
+	// precommit 非 nil 时同样在事务内、COMMIT 之前执行(读 Redis 会话权威的既有防线,保留
+	// 作为纵深);返回错误则 ROLLBACK。
+	SetRole(ctx context.Context, playerID uint64, roleID uint32, expectedSessJTI string, precommit func(context.Context) error) error
 }
 
 // MySQLPlayerRoleRepo 基于 *sql.DB 的实现(pandora_account.player_roles)。
@@ -48,11 +60,51 @@ func (r *MySQLPlayerRoleRepo) GetRole(ctx context.Context, playerID uint64) (uin
 	return roleID, nil
 }
 
-func (r *MySQLPlayerRoleRepo) SetRole(ctx context.Context, playerID uint64, roleID uint32) error {
+func (r *MySQLPlayerRoleRepo) SetRole(ctx context.Context, playerID uint64, roleID uint32, expectedSessJTI string, precommit func(context.Context) error) error {
 	const q = `INSERT INTO player_roles(player_id, role_id) VALUES (?, ?)
 ON DUPLICATE KEY UPDATE role_id = VALUES(role_id)`
-	if _, err := r.db.ExecContext(ctx, q, playerID, roleID); err != nil {
+	// 两道防线都未启用时保持单语句路径(dev 裸跑/无会话权威),行为与历史一致。
+	if expectedSessJTI == "" && precommit == nil {
+		if _, err := r.db.ExecContext(ctx, q, playerID, roleID); err != nil {
+			return errcode.New(errcode.ErrInternal, "mysql set player role: %v", err)
+		}
+		return nil
+	}
+	// 事务内「UPSERT → 同事务代际复核(FOR UPDATE) → precommit 复核 → COMMIT」:
+	// 任一复核失败 ROLLBACK,角色写永不落地;崩溃在复核与 COMMIT 之间由事务自动回滚兜底。
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "begin set role tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, q, playerID, roleID); err != nil {
 		return errcode.New(errcode.ErrInternal, "mysql set player role: %v", err)
+	}
+	if expectedSessJTI != "" {
+		// R7 复审 P0-4:同事务域会话代际 fencing。FOR UPDATE 行锁保证与 Login 的代际
+		// upsert 串行化——新登录代际已落库则此处必然读到并回滚;此处先持锁提交,则
+		// 新登录的代际写在本事务之后,本次角色写序在轮换之前,语义等价「登录前写入」。
+		var currentJTI string
+		serr := tx.QueryRowContext(ctx,
+			`SELECT sess_jti FROM player_session_generations WHERE player_id = ? FOR UPDATE`,
+			playerID).Scan(&currentJTI)
+		switch {
+		case errors.Is(serr, sql.ErrNoRows):
+			// 兼容窗:部署前登录的存量会话尚无代际行,退化为 precommit(Redis)复核。
+		case serr != nil:
+			return errcode.New(errcode.ErrInternal, "mysql read session generation: %v", serr)
+		case currentJTI != expectedSessJTI:
+			return errcode.New(errcode.ErrSessionSuperseded,
+				"session superseded; role write rolled back")
+		}
+	}
+	if precommit != nil {
+		if err := precommit(ctx); err != nil {
+			return err // ROLLBACK by defer:检查不过,写不落地
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return errcode.New(errcode.ErrInternal, "commit set player role: %v", err)
 	}
 	return nil
 }

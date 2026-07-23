@@ -39,8 +39,11 @@ type HubAssignment struct {
 // sourceMatchID(Battle→Hub 回流 fence,2026-07-21):login 三态门证明原对局已终局时
 // 透传的原 Battle match_id;allocator 把它签进 hub 票据 source_match_id claim,
 // Hub DS 用它通过 locator 的 BATTLE→HUB guard。0 = 普通登录/非回流。
+//
+// sessionJTI(R6 复审 P0-3):请求方登录会话 jti;allocator 签进 hub 票据 sjti claim,
+// VerifyDSTicket 在线核销时复核会话现行性。空 = dev 无网关证据(票据不带 sjti,兼容窗)。
 type HubAssigner interface {
-	AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64) (*HubAssignment, error)
+	AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64, sessionJTI string) (*HubAssignment, error)
 }
 
 // GrpcHubAssigner 实现 HubAssigner,内嵌 grpc client。
@@ -62,13 +65,14 @@ func NewGrpcHubAssigner(conn *grpc.ClientConn) *GrpcHubAssigner {
 // AssignHub 调 HubAllocatorService.AssignHub,返回分片地址 + hub 票据。
 //
 // 登录时玩家尚未组队,teamID 一般为 0;region 由 login 配置给出(空 = 让 allocator 选最空分片)。
-func (a *GrpcHubAssigner) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64) (*HubAssignment, error) {
+func (a *GrpcHubAssigner) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64, sessionJTI string) (*HubAssignment, error) {
 	req := &hubv1.AssignHubRequest{
 		PlayerId:      playerID,
 		Region:        region,
 		TeamId:        teamID,
 		RoleId:        roleID,
 		SourceMatchId: sourceMatchID,
+		SessionJti:    sessionJTI,
 	}
 	resp, err := a.client.AssignHub(ctx, req)
 	if err != nil {

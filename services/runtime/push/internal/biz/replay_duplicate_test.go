@@ -378,10 +378,10 @@ func TestRecheckSession_SupersededAndRetryable(t *testing.T) {
 	}
 }
 
-// ── gap 检测 + resync 信号(R4 P1-3;R4 复审 P1-2:拉空后终检 + fail-closed)──────
+// ── gap 检测 + resync 信号(R4 P1-3;R4 复审 P1-2 终检 fail-closed;R7 复审 P1-1 先信号后发帧)──
 
-// 带游标重连且缓冲已丢帧:补推幸存帧之后必须收到 pandora.push.resync 合成帧
-// (终检在拉空后执行,消除「检查后~分页间隙修剪」的漏报窗口),且同一段丢失只信号一次。
+// 带游标重连且缓冲已丢帧:resync 合成帧必须**先于**越过缺口的幸存帧到达(R7 复审
+// P1-1:否则多页补推期间断流,客户端游标已越过缺口,缺口永不回补),且同一段丢失只信号一次。
 func TestRunSubscribeStream_GapSignalsResyncAfterReplay(t *testing.T) {
 	repo := &pullRepo{pageSize: 10, lost: 3000}
 	repo.add(2001, "tail")
@@ -420,13 +420,13 @@ func TestRunSubscribeStream_GapSignalsResyncAfterReplay(t *testing.T) {
 	frames := append([]*pushv1.PushFrame(nil), stream.frames...)
 	stream.mu.Unlock()
 	if len(frames) != 3 {
-		t.Fatalf("want exactly tail+resync+late, got=%+v", frames)
+		t.Fatalf("want exactly resync+tail+late, got=%+v", frames)
 	}
-	if string(frames[0].GetPayload()) != "tail" {
-		t.Fatalf("surviving frames must be replayed before resync, got=%+v", frames[0])
+	if frames[0].GetTopic() != ResyncTopic || frames[0].GetTsMs() != 0 {
+		t.Fatalf("R7 P1-1: resync signal must precede frames beyond the gap, got=%+v", frames[0])
 	}
-	if frames[1].GetTopic() != ResyncTopic || frames[1].GetTsMs() != 0 {
-		t.Fatalf("second frame must be resync signal (topic=%s ts=0), got=%+v", ResyncTopic, frames[1])
+	if string(frames[1].GetPayload()) != "tail" {
+		t.Fatalf("surviving frames must follow the resync signal, got=%+v", frames[1])
 	}
 	if string(frames[2].GetPayload()) != "late" {
 		t.Fatalf("resync must be signaled once per lost range, got=%+v", frames[2])
@@ -434,8 +434,8 @@ func TestRunSubscribeStream_GapSignalsResyncAfterReplay(t *testing.T) {
 }
 
 // R5 复审 P1-1:丢失帧与幸存帧交错(丢 1001、幸存 1002)——幸存帧把游标推进到 1002
-// 之后,fl=1001 不再大于拉空后游标,旧基线永久漏报。终检基线必须用进入时游标(1000):
-// fl>entry 即发 resync;且信号后同一段丢失不得重复。
+// 之后,fl=1001 不再大于拉空后游标,旧基线永久漏报。基线必须用进入时游标(1000):
+// fl>entry 即发 resync(R7 复审 P1-1:且先于幸存帧);信号后同一段丢失不得重复。
 func TestRunSubscribeStream_GapInterleavedWithSurvivorStillSignals(t *testing.T) {
 	repo := &pullRepo{pageSize: 10, lost: 1001}
 	repo.add(1002, "survivor")
@@ -474,13 +474,13 @@ func TestRunSubscribeStream_GapInterleavedWithSurvivorStillSignals(t *testing.T)
 	frames := append([]*pushv1.PushFrame(nil), stream.frames...)
 	stream.mu.Unlock()
 	if len(frames) != 3 {
-		t.Fatalf("want survivor+resync+later, got=%+v", frames)
+		t.Fatalf("want resync+survivor+later, got=%+v", frames)
 	}
-	if string(frames[0].GetPayload()) != "survivor" {
-		t.Fatalf("survivor must be replayed first, got=%+v", frames[0])
+	if frames[0].GetTopic() != ResyncTopic || frames[0].GetTsMs() != 0 {
+		t.Fatalf("P1-1: interleaved loss must emit resync before survivor, got=%+v", frames[0])
 	}
-	if frames[1].GetTopic() != ResyncTopic || frames[1].GetTsMs() != 0 {
-		t.Fatalf("P1-1: interleaved loss must emit resync, got=%+v", frames[1])
+	if string(frames[1].GetPayload()) != "survivor" {
+		t.Fatalf("survivor must follow the resync signal, got=%+v", frames[1])
 	}
 	if string(frames[2].GetPayload()) != "later" {
 		t.Fatalf("resync must not repeat for the same lost range, got=%+v", frames[2])

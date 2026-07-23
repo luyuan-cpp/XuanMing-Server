@@ -84,6 +84,14 @@ type SessionGateConf struct {
 	// 一律 fail-closed 拒绝。false = dev 宽松档(无 Redis 时直连联调可跳过现行性判定;
 	// 但 gate 已装配时无论档位,权威查询失败/顶号/登出都照常拒绝)。
 	Require bool `yaml:"require,omitempty" json:"require,omitempty"`
+
+	// RequireTicketSJTI 仅 hub_allocator 使用(R7 收口,滚动发布分阶段激活):
+	// true = AcknowledgeAdmission 对票据缺 sjti(会话绑定)硬拒;false(默认)= 兼容档,
+	// 空 sjti 告警放行(跳过现行性判定,行为与旧 DS/旧票一致),非空 sjti 仍全量复核。
+	// 激活前提(顺序硬约束):全 fleet Hub DS 已升级到会转发 sjti 的版本、旧 DS 已排空,
+	// 且等满一个票据最大 TTL(旧签发面残票自然过期)后再置 true。提前开启 = 旧 DS 上
+	// 所有玩家无法进入大厅。
+	RequireTicketSJTI bool `yaml:"require_ticket_sjti,omitempty" json:"require_ticket_sjti,omitempty"`
 }
 
 // ConfigTableConf 配置表加载参数。

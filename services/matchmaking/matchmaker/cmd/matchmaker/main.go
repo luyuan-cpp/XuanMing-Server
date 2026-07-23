@@ -179,6 +179,14 @@ func main() {
 	// 7. 装配链
 	repo := data.NewRedisMatchRepo(rdb, cfg.Match.GameMode)
 
+	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):客户端面请求 jti 必须是 login
+	// 会话权威(pandora:sess,node.redis_client 指向的共享 Redis)当前一代;
+	// prod 生成器机械置 session_gate.require=true(漏配端点拒启)。
+	// R7 复审 P0-2:同一 gate 提前构建,还要注入 DS allocator——READY 批签的 battle 票
+	// 逐玩家携带当前会话 jti(sjti claim),兑换点复核后旧设备残票作废。
+	sessGate, sgClose := sessiongate.MustBuild(cfg.Node.RedisClient, cfg.SessionGate.Require)
+	defer sgClose()
+
 	// DSAllocator:ds_allocator_addr 非空 → 真 gRPC 拉 DS + 签 battle 票据;否则 W4 ① 打桩
 	var allocator biz.DSAllocator
 	if cfg.Match.DSAllocatorAddr != "" {
@@ -204,6 +212,7 @@ func main() {
 		}
 		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, nil, v2Signer, abortSigner,
 			cfg.Match.MapId, cfg.Match.GameMode, cfg.Match.DSAllocateTimeout.Std())
+		ga.SetSessionGate(sessGate) // R7 P0-2:READY 批签票据绑定当前会话代际
 		defer func() { _ = ga.Close() }()
 		allocator = ga
 		helper.Infow("msg", "ds_allocator_grpc_ready", "ds_allocator_addr", cfg.Match.DSAllocatorAddr,
@@ -262,12 +271,6 @@ func main() {
 	if ctStore != nil {
 		ctAdmin = service.NewConfigTableAdminService(ctStore, cfg.ConfigTable.Dir)
 	}
-	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):客户端面请求 jti 必须是 login
-	// 会话权威(pandora:sess,node.redis_client 指向的共享 Redis)当前一代;
-	// prod 生成器机械置 session_gate.require=true(漏配端点拒启)。
-	sessGate, sgClose := sessiongate.MustBuild(cfg.Node.RedisClient, cfg.SessionGate.Require)
-	defer sgClose()
-
 	grpcSrv := server.NewGRPCServer(&cfg, svc, ctAdmin, sessGate)
 	httpSrv := server.NewHTTPServer(&cfg)
 

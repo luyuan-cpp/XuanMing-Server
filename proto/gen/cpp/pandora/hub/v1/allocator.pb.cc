@@ -4187,11 +4187,11 @@ constexpr AssignHubRequest::ParseTableT_ AssignHubRequest::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -4201,59 +4201,65 @@ constexpr AssignHubRequest::ParseTableT_ AssignHubRequest::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::pandora::hub::v1::AssignHubRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // string session_jti = 8 [json_name = "sessionJti"];
+      {::_pbi::TcParser::FastUS1,
+       {66, 2, 0,
+        PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.session_jti_)}},
       // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AssignHubRequest, _impl_.player_id_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AssignHubRequest, _impl_.player_id_), 3>(),
+       {8, 3, 0,
         PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.player_id_)}},
       // string region = 2 [json_name = "region"];
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.region_)}},
       // uint64 team_id = 3 [json_name = "teamId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AssignHubRequest, _impl_.team_id_), 3>(),
-       {24, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AssignHubRequest, _impl_.team_id_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.team_id_)}},
       // uint32 role_id = 4 [json_name = "roleId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AssignHubRequest, _impl_.role_id_), 6>(),
-       {32, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AssignHubRequest, _impl_.role_id_), 7>(),
+       {32, 7, 0,
         PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.role_id_)}},
       // uint64 placement_version = 5 [json_name = "placementVersion"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AssignHubRequest, _impl_.placement_version_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AssignHubRequest, _impl_.placement_version_), 5>(),
+       {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.placement_version_)}},
       // string placement_operation_id = 6 [json_name = "placementOperationId"];
       {::_pbi::TcParser::FastUS1,
        {50, 1, 0,
         PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.placement_operation_id_)}},
       // uint64 source_match_id = 7 [json_name = "sourceMatchId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AssignHubRequest, _impl_.source_match_id_), 5>(),
-       {56, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AssignHubRequest, _impl_.source_match_id_), 6>(),
+       {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.source_match_id_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string region = 2 [json_name = "region"];
       {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.region_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 team_id = 3 [json_name = "teamId"];
-      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 role_id = 4 [json_name = "roleId"];
-      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.role_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.role_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 placement_version = 5 [json_name = "placementVersion"];
-      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.placement_version_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.placement_version_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string placement_operation_id = 6 [json_name = "placementOperationId"];
       {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.placement_operation_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 source_match_id = 7 [json_name = "sourceMatchId"];
-      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.source_match_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.source_match_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string session_jti = 8 [json_name = "sessionJti"];
+      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.session_jti_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\37\0\6\0\0\0\26\0"
+      "\37\0\6\0\0\0\26\0\13\0\0\0\0\0\0\0"
       "pandora.hub.v1.AssignHubRequest"
       "region"
       "placement_operation_id"
+      "session_jti"
     }},
   };
 }
@@ -4267,6 +4273,9 @@ inline constexpr AssignHubRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         placement_operation_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        session_jti_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
@@ -4887,11 +4896,11 @@ constexpr AcknowledgeAdmissionRequest::ParseTableT_ AcknowledgeAdmissionRequest:
     {
       PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -4901,13 +4910,10 @@ constexpr AcknowledgeAdmissionRequest::ParseTableT_ AcknowledgeAdmissionRequest:
       ::_pbi::TcParser::GetTable<::pandora::hub::v1::AcknowledgeAdmissionRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 source_match_id = 8 [json_name = "sourceMatchId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.source_match_id_), 7>(),
-       {64, 7, 0,
-        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.source_match_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.player_id_), 4>(),
-       {8, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.player_id_), 5>(),
+       {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.player_id_)}},
       // string assignment_id = 2 [json_name = "assignmentId"];
       {::_pbi::TcParser::FastUS1,
@@ -4922,22 +4928,36 @@ constexpr AcknowledgeAdmissionRequest::ParseTableT_ AcknowledgeAdmissionRequest:
        {34, 2, 0,
         PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_id_)}},
       // uint64 admission_seq = 5 [json_name = "admissionSeq"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.admission_seq_), 5>(),
-       {40, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.admission_seq_), 6>(),
+       {40, 6, 0,
         PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_seq_)}},
       // uint64 placement_version = 6 [json_name = "placementVersion"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.placement_version_), 6>(),
-       {48, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.placement_version_), 7>(),
+       {48, 7, 0,
         PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.placement_version_)}},
       // string placement_operation_id = 7 [json_name = "placementOperationId"];
       {::_pbi::TcParser::FastUS1,
        {58, 3, 0,
         PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.placement_operation_id_)}},
+      // uint64 source_match_id = 8 [json_name = "sourceMatchId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.source_match_id_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.source_match_id_)}},
+      // string session_jti = 9 [json_name = "sessionJti"];
+      {::_pbi::TcParser::FastUS1,
+       {74, 4, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.session_jti_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string assignment_id = 2 [json_name = "assignmentId"];
       {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.assignment_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string hub_pod_name = 3 [json_name = "hubPodName"];
@@ -4945,22 +4965,25 @@ constexpr AcknowledgeAdmissionRequest::ParseTableT_ AcknowledgeAdmissionRequest:
       // string admission_id = 4 [json_name = "admissionId"];
       {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 admission_seq = 5 [json_name = "admissionSeq"];
-      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_seq_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_seq_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 placement_version = 6 [json_name = "placementVersion"];
-      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.placement_version_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.placement_version_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string placement_operation_id = 7 [json_name = "placementOperationId"];
       {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.placement_operation_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 source_match_id = 8 [json_name = "sourceMatchId"];
-      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.source_match_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.source_match_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string session_jti = 9 [json_name = "sessionJti"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.session_jti_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\52\0\15\14\14\0\0\26\0\0\0\0\0\0\0\0"
+      "\52\0\15\14\14\0\0\26\0\13\0\0\0\0\0\0"
       "pandora.hub.v1.AcknowledgeAdmissionRequest"
       "assignment_id"
       "hub_pod_name"
       "admission_id"
       "placement_operation_id"
+      "session_jti"
     }},
   };
 }
@@ -4980,6 +5003,9 @@ inline constexpr AcknowledgeAdmissionRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         placement_operation_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        session_jti_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
@@ -5876,7 +5902,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.region_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.team_id_),
@@ -5884,13 +5910,15 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.placement_version_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.placement_operation_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.source_match_id_),
-        2,
-        0,
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.session_jti_),
         3,
-        6,
+        0,
         4,
-        1,
+        7,
         5,
+        1,
+        6,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubResponse, _impl_._has_bits_),
         10, // hasbit index offset
@@ -6262,7 +6290,7 @@ const ::uint32_t
         8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.assignment_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.hub_pod_name_),
@@ -6271,14 +6299,16 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.placement_version_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.placement_operation_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.source_match_id_),
-        4,
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.session_jti_),
+        5,
         0,
         1,
         2,
-        5,
         6,
-        3,
         7,
+        3,
+        8,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionResponse, _impl_._has_bits_),
         8, // hasbit index offset
@@ -6363,35 +6393,35 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::hub::v1::AssignHubRequest)},
-        {17, sizeof(::pandora::hub::v1::AssignHubResponse)},
-        {34, sizeof(::pandora::hub::v1::ReleaseHubRequest)},
-        {39, sizeof(::pandora::hub::v1::ReleaseHubResponse)},
-        {44, sizeof(::pandora::hub::v1::EnsureHubDepartureForBattleRequest)},
-        {55, sizeof(::pandora::hub::v1::EnsureHubDepartureForBattleResponse)},
-        {62, sizeof(::pandora::hub::v1::TransferHubRequest)},
-        {69, sizeof(::pandora::hub::v1::TransferHubResponse)},
-        {78, sizeof(::pandora::hub::v1::HubLine)},
-        {93, sizeof(::pandora::hub::v1::ListHubLinesRequest)},
-        {98, sizeof(::pandora::hub::v1::ListHubLinesResponse)},
-        {105, sizeof(::pandora::hub::v1::TransferToLineRequest)},
-        {110, sizeof(::pandora::hub::v1::TransferToLineResponse)},
-        {123, sizeof(::pandora::hub::v1::HubInfo)},
-        {138, sizeof(::pandora::hub::v1::ListHubsRequest)},
-        {143, sizeof(::pandora::hub::v1::ListHubsResponse)},
-        {150, sizeof(::pandora::hub::v1::HeartbeatRequest)},
-        {169, sizeof(::pandora::hub::v1::HeartbeatResponse)},
-        {190, sizeof(::pandora::hub::v1::HubEvictionOrder)},
-        {209, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
-        {256, sizeof(::pandora::hub::v1::HubDSCredential)},
-        {275, sizeof(::pandora::hub::v1::HubShardAuthStorageRecord)},
-        {302, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
-        {365, sizeof(::pandora::hub::v1::HubMigrateEvent)},
-        {386, sizeof(::pandora::hub::v1::AcknowledgeAdmissionRequest)},
-        {405, sizeof(::pandora::hub::v1::AcknowledgeAdmissionResponse)},
-        {418, sizeof(::pandora::hub::v1::AcknowledgeDepartureRequest)},
-        {431, sizeof(::pandora::hub::v1::AcknowledgeDepartureResponse)},
-        {438, sizeof(::pandora::hub::v1::HubReservationStorageRecord)},
-        {459, sizeof(::pandora::hub::v1::HubConnectedOwnershipStorageRecord)},
+        {19, sizeof(::pandora::hub::v1::AssignHubResponse)},
+        {36, sizeof(::pandora::hub::v1::ReleaseHubRequest)},
+        {41, sizeof(::pandora::hub::v1::ReleaseHubResponse)},
+        {46, sizeof(::pandora::hub::v1::EnsureHubDepartureForBattleRequest)},
+        {57, sizeof(::pandora::hub::v1::EnsureHubDepartureForBattleResponse)},
+        {64, sizeof(::pandora::hub::v1::TransferHubRequest)},
+        {71, sizeof(::pandora::hub::v1::TransferHubResponse)},
+        {80, sizeof(::pandora::hub::v1::HubLine)},
+        {95, sizeof(::pandora::hub::v1::ListHubLinesRequest)},
+        {100, sizeof(::pandora::hub::v1::ListHubLinesResponse)},
+        {107, sizeof(::pandora::hub::v1::TransferToLineRequest)},
+        {112, sizeof(::pandora::hub::v1::TransferToLineResponse)},
+        {125, sizeof(::pandora::hub::v1::HubInfo)},
+        {140, sizeof(::pandora::hub::v1::ListHubsRequest)},
+        {145, sizeof(::pandora::hub::v1::ListHubsResponse)},
+        {152, sizeof(::pandora::hub::v1::HeartbeatRequest)},
+        {171, sizeof(::pandora::hub::v1::HeartbeatResponse)},
+        {192, sizeof(::pandora::hub::v1::HubEvictionOrder)},
+        {211, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
+        {258, sizeof(::pandora::hub::v1::HubDSCredential)},
+        {277, sizeof(::pandora::hub::v1::HubShardAuthStorageRecord)},
+        {304, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
+        {367, sizeof(::pandora::hub::v1::HubMigrateEvent)},
+        {388, sizeof(::pandora::hub::v1::AcknowledgeAdmissionRequest)},
+        {409, sizeof(::pandora::hub::v1::AcknowledgeAdmissionResponse)},
+        {422, sizeof(::pandora::hub::v1::AcknowledgeDepartureRequest)},
+        {435, sizeof(::pandora::hub::v1::AcknowledgeDepartureResponse)},
+        {442, sizeof(::pandora::hub::v1::HubReservationStorageRecord)},
+        {463, sizeof(::pandora::hub::v1::HubConnectedOwnershipStorageRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -6430,246 +6460,248 @@ const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] AB
     protodesc_cold) = {
     "\n\036pandora/hub/v1/allocator.proto\022\016pandor"
     "a.hub.v1\032\037pandora/common/v1/errcode.prot"
-    "o\"\204\002\n\020AssignHubRequest\022\033\n\tplayer_id\030\001 \001("
+    "o\"\245\002\n\020AssignHubRequest\022\033\n\tplayer_id\030\001 \001("
     "\004R\010playerId\022\026\n\006region\030\002 \001(\tR\006region\022\027\n\007t"
     "eam_id\030\003 \001(\004R\006teamId\022\027\n\007role_id\030\004 \001(\rR\006r"
     "oleId\022+\n\021placement_version\030\005 \001(\004R\020placem"
     "entVersion\0224\n\026placement_operation_id\030\006 \001"
     "(\tR\024placementOperationId\022&\n\017source_match"
-    "_id\030\007 \001(\004R\rsourceMatchId\"\242\002\n\021AssignHubRe"
-    "sponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1"
-    ".ErrCodeR\004code\022\036\n\013hub_ds_addr\030\002 \001(\tR\thub"
-    "DsAddr\022\035\n\nhub_ticket\030\003 \001(\tR\thubTicket\022 \n"
-    "\014hub_pod_name\030\004 \001(\tR\nhubPodName\022\031\n\010shard"
-    "_id\030\005 \001(\rR\007shardId\022+\n\021placement_version\030"
-    "\006 \001(\004R\020placementVersion\0224\n\026placement_ope"
-    "ration_id\030\007 \001(\tR\024placementOperationId\"0\n"
-    "\021ReleaseHubRequest\022\033\n\tplayer_id\030\001 \001(\004R\010p"
-    "layerId\"D\n\022ReleaseHubResponse\022.\n\004code\030\001 "
-    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\"\277\001"
-    "\n\"EnsureHubDepartureForBattleRequest\022\033\n\t"
-    "player_id\030\001 \001(\004R\010playerId\022\031\n\010match_id\030\002 "
-    "\001(\004R\007matchId\022+\n\021placement_version\030\003 \001(\004R"
-    "\020placementVersion\0224\n\026placement_operation"
-    "_id\030\004 \001(\tR\024placementOperationId\"q\n#Ensur"
-    "eHubDepartureForBattleResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022\032"
-    "\n\010departed\030\002 \001(\010R\010departed\"U\n\022TransferHu"
-    "bRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\"\n"
-    "\rtarget_hub_id\030\002 \001(\004R\013targetHubId\"\222\001\n\023Tr"
-    "ansferHubResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
-    "a.common.v1.ErrCodeR\004code\022%\n\017new_hub_ds_"
-    "addr\030\002 \001(\tR\014newHubDsAddr\022$\n\016new_hub_tick"
-    "et\030\003 \001(\tR\014newHubTicket\"\264\001\n\007HubLine\022\027\n\007li"
-    "ne_no\030\001 \001(\rR\006lineNo\022\031\n\010shard_id\030\002 \001(\rR\007s"
-    "hardId\022!\n\014player_count\030\003 \001(\005R\013playerCoun"
-    "t\022\032\n\010capacity\030\004 \001(\005R\010capacity\022\027\n\007is_full"
-    "\030\005 \001(\010R\006isFull\022\035\n\nis_current\030\006 \001(\010R\tisCu"
-    "rrent\"-\n\023ListHubLinesRequest\022\026\n\006region\030\001"
-    " \001(\tR\006region\"u\n\024ListHubLinesResponse\022.\n\004"
-    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
-    "code\022-\n\005lines\030\002 \003(\0132\027.pandora.hub.v1.Hub"
-    "LineR\005lines\"\?\n\025TransferToLineRequest\022&\n\017"
-    "target_shard_id\030\001 \001(\rR\rtargetShardId\"\320\001\n"
-    "\026TransferToLineResponse\022.\n\004code\030\001 \001(\0162\032."
-    "pandora.common.v1.ErrCodeR\004code\022%\n\017new_h"
-    "ub_ds_addr\030\002 \001(\tR\014newHubDsAddr\022$\n\016new_hu"
-    "b_ticket\030\003 \001(\tR\014newHubTicket\022 \n\014new_shar"
-    "d_id\030\004 \001(\rR\nnewShardId\022\027\n\007line_no\030\005 \001(\rR"
-    "\006lineNo\"\263\001\n\007HubInfo\022 \n\014hub_pod_name\030\001 \001("
-    "\tR\nhubPodName\022\031\n\010hub_addr\030\002 \001(\tR\007hubAddr"
-    "\022\026\n\006region\030\003 \001(\tR\006region\022!\n\014player_count"
-    "\030\004 \001(\005R\013playerCount\022\032\n\010capacity\030\005 \001(\005R\010c"
-    "apacity\022\024\n\005state\030\006 \001(\tR\005state\")\n\017ListHub"
-    "sRequest\022\026\n\006region\030\001 \001(\tR\006region\"o\n\020List"
-    "HubsResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
-    "mon.v1.ErrCodeR\004code\022+\n\004hubs\030\002 \003(\0132\027.pan"
-    "dora.hub.v1.HubInfoR\004hubs\"\370\001\n\020HeartbeatR"
-    "equest\022 \n\014hub_pod_name\030\001 \001(\tR\nhubPodName"
-    "\022!\n\014player_count\030\002 \001(\005R\013playerCount\022\027\n\007c"
-    "pu_pct\030\003 \001(\002R\006cpuPct\022\025\n\006mem_mb\030\004 \001(\002R\005me"
-    "mMb\022\024\n\005state\030\005 \001(\tR\005state\022\023\n\005ts_ms\030\006 \001(\003"
-    "R\004tsMs\022\035\n\nplayer_ids\030\n \003(\004R\tplayerIds\022\037\n"
-    "\013max_players\030\013 \001(\rR\nmaxPlayersJ\004\010\007\020\n\"\317\003\n"
-    "\021HeartbeatResponse\022.\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCodeR\004code\022\030\n\007command\030\002 "
-    "\001(\tR\007command\022#\n\rgrace_seconds\030\003 \001(\005R\014gra"
-    "ceSeconds\022,\n\022accepted_token_gen\030\n \001(\004R\020a"
-    "cceptedTokenGen\022,\n\022accepted_token_jti\030\013 "
-    "\001(\tR\020acceptedTokenJti\0222\n\025accepted_instan"
-    "ce_uid\030\014 \001(\tR\023acceptedInstanceUid\0226\n\027acc"
-    "epted_protocol_epoch\030\r \001(\rR\025acceptedProt"
-    "ocolEpoch\0222\n\025accepted_writer_epoch\030\016 \001(\r"
-    "R\023acceptedWriterEpoch\022I\n\017eviction_orders"
-    "\030\017 \003(\0132 .pandora.hub.v1.HubEvictionOrder"
-    "R\016evictionOrdersJ\004\010\004\020\n\"\344\002\n\020HubEvictionOr"
-    "der\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022#\n\rassi"
-    "gnment_id\030\002 \001(\tR\014assignmentId\022!\n\014admissi"
-    "on_id\030\003 \001(\tR\013admissionId\022#\n\radmission_se"
-    "q\030\004 \001(\004R\014admissionSeq\022.\n\023source_instance"
-    "_uid\030\005 \001(\tR\021sourceInstanceUid\0222\n\025source_"
-    "protocol_epoch\030\006 \001(\rR\023sourceProtocolEpoc"
-    "h\022.\n\023source_writer_epoch\030\007 \001(\rR\021sourceWr"
-    "iterEpoch\0222\n\025cleanup_assignment_id\030\010 \001(\t"
-    "R\023cleanupAssignmentId\"\204\007\n\025HubShardStorag"
-    "eRecord\022 \n\014hub_pod_name\030\001 \001(\tR\nhubPodNam"
-    "e\022\031\n\010hub_addr\030\002 \001(\tR\007hubAddr\022\026\n\006region\030\003"
-    " \001(\tR\006region\022\031\n\010shard_id\030\004 \001(\rR\007shardId\022"
-    "!\n\014player_count\030\005 \001(\005R\013playerCount\022\032\n\010ca"
-    "pacity\030\006 \001(\005R\010capacity\022\024\n\005state\030\007 \001(\tR\005s"
-    "tate\022*\n\021last_heartbeat_ms\030\010 \001(\003R\017lastHea"
-    "rtbeatMs\022\"\n\rcreated_at_ms\030\t \001(\003R\013created"
-    "AtMs\022*\n\021draining_since_ms\030\n \001(\003R\017drainin"
-    "gSinceMs\022/\n\024current_token_exp_ms\030\013 \001(\004R\021"
-    "currentTokenExpMs\022*\n\021current_token_gen\030\014"
-    " \001(\004R\017currentTokenGen\022*\n\021last_verified_g"
-    "en\030\r \001(\004R\017lastVerifiedGen\022*\n\021last_verifi"
-    "ed_jti\030\016 \001(\tR\017lastVerifiedJti\022%\n\016gameser"
-    "ver_uid\030\017 \001(\tR\rgameserverUid\022\035\n\nauth_epo"
-    "ch\030\020 \001(\rR\tauthEpoch\022;\n\032last_verified_wri"
-    "ter_epoch\030\021 \001(\rR\027lastVerifiedWriterEpoch"
-    "\022#\n\rrelease_track\030\022 \001(\tR\014releaseTrack\0228\n"
-    "\030reported_connected_count\030\023 \001(\005R\026reporte"
-    "dConnectedCount\022%\n\016reserved_count\030\024 \001(\005R"
-    "\rreservedCount\022:\n\031connected_ownership_co"
-    "unt\030\025 \001(\005R\027connectedOwnershipCount\0220\n\024re"
-    "ported_max_players\030\026 \001(\rR\022reportedMaxPla"
-    "yers\"\356\001\n\017HubDSCredential\022\020\n\003gen\030\001 \001(\004R\003g"
-    "en\022\020\n\003jti\030\002 \001(\tR\003jti\022\025\n\006exp_ms\030\003 \001(\004R\005ex"
-    "pMs\022\020\n\003kid\030\004 \001(\tR\003kid\022!\n\014instance_uid\030\005 "
-    "\001(\tR\013instanceUid\022%\n\016protocol_epoch\030\006 \001(\r"
-    "R\rprotocolEpoch\022!\n\014token_sha256\030\007 \001(\tR\013t"
-    "okenSha256\022!\n\014writer_epoch\030\010 \001(\rR\013writer"
-    "Epoch\"\260\004\n\031HubShardAuthStorageRecord\022\031\n\010p"
-    "od_name\030\001 \001(\tR\007podName\022!\n\014instance_uid\030\002"
-    " \001(\tR\013instanceUid\022%\n\016protocol_epoch\030\003 \001("
-    "\rR\rprotocolEpoch\0222\n\005phase\030\004 \001(\0162\034.pandor"
-    "a.hub.v1.HubAuthPhaseR\005phase\0227\n\006active\030\005"
-    " \001(\0132\037.pandora.hub.v1.HubDSCredentialR\006a"
-    "ctive\0229\n\007pending\030\006 \001(\0132\037.pandora.hub.v1."
-    "HubDSCredentialR\007pending\022$\n\016high_water_g"
-    "en\030\007 \001(\004R\014highWaterGen\022,\n\022pending_starte"
-    "d_ms\030\010 \001(\003R\020pendingStartedMs\022!\n\014delivere"
-    "d_rv\030\t \001(\tR\013deliveredRv\022\"\n\rupdated_at_ms"
-    "\030\n \001(\003R\013updatedAtMs\0227\n\030last_active_heart"
-    "beat_ms\030\013 \001(\003R\025lastActiveHeartbeatMs\0222\n\025"
-    "required_writer_epoch\030\014 \001(\rR\023requiredWri"
-    "terEpoch\"\351\n\n\032HubAssignmentStorageRecord\022"
-    "\033\n\tplayer_id\030\001 \001(\004R\010playerId\022 \n\014hub_pod_"
-    "name\030\002 \001(\tR\nhubPodName\022\031\n\010hub_addr\030\003 \001(\t"
-    "R\007hubAddr\022\031\n\010shard_id\030\004 \001(\rR\007shardId\022\026\n\006"
-    "region\030\005 \001(\tR\006region\022\027\n\007team_id\030\006 \001(\004R\006t"
-    "eamId\022$\n\016assigned_at_ms\030\007 \001(\003R\014assignedA"
-    "tMs\022\027\n\007role_id\030\010 \001(\rR\006roleId\022(\n\020hub_inst"
-    "ance_uid\030\t \001(\tR\016hubInstanceUid\022\035\n\nauth_e"
-    "poch\030\n \001(\rR\tauthEpoch\022\031\n\010auth_gen\030\013 \001(\004R"
-    "\007authGen\022\031\n\010auth_jti\030\014 \001(\tR\007authJti\022#\n\ra"
-    "ssignment_id\030\r \001(\tR\014assignmentId\022*\n\021auth"
-    "_writer_epoch\030\016 \001(\rR\017authWriterEpoch\022#\n\r"
-    "release_track\030\017 \001(\tR\014releaseTrack\022+\n\021pla"
-    "cement_version\030\020 \001(\004R\020placementVersion\0224"
-    "\n\026placement_operation_id\030\021 \001(\tR\024placemen"
-    "tOperationId\022&\n\017source_match_id\030\022 \001(\004R\rs"
-    "ourceMatchId\0220\n\024placement_proof_type\030\023 \001"
-    "(\rR\022placementProofType\0228\n\030transfer_clean"
-    "up_pending\030\024 \001(\010R\026transferCleanupPending"
-    "\0222\n\025transfer_target_bound\030\025 \001(\010R\023transfe"
-    "rTargetBound\022>\n\034transfer_source_hub_pod_"
-    "name\030\026 \001(\tR\030transferSourceHubPodName\022A\n\035"
-    "transfer_source_assignment_id\030\027 \001(\tR\032tra"
-    "nsferSourceAssignmentId\022\?\n\034transfer_sour"
-    "ce_instance_uid\030\030 \001(\tR\031transferSourceIns"
-    "tanceUid\022;\n\032transfer_source_auth_epoch\030\031"
-    " \001(\rR\027transferSourceAuthEpoch\022H\n!transfe"
-    "r_source_auth_writer_epoch\030\032 \001(\rR\035transf"
-    "erSourceAuthWriterEpoch\0226\n\027release_clean"
-    "up_pending\030\033 \001(\010R\025releaseCleanupPending\022"
-    "7\n\030release_cleanup_match_id\030\034 \001(\004R\025relea"
-    "seCleanupMatchId\022I\n!release_cleanup_plac"
-    "ement_version\030\035 \001(\004R\036releaseCleanupPlace"
-    "mentVersion\022\?\n\034release_cleanup_operation"
-    "_id\030\036 \001(\tR\031releaseCleanupOperationId\"\262\002\n"
-    "\017HubMigrateEvent\022\033\n\tplayer_id\030\001 \001(\004R\010pla"
-    "yerId\022 \n\014from_hub_pod\030\002 \001(\tR\nfromHubPod\022"
-    "#\n\016to_hub_ds_addr\030\003 \001(\tR\013toHubDsAddr\022\"\n\r"
-    "to_hub_ticket\030\004 \001(\tR\013toHubTicket\022%\n\017to_h"
-    "ub_pod_name\030\005 \001(\tR\014toHubPodName\022\036\n\013to_sh"
-    "ard_id\030\006 \001(\rR\ttoShardId\022#\n\rgrace_seconds"
-    "\030\007 \001(\005R\014graceSeconds\022\026\n\006reason\030\010 \001(\tR\006re"
-    "ason\022\023\n\005ts_ms\030\t \001(\003R\004tsMs\"\324\002\n\033Acknowledg"
-    "eAdmissionRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pl"
-    "ayerId\022#\n\rassignment_id\030\002 \001(\tR\014assignmen"
-    "tId\022 \n\014hub_pod_name\030\003 \001(\tR\nhubPodName\022!\n"
-    "\014admission_id\030\004 \001(\tR\013admissionId\022#\n\radmi"
-    "ssion_seq\030\005 \001(\004R\014admissionSeq\022+\n\021placeme"
-    "nt_version\030\006 \001(\004R\020placementVersion\0224\n\026pl"
-    "acement_operation_id\030\007 \001(\tR\024placementOpe"
-    "rationId\022&\n\017source_match_id\030\010 \001(\004R\rsourc"
-    "eMatchId\"\376\001\n\034AcknowledgeAdmissionRespons"
-    "e\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrC"
-    "odeR\004code\022\032\n\010admitted\030\002 \001(\010R\010admitted\022/\n"
-    "\023placement_committed\030\003 \001(\010R\022placementCom"
-    "mitted\022+\n\021placement_version\030\004 \001(\004R\020place"
-    "mentVersion\0224\n\026placement_operation_id\030\005 "
-    "\001(\tR\024placementOperationId\"\311\001\n\033Acknowledg"
-    "eDepartureRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pl"
-    "ayerId\022#\n\rassignment_id\030\002 \001(\tR\014assignmen"
-    "tId\022 \n\014hub_pod_name\030\003 \001(\tR\nhubPodName\022!\n"
-    "\014admission_id\030\004 \001(\tR\013admissionId\022#\n\radmi"
-    "ssion_seq\030\005 \001(\004R\014admissionSeq\"j\n\034Acknowl"
-    "edgeDepartureResponse\022.\n\004code\030\001 \001(\0162\032.pa"
-    "ndora.common.v1.ErrCodeR\004code\022\032\n\010departe"
-    "d\030\002 \001(\010R\010departed\"\367\002\n\033HubReservationStor"
-    "ageRecord\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022#"
-    "\n\rassignment_id\030\002 \001(\tR\014assignmentId\022 \n\014h"
-    "ub_pod_name\030\003 \001(\tR\nhubPodName\022(\n\020hub_ins"
-    "tance_uid\030\004 \001(\tR\016hubInstanceUid\022\035\n\nauth_"
-    "epoch\030\005 \001(\rR\tauthEpoch\022*\n\021auth_writer_ep"
-    "och\030\006 \001(\rR\017authWriterEpoch\022\"\n\rcreated_at"
-    "_ms\030\007 \001(\003R\013createdAtMs\022\"\n\rexpires_at_ms\030"
-    "\010 \001(\003R\013expiresAtMs\0227\n\030assignment_expires"
-    "_at_ms\030\t \001(\003R\025assignmentExpiresAtMs\"\261\003\n\""
-    "HubConnectedOwnershipStorageRecord\022\033\n\tpl"
-    "ayer_id\030\001 \001(\004R\010playerId\022#\n\rassignment_id"
-    "\030\002 \001(\tR\014assignmentId\022!\n\014admission_id\030\003 \001"
-    "(\tR\013admissionId\022 \n\014hub_pod_name\030\004 \001(\tR\nh"
-    "ubPodName\022(\n\020hub_instance_uid\030\005 \001(\tR\016hub"
-    "InstanceUid\022\035\n\nauth_epoch\030\006 \001(\rR\tauthEpo"
-    "ch\022*\n\021auth_writer_epoch\030\007 \001(\rR\017authWrite"
-    "rEpoch\022$\n\016admitted_at_ms\030\010 \001(\003R\014admitted"
-    "AtMs\022 \n\014last_seen_ms\030\t \001(\003R\nlastSeenMs\022\""
-    "\n\rexpires_at_ms\030\n \001(\003R\013expiresAtMs\022#\n\rad"
-    "mission_seq\030\013 \001(\004R\014admissionSeq*\304\001\n\014HubA"
-    "uthPhase\022\036\n\032HUB_AUTH_PHASE_UNSPECIFIED\020\000"
-    "\022\034\n\030HUB_AUTH_PHASE_BOOTSTRAP\020\001\022\031\n\025HUB_AU"
-    "TH_PHASE_ACTIVE\020\002\022\033\n\027HUB_AUTH_PHASE_ROTA"
-    "TING\020\003\022\036\n\032HUB_AUTH_PHASE_QUARANTINED\020\004\022\036"
-    "\n\032HUB_AUTH_PHASE_TERMINATING\020\0052\340\007\n\023HubAl"
-    "locatorService\022P\n\tAssignHub\022 .pandora.hu"
-    "b.v1.AssignHubRequest\032!.pandora.hub.v1.A"
-    "ssignHubResponse\022S\n\nReleaseHub\022!.pandora"
-    ".hub.v1.ReleaseHubRequest\032\".pandora.hub."
-    "v1.ReleaseHubResponse\022\206\001\n\033EnsureHubDepar"
-    "tureForBattle\0222.pandora.hub.v1.EnsureHub"
-    "DepartureForBattleRequest\0323.pandora.hub."
-    "v1.EnsureHubDepartureForBattleResponse\022V"
-    "\n\013TransferHub\022\".pandora.hub.v1.TransferH"
-    "ubRequest\032#.pandora.hub.v1.TransferHubRe"
-    "sponse\022M\n\010ListHubs\022\037.pandora.hub.v1.List"
-    "HubsRequest\032 .pandora.hub.v1.ListHubsRes"
-    "ponse\022P\n\tHeartbeat\022 .pandora.hub.v1.Hear"
-    "tbeatRequest\032!.pandora.hub.v1.HeartbeatR"
-    "esponse\022q\n\024AcknowledgeAdmission\022+.pandor"
-    "a.hub.v1.AcknowledgeAdmissionRequest\032,.p"
-    "andora.hub.v1.AcknowledgeAdmissionRespon"
-    "se\022q\n\024AcknowledgeDeparture\022+.pandora.hub"
-    ".v1.AcknowledgeDepartureRequest\032,.pandor"
-    "a.hub.v1.AcknowledgeDepartureResponse\022Y\n"
-    "\014ListHubLines\022#.pandora.hub.v1.ListHubLi"
-    "nesRequest\032$.pandora.hub.v1.ListHubLines"
-    "Response\022_\n\016TransferToLine\022%.pandora.hub"
-    ".v1.TransferToLineRequest\032&.pandora.hub."
-    "v1.TransferToLineResponseb\006proto3"
+    "_id\030\007 \001(\004R\rsourceMatchId\022\037\n\013session_jti\030"
+    "\010 \001(\tR\nsessionJti\"\242\002\n\021AssignHubResponse\022"
+    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
+    "eR\004code\022\036\n\013hub_ds_addr\030\002 \001(\tR\thubDsAddr\022"
+    "\035\n\nhub_ticket\030\003 \001(\tR\thubTicket\022 \n\014hub_po"
+    "d_name\030\004 \001(\tR\nhubPodName\022\031\n\010shard_id\030\005 \001"
+    "(\rR\007shardId\022+\n\021placement_version\030\006 \001(\004R\020"
+    "placementVersion\0224\n\026placement_operation_"
+    "id\030\007 \001(\tR\024placementOperationId\"0\n\021Releas"
+    "eHubRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId"
+    "\"D\n\022ReleaseHubResponse\022.\n\004code\030\001 \001(\0162\032.p"
+    "andora.common.v1.ErrCodeR\004code\"\277\001\n\"Ensur"
+    "eHubDepartureForBattleRequest\022\033\n\tplayer_"
+    "id\030\001 \001(\004R\010playerId\022\031\n\010match_id\030\002 \001(\004R\007ma"
+    "tchId\022+\n\021placement_version\030\003 \001(\004R\020placem"
+    "entVersion\0224\n\026placement_operation_id\030\004 \001"
+    "(\tR\024placementOperationId\"q\n#EnsureHubDep"
+    "artureForBattleResponse\022.\n\004code\030\001 \001(\0162\032."
+    "pandora.common.v1.ErrCodeR\004code\022\032\n\010depar"
+    "ted\030\002 \001(\010R\010departed\"U\n\022TransferHubReques"
+    "t\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\"\n\rtarget"
+    "_hub_id\030\002 \001(\004R\013targetHubId\"\222\001\n\023TransferH"
+    "ubResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
+    "n.v1.ErrCodeR\004code\022%\n\017new_hub_ds_addr\030\002 "
+    "\001(\tR\014newHubDsAddr\022$\n\016new_hub_ticket\030\003 \001("
+    "\tR\014newHubTicket\"\264\001\n\007HubLine\022\027\n\007line_no\030\001"
+    " \001(\rR\006lineNo\022\031\n\010shard_id\030\002 \001(\rR\007shardId\022"
+    "!\n\014player_count\030\003 \001(\005R\013playerCount\022\032\n\010ca"
+    "pacity\030\004 \001(\005R\010capacity\022\027\n\007is_full\030\005 \001(\010R"
+    "\006isFull\022\035\n\nis_current\030\006 \001(\010R\tisCurrent\"-"
+    "\n\023ListHubLinesRequest\022\026\n\006region\030\001 \001(\tR\006r"
+    "egion\"u\n\024ListHubLinesResponse\022.\n\004code\030\001 "
+    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\022-\n"
+    "\005lines\030\002 \003(\0132\027.pandora.hub.v1.HubLineR\005l"
+    "ines\"\?\n\025TransferToLineRequest\022&\n\017target_"
+    "shard_id\030\001 \001(\rR\rtargetShardId\"\320\001\n\026Transf"
+    "erToLineResponse\022.\n\004code\030\001 \001(\0162\032.pandora"
+    ".common.v1.ErrCodeR\004code\022%\n\017new_hub_ds_a"
+    "ddr\030\002 \001(\tR\014newHubDsAddr\022$\n\016new_hub_ticke"
+    "t\030\003 \001(\tR\014newHubTicket\022 \n\014new_shard_id\030\004 "
+    "\001(\rR\nnewShardId\022\027\n\007line_no\030\005 \001(\rR\006lineNo"
+    "\"\263\001\n\007HubInfo\022 \n\014hub_pod_name\030\001 \001(\tR\nhubP"
+    "odName\022\031\n\010hub_addr\030\002 \001(\tR\007hubAddr\022\026\n\006reg"
+    "ion\030\003 \001(\tR\006region\022!\n\014player_count\030\004 \001(\005R"
+    "\013playerCount\022\032\n\010capacity\030\005 \001(\005R\010capacity"
+    "\022\024\n\005state\030\006 \001(\tR\005state\")\n\017ListHubsReques"
+    "t\022\026\n\006region\030\001 \001(\tR\006region\"o\n\020ListHubsRes"
+    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
+    "ErrCodeR\004code\022+\n\004hubs\030\002 \003(\0132\027.pandora.hu"
+    "b.v1.HubInfoR\004hubs\"\370\001\n\020HeartbeatRequest\022"
+    " \n\014hub_pod_name\030\001 \001(\tR\nhubPodName\022!\n\014pla"
+    "yer_count\030\002 \001(\005R\013playerCount\022\027\n\007cpu_pct\030"
+    "\003 \001(\002R\006cpuPct\022\025\n\006mem_mb\030\004 \001(\002R\005memMb\022\024\n\005"
+    "state\030\005 \001(\tR\005state\022\023\n\005ts_ms\030\006 \001(\003R\004tsMs\022"
+    "\035\n\nplayer_ids\030\n \003(\004R\tplayerIds\022\037\n\013max_pl"
+    "ayers\030\013 \001(\rR\nmaxPlayersJ\004\010\007\020\n\"\317\003\n\021Heartb"
+    "eatResponse\022.\n\004code\030\001 \001(\0162\032.pandora.comm"
+    "on.v1.ErrCodeR\004code\022\030\n\007command\030\002 \001(\tR\007co"
+    "mmand\022#\n\rgrace_seconds\030\003 \001(\005R\014graceSecon"
+    "ds\022,\n\022accepted_token_gen\030\n \001(\004R\020accepted"
+    "TokenGen\022,\n\022accepted_token_jti\030\013 \001(\tR\020ac"
+    "ceptedTokenJti\0222\n\025accepted_instance_uid\030"
+    "\014 \001(\tR\023acceptedInstanceUid\0226\n\027accepted_p"
+    "rotocol_epoch\030\r \001(\rR\025acceptedProtocolEpo"
+    "ch\0222\n\025accepted_writer_epoch\030\016 \001(\rR\023accep"
+    "tedWriterEpoch\022I\n\017eviction_orders\030\017 \003(\0132"
+    " .pandora.hub.v1.HubEvictionOrderR\016evict"
+    "ionOrdersJ\004\010\004\020\n\"\344\002\n\020HubEvictionOrder\022\033\n\t"
+    "player_id\030\001 \001(\004R\010playerId\022#\n\rassignment_"
+    "id\030\002 \001(\tR\014assignmentId\022!\n\014admission_id\030\003"
+    " \001(\tR\013admissionId\022#\n\radmission_seq\030\004 \001(\004"
+    "R\014admissionSeq\022.\n\023source_instance_uid\030\005 "
+    "\001(\tR\021sourceInstanceUid\0222\n\025source_protoco"
+    "l_epoch\030\006 \001(\rR\023sourceProtocolEpoch\022.\n\023so"
+    "urce_writer_epoch\030\007 \001(\rR\021sourceWriterEpo"
+    "ch\0222\n\025cleanup_assignment_id\030\010 \001(\tR\023clean"
+    "upAssignmentId\"\204\007\n\025HubShardStorageRecord"
+    "\022 \n\014hub_pod_name\030\001 \001(\tR\nhubPodName\022\031\n\010hu"
+    "b_addr\030\002 \001(\tR\007hubAddr\022\026\n\006region\030\003 \001(\tR\006r"
+    "egion\022\031\n\010shard_id\030\004 \001(\rR\007shardId\022!\n\014play"
+    "er_count\030\005 \001(\005R\013playerCount\022\032\n\010capacity\030"
+    "\006 \001(\005R\010capacity\022\024\n\005state\030\007 \001(\tR\005state\022*\n"
+    "\021last_heartbeat_ms\030\010 \001(\003R\017lastHeartbeatM"
+    "s\022\"\n\rcreated_at_ms\030\t \001(\003R\013createdAtMs\022*\n"
+    "\021draining_since_ms\030\n \001(\003R\017drainingSinceM"
+    "s\022/\n\024current_token_exp_ms\030\013 \001(\004R\021current"
+    "TokenExpMs\022*\n\021current_token_gen\030\014 \001(\004R\017c"
+    "urrentTokenGen\022*\n\021last_verified_gen\030\r \001("
+    "\004R\017lastVerifiedGen\022*\n\021last_verified_jti\030"
+    "\016 \001(\tR\017lastVerifiedJti\022%\n\016gameserver_uid"
+    "\030\017 \001(\tR\rgameserverUid\022\035\n\nauth_epoch\030\020 \001("
+    "\rR\tauthEpoch\022;\n\032last_verified_writer_epo"
+    "ch\030\021 \001(\rR\027lastVerifiedWriterEpoch\022#\n\rrel"
+    "ease_track\030\022 \001(\tR\014releaseTrack\0228\n\030report"
+    "ed_connected_count\030\023 \001(\005R\026reportedConnec"
+    "tedCount\022%\n\016reserved_count\030\024 \001(\005R\rreserv"
+    "edCount\022:\n\031connected_ownership_count\030\025 \001"
+    "(\005R\027connectedOwnershipCount\0220\n\024reported_"
+    "max_players\030\026 \001(\rR\022reportedMaxPlayers\"\356\001"
+    "\n\017HubDSCredential\022\020\n\003gen\030\001 \001(\004R\003gen\022\020\n\003j"
+    "ti\030\002 \001(\tR\003jti\022\025\n\006exp_ms\030\003 \001(\004R\005expMs\022\020\n\003"
+    "kid\030\004 \001(\tR\003kid\022!\n\014instance_uid\030\005 \001(\tR\013in"
+    "stanceUid\022%\n\016protocol_epoch\030\006 \001(\rR\rproto"
+    "colEpoch\022!\n\014token_sha256\030\007 \001(\tR\013tokenSha"
+    "256\022!\n\014writer_epoch\030\010 \001(\rR\013writerEpoch\"\260"
+    "\004\n\031HubShardAuthStorageRecord\022\031\n\010pod_name"
+    "\030\001 \001(\tR\007podName\022!\n\014instance_uid\030\002 \001(\tR\013i"
+    "nstanceUid\022%\n\016protocol_epoch\030\003 \001(\rR\rprot"
+    "ocolEpoch\0222\n\005phase\030\004 \001(\0162\034.pandora.hub.v"
+    "1.HubAuthPhaseR\005phase\0227\n\006active\030\005 \001(\0132\037."
+    "pandora.hub.v1.HubDSCredentialR\006active\0229"
+    "\n\007pending\030\006 \001(\0132\037.pandora.hub.v1.HubDSCr"
+    "edentialR\007pending\022$\n\016high_water_gen\030\007 \001("
+    "\004R\014highWaterGen\022,\n\022pending_started_ms\030\010 "
+    "\001(\003R\020pendingStartedMs\022!\n\014delivered_rv\030\t "
+    "\001(\tR\013deliveredRv\022\"\n\rupdated_at_ms\030\n \001(\003R"
+    "\013updatedAtMs\0227\n\030last_active_heartbeat_ms"
+    "\030\013 \001(\003R\025lastActiveHeartbeatMs\0222\n\025require"
+    "d_writer_epoch\030\014 \001(\rR\023requiredWriterEpoc"
+    "h\"\351\n\n\032HubAssignmentStorageRecord\022\033\n\tplay"
+    "er_id\030\001 \001(\004R\010playerId\022 \n\014hub_pod_name\030\002 "
+    "\001(\tR\nhubPodName\022\031\n\010hub_addr\030\003 \001(\tR\007hubAd"
+    "dr\022\031\n\010shard_id\030\004 \001(\rR\007shardId\022\026\n\006region\030"
+    "\005 \001(\tR\006region\022\027\n\007team_id\030\006 \001(\004R\006teamId\022$"
+    "\n\016assigned_at_ms\030\007 \001(\003R\014assignedAtMs\022\027\n\007"
+    "role_id\030\010 \001(\rR\006roleId\022(\n\020hub_instance_ui"
+    "d\030\t \001(\tR\016hubInstanceUid\022\035\n\nauth_epoch\030\n "
+    "\001(\rR\tauthEpoch\022\031\n\010auth_gen\030\013 \001(\004R\007authGe"
+    "n\022\031\n\010auth_jti\030\014 \001(\tR\007authJti\022#\n\rassignme"
+    "nt_id\030\r \001(\tR\014assignmentId\022*\n\021auth_writer"
+    "_epoch\030\016 \001(\rR\017authWriterEpoch\022#\n\rrelease"
+    "_track\030\017 \001(\tR\014releaseTrack\022+\n\021placement_"
+    "version\030\020 \001(\004R\020placementVersion\0224\n\026place"
+    "ment_operation_id\030\021 \001(\tR\024placementOperat"
+    "ionId\022&\n\017source_match_id\030\022 \001(\004R\rsourceMa"
+    "tchId\0220\n\024placement_proof_type\030\023 \001(\rR\022pla"
+    "cementProofType\0228\n\030transfer_cleanup_pend"
+    "ing\030\024 \001(\010R\026transferCleanupPending\0222\n\025tra"
+    "nsfer_target_bound\030\025 \001(\010R\023transferTarget"
+    "Bound\022>\n\034transfer_source_hub_pod_name\030\026 "
+    "\001(\tR\030transferSourceHubPodName\022A\n\035transfe"
+    "r_source_assignment_id\030\027 \001(\tR\032transferSo"
+    "urceAssignmentId\022\?\n\034transfer_source_inst"
+    "ance_uid\030\030 \001(\tR\031transferSourceInstanceUi"
+    "d\022;\n\032transfer_source_auth_epoch\030\031 \001(\rR\027t"
+    "ransferSourceAuthEpoch\022H\n!transfer_sourc"
+    "e_auth_writer_epoch\030\032 \001(\rR\035transferSourc"
+    "eAuthWriterEpoch\0226\n\027release_cleanup_pend"
+    "ing\030\033 \001(\010R\025releaseCleanupPending\0227\n\030rele"
+    "ase_cleanup_match_id\030\034 \001(\004R\025releaseClean"
+    "upMatchId\022I\n!release_cleanup_placement_v"
+    "ersion\030\035 \001(\004R\036releaseCleanupPlacementVer"
+    "sion\022\?\n\034release_cleanup_operation_id\030\036 \001"
+    "(\tR\031releaseCleanupOperationId\"\262\002\n\017HubMig"
+    "rateEvent\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022 "
+    "\n\014from_hub_pod\030\002 \001(\tR\nfromHubPod\022#\n\016to_h"
+    "ub_ds_addr\030\003 \001(\tR\013toHubDsAddr\022\"\n\rto_hub_"
+    "ticket\030\004 \001(\tR\013toHubTicket\022%\n\017to_hub_pod_"
+    "name\030\005 \001(\tR\014toHubPodName\022\036\n\013to_shard_id\030"
+    "\006 \001(\rR\ttoShardId\022#\n\rgrace_seconds\030\007 \001(\005R"
+    "\014graceSeconds\022\026\n\006reason\030\010 \001(\tR\006reason\022\023\n"
+    "\005ts_ms\030\t \001(\003R\004tsMs\"\365\002\n\033AcknowledgeAdmiss"
+    "ionRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022"
+    "#\n\rassignment_id\030\002 \001(\tR\014assignmentId\022 \n\014"
+    "hub_pod_name\030\003 \001(\tR\nhubPodName\022!\n\014admiss"
+    "ion_id\030\004 \001(\tR\013admissionId\022#\n\radmission_s"
+    "eq\030\005 \001(\004R\014admissionSeq\022+\n\021placement_vers"
+    "ion\030\006 \001(\004R\020placementVersion\0224\n\026placement"
+    "_operation_id\030\007 \001(\tR\024placementOperationI"
+    "d\022&\n\017source_match_id\030\010 \001(\004R\rsourceMatchI"
+    "d\022\037\n\013session_jti\030\t \001(\tR\nsessionJti\"\376\001\n\034A"
+    "cknowledgeAdmissionResponse\022.\n\004code\030\001 \001("
+    "\0162\032.pandora.common.v1.ErrCodeR\004code\022\032\n\010a"
+    "dmitted\030\002 \001(\010R\010admitted\022/\n\023placement_com"
+    "mitted\030\003 \001(\010R\022placementCommitted\022+\n\021plac"
+    "ement_version\030\004 \001(\004R\020placementVersion\0224\n"
+    "\026placement_operation_id\030\005 \001(\tR\024placement"
+    "OperationId\"\311\001\n\033AcknowledgeDepartureRequ"
+    "est\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022#\n\rassi"
+    "gnment_id\030\002 \001(\tR\014assignmentId\022 \n\014hub_pod"
+    "_name\030\003 \001(\tR\nhubPodName\022!\n\014admission_id\030"
+    "\004 \001(\tR\013admissionId\022#\n\radmission_seq\030\005 \001("
+    "\004R\014admissionSeq\"j\n\034AcknowledgeDepartureR"
+    "esponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v"
+    "1.ErrCodeR\004code\022\032\n\010departed\030\002 \001(\010R\010depar"
+    "ted\"\367\002\n\033HubReservationStorageRecord\022\033\n\tp"
+    "layer_id\030\001 \001(\004R\010playerId\022#\n\rassignment_i"
+    "d\030\002 \001(\tR\014assignmentId\022 \n\014hub_pod_name\030\003 "
+    "\001(\tR\nhubPodName\022(\n\020hub_instance_uid\030\004 \001("
+    "\tR\016hubInstanceUid\022\035\n\nauth_epoch\030\005 \001(\rR\ta"
+    "uthEpoch\022*\n\021auth_writer_epoch\030\006 \001(\rR\017aut"
+    "hWriterEpoch\022\"\n\rcreated_at_ms\030\007 \001(\003R\013cre"
+    "atedAtMs\022\"\n\rexpires_at_ms\030\010 \001(\003R\013expires"
+    "AtMs\0227\n\030assignment_expires_at_ms\030\t \001(\003R\025"
+    "assignmentExpiresAtMs\"\261\003\n\"HubConnectedOw"
+    "nershipStorageRecord\022\033\n\tplayer_id\030\001 \001(\004R"
+    "\010playerId\022#\n\rassignment_id\030\002 \001(\tR\014assign"
+    "mentId\022!\n\014admission_id\030\003 \001(\tR\013admissionI"
+    "d\022 \n\014hub_pod_name\030\004 \001(\tR\nhubPodName\022(\n\020h"
+    "ub_instance_uid\030\005 \001(\tR\016hubInstanceUid\022\035\n"
+    "\nauth_epoch\030\006 \001(\rR\tauthEpoch\022*\n\021auth_wri"
+    "ter_epoch\030\007 \001(\rR\017authWriterEpoch\022$\n\016admi"
+    "tted_at_ms\030\010 \001(\003R\014admittedAtMs\022 \n\014last_s"
+    "een_ms\030\t \001(\003R\nlastSeenMs\022\"\n\rexpires_at_m"
+    "s\030\n \001(\003R\013expiresAtMs\022#\n\radmission_seq\030\013 "
+    "\001(\004R\014admissionSeq*\304\001\n\014HubAuthPhase\022\036\n\032HU"
+    "B_AUTH_PHASE_UNSPECIFIED\020\000\022\034\n\030HUB_AUTH_P"
+    "HASE_BOOTSTRAP\020\001\022\031\n\025HUB_AUTH_PHASE_ACTIV"
+    "E\020\002\022\033\n\027HUB_AUTH_PHASE_ROTATING\020\003\022\036\n\032HUB_"
+    "AUTH_PHASE_QUARANTINED\020\004\022\036\n\032HUB_AUTH_PHA"
+    "SE_TERMINATING\020\0052\340\007\n\023HubAllocatorService"
+    "\022P\n\tAssignHub\022 .pandora.hub.v1.AssignHub"
+    "Request\032!.pandora.hub.v1.AssignHubRespon"
+    "se\022S\n\nReleaseHub\022!.pandora.hub.v1.Releas"
+    "eHubRequest\032\".pandora.hub.v1.ReleaseHubR"
+    "esponse\022\206\001\n\033EnsureHubDepartureForBattle\022"
+    "2.pandora.hub.v1.EnsureHubDepartureForBa"
+    "ttleRequest\0323.pandora.hub.v1.EnsureHubDe"
+    "partureForBattleResponse\022V\n\013TransferHub\022"
+    "\".pandora.hub.v1.TransferHubRequest\032#.pa"
+    "ndora.hub.v1.TransferHubResponse\022M\n\010List"
+    "Hubs\022\037.pandora.hub.v1.ListHubsRequest\032 ."
+    "pandora.hub.v1.ListHubsResponse\022P\n\tHeart"
+    "beat\022 .pandora.hub.v1.HeartbeatRequest\032!"
+    ".pandora.hub.v1.HeartbeatResponse\022q\n\024Ack"
+    "nowledgeAdmission\022+.pandora.hub.v1.Ackno"
+    "wledgeAdmissionRequest\032,.pandora.hub.v1."
+    "AcknowledgeAdmissionResponse\022q\n\024Acknowle"
+    "dgeDeparture\022+.pandora.hub.v1.Acknowledg"
+    "eDepartureRequest\032,.pandora.hub.v1.Ackno"
+    "wledgeDepartureResponse\022Y\n\014ListHubLines\022"
+    "#.pandora.hub.v1.ListHubLinesRequest\032$.p"
+    "andora.hub.v1.ListHubLinesResponse\022_\n\016Tr"
+    "ansferToLine\022%.pandora.hub.v1.TransferTo"
+    "LineRequest\032&.pandora.hub.v1.TransferToL"
+    "ineResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_deps[1] = {
@@ -6679,7 +6711,7 @@ static ::absl::once_flag descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto = {
     false,
     false,
-    9673,
+    9739,
     descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto,
     "pandora/hub/v1/allocator.proto",
     &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_once,
@@ -6720,7 +6752,8 @@ PROTOBUF_NDEBUG_INLINE AssignHubRequest::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         region_(arena, from.region_),
-        placement_operation_id_(arena, from.placement_operation_id_) {}
+        placement_operation_id_(arena, from.placement_operation_id_),
+        session_jti_(arena, from.session_jti_) {}
 
 AssignHubRequest::AssignHubRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -6751,7 +6784,8 @@ PROTOBUF_NDEBUG_INLINE AssignHubRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         region_(arena),
-        placement_operation_id_(arena) {}
+        placement_operation_id_(arena),
+        session_jti_(arena) {}
 
 inline void AssignHubRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -6775,6 +6809,7 @@ inline void AssignHubRequest::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.region_.Destroy();
   this_._impl_.placement_operation_id_.Destroy();
+  this_._impl_.session_jti_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -6812,15 +6847,18 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.region_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.placement_operation_id_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.session_jti_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.role_id_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.role_id_));
@@ -6849,7 +6887,7 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6868,7 +6906,7 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
   }
 
   // uint64 team_id = 3 [json_name = "teamId"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_team_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6877,7 +6915,7 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
   }
 
   // uint32 role_id = 4 [json_name = "roleId"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_role_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -6886,7 +6924,7 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
   }
 
   // uint64 placement_version = 5 [json_name = "placementVersion"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_placement_version() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6905,11 +6943,21 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
   }
 
   // uint64 source_match_id = 7 [json_name = "sourceMatchId"];
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_source_match_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           7, this_._internal_source_match_id(), target);
+    }
+  }
+
+  // string session_jti = 8 [json_name = "sessionJti"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_session_jti().empty()) {
+      const ::std::string& _s = this_._internal_session_jti();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.AssignHubRequest.session_jti");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
     }
   }
 
@@ -6938,7 +6986,7 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string region = 2 [json_name = "region"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_region().empty()) {
@@ -6953,36 +7001,43 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
                                         this_._internal_placement_operation_id());
       }
     }
-    // uint64 player_id = 1 [json_name = "playerId"];
+    // string session_jti = 8 [json_name = "sessionJti"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_session_jti().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_session_jti());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint64 team_id = 3 [json_name = "teamId"];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_team_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_team_id());
       }
     }
     // uint64 placement_version = 5 [json_name = "placementVersion"];
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_placement_version() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_placement_version());
       }
     }
     // uint64 source_match_id = 7 [json_name = "sourceMatchId"];
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_source_match_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_source_match_id());
       }
     }
     // uint32 role_id = 4 [json_name = "roleId"];
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_role_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_role_id());
@@ -7006,7 +7061,7 @@ void AssignHubRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_region().empty()) {
         _this->_internal_set_region(from._internal_region());
@@ -7026,26 +7081,35 @@ void AssignHubRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_session_jti().empty()) {
+        _this->_internal_set_session_jti(from._internal_session_jti());
+      } else {
+        if (_this->_impl_.session_jti_.IsDefault()) {
+          _this->_internal_set_session_jti("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_team_id() != 0) {
         _this->_impl_.team_id_ = from._impl_.team_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_placement_version() != 0) {
         _this->_impl_.placement_version_ = from._impl_.placement_version_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_source_match_id() != 0) {
         _this->_impl_.source_match_id_ = from._impl_.source_match_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_role_id() != 0) {
         _this->_impl_.role_id_ = from._impl_.role_id_;
       }
@@ -7072,6 +7136,7 @@ void AssignHubRequest::InternalSwap(AssignHubRequest* PROTOBUF_RESTRICT PROTOBUF
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.region_, &other->_impl_.region_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.placement_operation_id_, &other->_impl_.placement_operation_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.session_jti_, &other->_impl_.session_jti_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.role_id_)
       + sizeof(AssignHubRequest::_impl_.role_id_)
@@ -15559,7 +15624,8 @@ PROTOBUF_NDEBUG_INLINE AcknowledgeAdmissionRequest::Impl_::Impl_(
         assignment_id_(arena, from.assignment_id_),
         hub_pod_name_(arena, from.hub_pod_name_),
         admission_id_(arena, from.admission_id_),
-        placement_operation_id_(arena, from.placement_operation_id_) {}
+        placement_operation_id_(arena, from.placement_operation_id_),
+        session_jti_(arena, from.session_jti_) {}
 
 AcknowledgeAdmissionRequest::AcknowledgeAdmissionRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -15592,7 +15658,8 @@ PROTOBUF_NDEBUG_INLINE AcknowledgeAdmissionRequest::Impl_::Impl_(
         assignment_id_(arena),
         hub_pod_name_(arena),
         admission_id_(arena),
-        placement_operation_id_(arena) {}
+        placement_operation_id_(arena),
+        session_jti_(arena) {}
 
 inline void AcknowledgeAdmissionRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -15618,6 +15685,7 @@ inline void AcknowledgeAdmissionRequest::SharedDtor(MessageLite& self) {
   this_._impl_.hub_pod_name_.Destroy();
   this_._impl_.admission_id_.Destroy();
   this_._impl_.placement_operation_id_.Destroy();
+  this_._impl_.session_jti_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -15655,7 +15723,7 @@ PROTOBUF_NOINLINE void AcknowledgeAdmissionRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.assignment_id_.ClearNonDefaultToEmpty();
     }
@@ -15668,12 +15736,16 @@ PROTOBUF_NOINLINE void AcknowledgeAdmissionRequest::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _impl_.placement_operation_id_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.session_jti_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.source_match_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.source_match_id_));
+        reinterpret_cast<char*>(&_impl_.placement_version_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.placement_version_));
   }
+  _impl_.source_match_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -15698,7 +15770,7 @@ PROTOBUF_NOINLINE void AcknowledgeAdmissionRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -15737,7 +15809,7 @@ PROTOBUF_NOINLINE void AcknowledgeAdmissionRequest::Clear() {
   }
 
   // uint64 admission_seq = 5 [json_name = "admissionSeq"];
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_admission_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -15746,7 +15818,7 @@ PROTOBUF_NOINLINE void AcknowledgeAdmissionRequest::Clear() {
   }
 
   // uint64 placement_version = 6 [json_name = "placementVersion"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_placement_version() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -15765,11 +15837,21 @@ PROTOBUF_NOINLINE void AcknowledgeAdmissionRequest::Clear() {
   }
 
   // uint64 source_match_id = 8 [json_name = "sourceMatchId"];
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_source_match_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           8, this_._internal_source_match_id(), target);
+    }
+  }
+
+  // string session_jti = 9 [json_name = "sessionJti"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_session_jti().empty()) {
+      const ::std::string& _s = this_._internal_session_jti();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.AcknowledgeAdmissionRequest.session_jti");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
     }
   }
 
@@ -15827,29 +15909,38 @@ PROTOBUF_NOINLINE void AcknowledgeAdmissionRequest::Clear() {
                                         this_._internal_placement_operation_id());
       }
     }
-    // uint64 player_id = 1 [json_name = "playerId"];
+    // string session_jti = 9 [json_name = "sessionJti"];
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_session_jti().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_session_jti());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint64 admission_seq = 5 [json_name = "admissionSeq"];
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_admission_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_admission_seq());
       }
     }
     // uint64 placement_version = 6 [json_name = "placementVersion"];
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_placement_version() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_placement_version());
       }
     }
+  }
+   {
     // uint64 source_match_id = 8 [json_name = "sourceMatchId"];
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_source_match_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_source_match_id());
@@ -15911,24 +16002,33 @@ void AcknowledgeAdmissionRequest::MergeImpl(::google::protobuf::MessageLite& to_
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_session_jti().empty()) {
+        _this->_internal_set_session_jti(from._internal_session_jti());
+      } else {
+        if (_this->_impl_.session_jti_.IsDefault()) {
+          _this->_internal_set_session_jti("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_admission_seq() != 0) {
         _this->_impl_.admission_seq_ = from._impl_.admission_seq_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_placement_version() != 0) {
         _this->_impl_.placement_version_ = from._impl_.placement_version_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_source_match_id() != 0) {
-        _this->_impl_.source_match_id_ = from._impl_.source_match_id_;
-      }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_source_match_id() != 0) {
+      _this->_impl_.source_match_id_ = from._impl_.source_match_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -15954,6 +16054,7 @@ void AcknowledgeAdmissionRequest::InternalSwap(AcknowledgeAdmissionRequest* PROT
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_name_, &other->_impl_.hub_pod_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.admission_id_, &other->_impl_.admission_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.placement_operation_id_, &other->_impl_.placement_operation_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.session_jti_, &other->_impl_.session_jti_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.source_match_id_)
       + sizeof(AcknowledgeAdmissionRequest::_impl_.source_match_id_)

@@ -66,6 +66,14 @@ login:
   require_hub_assignment_binding: false
   # require_hub_assignment_binding=true 时由集群配置生成器原子注入 hub_assignment_fence。
 
+  # 会话代际强制门(R7/R8 收口,分阶段激活;顺序见 docs/design/session-generation-rollout.md):
+  #   session_generation_enforce: 首次上线必须 false(只 emit 双写);全 fleet emit +
+  #     旧版本排空 + 000003 迁移已跑后才可置 true(SetRole 同事务 FOR UPDATE 复核代际)。
+  #   require_ticket_sjti: 首次上线必须 false(空 sjti 票告警放行,混版兼容窗);
+  #     全 fleet 签发面必带 sjti + 旧版本排空 + 等满票据最大 TTL 后才可置 true(硬拒空票)。
+  session_generation_enforce: false
+  require_ticket_sjti: false
+
   # 开发期免密登录(⚠️ 仅本机 / 联调,严禁上生产):
   #   true  → 跳过密码校验;账号不存在时自动懒注册,返回稳定 player_id
   #           客户端随便填一个账号名就能进,无需独立注册流程

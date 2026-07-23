@@ -75,7 +75,9 @@ type ResumeContextResult struct {
 // BattleTicketIssuer 把所有 login 侧 Battle 票据签发统一到带 roster 权威门的入口。
 // TicketUsecase 实现此接口；测试可注入严格 fake 验证 fail-closed 行为。
 type BattleTicketIssuer interface {
-	IssueBattleDSTicketAtCell(context.Context, uint64, uint64, uint32, uint32) (*DSTicketResult, error)
+	// 末位 sessionJTI(R6 复审 P0-3):请求方登录会话 jti,签进 battle 票 sjti claim
+	// (VerifyDSTicket 在线核销时复核现行性);空 = 无网关证据(dev/兼容窗)。
+	IssueBattleDSTicketAtCell(context.Context, uint64, uint64, uint32, uint32, string) (*DSTicketResult, error)
 	// InspectBattleRoute 是 Hub 签票门的显式三态权威判定(零副作用,不签票):
 	//   data.BattleRouteActive   = 玩家确属 live 对局 → 拒绝 Hub;
 	//   data.BattleRouteTerminal = 权威记录显式终态(ended/abandoned) → 唯一允许 Hub 的证明;
@@ -108,6 +110,29 @@ type LoginUsecase struct {
 	// hub_allocator 故障/旧版本返回无绑定票时回退；所有 hub 入场票必须由 allocator 权威签发。
 	requireHubAssignmentBinding bool
 
+	// sessionGen 会话代际 MySQL 仓储(R7 复审 P0-4,SetSessionGenerationRepo 注入)。
+	// Login 先在 MySQL 原子分配单调代际(fail-closed,定序权威),再条件写 Redis;
+	// 业务写事务(SetRole)在同一 MySQL 事务域内复核代际即可确定性挡掉旧会话。
+	sessionGen data.SessionGenerationRepo
+
+	// sessionGenEnforce 是 SetRole 会话代际强制门(R7 收口,滚动发布分阶段激活)。
+	// false(默认):Login 照常双写代际(emit),但 SetRole 不做 MySQL 代际复核——滚动
+	// 窗口内旧 Login Pod 不写代际,MySQL 行陈旧会误拒合法会话,必须等全 fleet emit 且
+	// 旧版本排空后才能开;true:SetRole 同事务 FOR UPDATE 复核代际,确定性挡旧会话。
+	// 关闭期间纵深仍在:precommit(Redis 现行性复核)不受本门控制。
+	sessionGenEnforce bool
+
+	// requireTicketSJTI 是票据兑换点空 sjti 强制门(R8 收口,P0-5 滚动兼容;与
+	// hub_allocator 的 session_gate.require_ticket_sjti 同语义、独立开关)。
+	// false(默认兼容档):VerifyDSTicket 收到不带 sjti 的票据时告警放行——滚动窗口内
+	// 旧签发面(旧 matchmaker/旧 hub_allocator)仍持续签空 sjti 票,硬拒会让混版期战斗
+	// 准入整体不可用;非空 sjti 始终强制复核现行性(fail-closed),不受本门影响。
+	// true:空 sjti 硬拒 ErrUnauthorized。激活前提(顺序硬约束,见
+	// docs/design/session-generation-rollout.md):全 fleet 签发面已升级为必带 sjti、
+	// 旧版本 Pod 已排空、再等满一个票据最大 TTL(部署内实际启用签发器的最大值,
+	// v2 RS256 上限 180s;若 legacy HS256 仍在用则为其 ds_ticket_ttl,默认 5min)。
+	requireTicketSJTI bool
+
 	// matchResolver 是 matchmaker 只读权威兜底(P0 修复 2026-07-15,codex P0-2/P0-3/P0-4)。
 	// locator 是 30s TTL presence 投影,不能当"玩家不在对局"的证明;matchmaker 的
 	// player claim + match 记录才是耐久事实。nil = presence-only(dev/local 兼容)。
@@ -139,6 +164,27 @@ type LoginUsecase struct {
 // SetBattleTicketIssuer 在服务启动、对外监听前注入统一的 Battle 票据签发入口。
 func (u *LoginUsecase) SetBattleTicketIssuer(issuer BattleTicketIssuer) {
 	u.battleTicketIssuer = issuer
+}
+
+// SetSessionGenerationRepo 注入会话代际 MySQL 仓储(R7 复审 P0-4)。非 nil 时 Login 在
+// Redis 会话写入之前先原子推进 player_session_generations 单调代际(fail-closed 定序
+// 权威),供 SetRole 等业务写在同一 MySQL 事务域内做 fencing。nil = dev 裸跑降级。
+func (u *LoginUsecase) SetSessionGenerationRepo(repo data.SessionGenerationRepo) {
+	u.sessionGen = repo
+}
+
+// SetSessionGenerationEnforce 设置 SetRole 会话代际强制门(默认 false=只 emit 不强制)。
+// 激活前提:全 fleet Login 已升级到会写代际的版本且旧版本已排空(发布顺序见
+// docs/design/session-generation-rollout.md);提前开启会误拒经旧 Pod 登录的合法会话。
+func (u *LoginUsecase) SetSessionGenerationEnforce(enforce bool) {
+	u.sessionGenEnforce = enforce
+}
+
+// SetRequireTicketSJTI 设置票据兑换点空 sjti 强制门(默认 false=兼容档告警放行)。
+// 激活前提:全 fleet 签发面必带 sjti、旧版本排空、等满一个票据最大 TTL(发布顺序见
+// docs/design/session-generation-rollout.md);提前开启会硬拒旧签发面的存量合法票。
+func (u *LoginUsecase) SetRequireTicketSJTI(require bool) {
+	u.requireTicketSJTI = require
 }
 
 // SetMatchContextResolver 注入 matchmaker 只读权威客户端(可 nil,presence-only 降级)。
@@ -269,11 +315,31 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		return nil, errcode.New(errcode.ErrInternal, "sign session failed: %v", err)
 	}
 
-	// 写 session:同 player_id 多端登录直接覆盖前一份(顶号语义跟 push.ConnectionManager 一致)
+	// 写 session(R7 收口,并发 Login 定序):先 MySQL 原子分配单调代际(登录定序权威,
+	// fail-closed),再对 Redis 做「仅更高代际可覆盖」的条件写。任意并发交错下两个存储
+	// 最终都收敛到最高代际那次登录;输掉定序的登录(条件写被拒)直接失败,不交付凭据,
+	// 不再出现「Redis=B、MySQL=A」的撕裂(旧实现先写 Redis 再无条件覆盖 MySQL 的缺陷)。
+	//
+	// 部分失败口径:MySQL 已提交、Redis 写失败(网络类错误)时本次登录失败,MySQL 代际
+	// 领先于 Redis 会话——方向是 fail-closed(SetRole 代际强制门开启时,旧会话角色写会被
+	// 拒到下一次成功登录为止),不产生任何"旧会话获得新权威"的口子;下一次成功登录
+	// 原子推进两个存储自愈。
 	sessTTL := u.signer.SessionTTL()
+	var sessGen uint64
+	if u.sessionGen != nil {
+		gen, gerr := u.sessionGen.PersistSessionJTI(ctx, playerID, sessJTI)
+		if gerr != nil {
+			h.Errorw("msg", "session_generation_persist_failed", "err", gerr, "player_id", playerID)
+			return nil, errcode.NewCause(errcode.ErrUnavailable, gerr,
+				"session generation persistence unavailable; login rejected")
+		}
+		sessGen = gen
+	}
 	if u.sessions != nil {
-		if err := u.sessions.Set(ctx, playerID, sessionToken, sessJTI, deviceID, sessTTL); err != nil {
-			h.Errorw("msg", "session_set_failed", "err", err, "player_id", playerID)
+		if err := u.sessions.Set(ctx, playerID, sessionToken, sessJTI, deviceID, sessTTL, sessGen); err != nil {
+			// ErrSessionSuperseded = 并发更新一代登录已完成写入,本次登录定序失败;
+			// 其余为基础设施错误。两者都不得交付凭据。
+			h.Warnw("msg", "session_set_failed", "err", err, "player_id", playerID, "gen", sessGen)
 			return nil, err
 		}
 	}
@@ -300,7 +366,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 				"player locator is required before B1 hub assignment")
 		}
 	} else {
-		res, terminalFence, reconnectErr := u.tryBattleReconnect(ctx, playerID, deviceID, sessionToken, sessExpMs, regionID, cellID)
+		res, terminalFence, reconnectErr := u.tryBattleReconnect(ctx, playerID, deviceID, sessionToken, sessExpMs, regionID, cellID, sessJTI)
 		if reconnectErr != nil {
 			return nil, reconnectErr
 		}
@@ -338,7 +404,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 解析 hub 分片 + hub 票据(W4 ⑥):
 	// hub_allocator 是 hub 票据权威,优先调 AssignHub 拿真实地址 + 票据;
 	// 未配 / 调用失败 → 回退自签票据(盖 region/cell 戳) + 静态 hubDSAddr(弱依赖,不阻断登录)。
-	hubDSAddr, hubTicket, hubExpMs, err := u.resolveHub(ctx, playerID, regionID, cellID, selectedRoleID, hubFenceMatchID)
+	hubDSAddr, hubTicket, hubExpMs, err := u.resolveHub(ctx, playerID, regionID, cellID, selectedRoleID, hubFenceMatchID, sessJTI)
 	if err != nil {
 		h.Errorw("msg", "resolve_hub_failed", "err", err, "player_id", playerID)
 		return nil, err
@@ -485,6 +551,7 @@ func (u *LoginUsecase) buildBattleResume(
 func (u *LoginUsecase) ResolveBattleEndpoint(
 	ctx context.Context,
 	playerID, matchID uint64,
+	sessJTI string,
 ) (addr, ticket string, expMs int64, err error) {
 	if playerID == 0 || matchID == 0 {
 		return "", "", 0, errcode.New(errcode.ErrInvalidArg,
@@ -496,7 +563,7 @@ func (u *LoginUsecase) ResolveBattleEndpoint(
 	}
 	regionID, cellID := u.routeRegionCell(ctx, playerID)
 	result, issueErr := u.battleTicketIssuer.IssueBattleDSTicketAtCell(
-		ctx, playerID, matchID, regionID, cellID)
+		ctx, playerID, matchID, regionID, cellID, sessJTI)
 	if issueErr != nil || result == nil || result.BattleDSAddr == "" || result.Ticket == "" {
 		return "", "", 0, errcode.NewCause(errcode.ErrUnavailable, issueErr,
 			"battle reconnect ticket authority unavailable")
@@ -621,7 +688,7 @@ func (u *LoginUsecase) resolveBattleAuthority(ctx context.Context, playerID uint
 //
 // 命中重连时不调 NotifyLoginPending / 不分配 hub(避免把 BATTLE 位置顶成 HUB)。
 func (u *LoginUsecase) tryBattleReconnect(
-	ctx context.Context, playerID uint64, deviceID, sessionToken string, sessExpMs int64, regionID, cellID uint32,
+	ctx context.Context, playerID uint64, deviceID, sessionToken string, sessExpMs int64, regionID, cellID uint32, sessJTI string,
 ) (*LoginResult, uint64, error) {
 	h := plog.With(ctx)
 
@@ -672,7 +739,7 @@ func (u *LoginUsecase) tryBattleReconnect(
 	}
 
 	battleResult, terr := u.battleTicketIssuer.IssueBattleDSTicketAtCell(
-		ctx, playerID, bl.MatchID, regionID, cellID)
+		ctx, playerID, bl.MatchID, regionID, cellID, sessJTI)
 	if terr != nil {
 		// roster/Redis/签票任一失败 → 本次路由可重试,绝不直签或继续分配 Hub。
 		h.Errorw("msg", "authorize_battle_reconnect_ticket_failed", "err", terr,
@@ -875,15 +942,16 @@ func (u *LoginUsecase) routeRegionCell(ctx context.Context, playerID uint64) (re
 // P0 止血(2026-07-14,docs §7.16.3 候选 A 下沉):本入口是客户端直连 battle 失败/重连超时
 // 回大厅的旁路,必须先过 active-BATTLE 三态权威门;BATTLE_ACTIVE/UNKNOWN 时零副作用拒绝,
 // 绝不先 AssignHub 再补偿。
-func (u *LoginUsecase) ResolveHubEndpoint(ctx context.Context, playerID uint64) (addr, ticket string, expMs int64, err error) {
-	return u.ResolveHubEndpointFromMatch(ctx, playerID, 0)
+// sessJTI(R6 复审 P0-3):请求方登录会话 jti,签进 hub 票 sjti claim;空 = 兼容窗。
+func (u *LoginUsecase) ResolveHubEndpoint(ctx context.Context, playerID uint64, sessJTI string) (addr, ticket string, expMs int64, err error) {
+	return u.ResolveHubEndpointFromMatch(ctx, playerID, 0, sessJTI)
 }
 
 // ResolveHubEndpointFromMatch 是结算/离开战斗回大厅路径。sourceMatchID 仅作日志
 // 参考;路由权威完全由 guardHubRouteAgainstActiveBattle 的三态门决定
 // (Active→拒绝,Terminal→放行,Unknown→可重试)。回流 fence 同样取门的权威判定
 // (locator BATTLE 残留的 match_id),不信客户端上报的 sourceMatchID。
-func (u *LoginUsecase) ResolveHubEndpointFromMatch(ctx context.Context, playerID, sourceMatchID uint64) (addr, ticket string, expMs int64, err error) {
+func (u *LoginUsecase) ResolveHubEndpointFromMatch(ctx context.Context, playerID, sourceMatchID uint64, sessJTI string) (addr, ticket string, expMs int64, err error) {
 	if playerID == 0 {
 		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "playerID must be > 0")
 	}
@@ -893,7 +961,7 @@ func (u *LoginUsecase) ResolveHubEndpointFromMatch(ctx context.Context, playerID
 	}
 	regionID, cellID := u.routeRegionCell(ctx, playerID)
 	// 选角权威化:返回大厅路径也把已选角盖进新票(与登录同语义,DS 重入时同样能 spawn 对角色)。
-	return u.resolveHub(ctx, playerID, regionID, cellID, u.loadSelectedRole(ctx, playerID), fenceMatchID)
+	return u.resolveHub(ctx, playerID, regionID, cellID, u.loadSelectedRole(ctx, playerID), fenceMatchID, sessJTI)
 }
 
 // guardHubRouteAgainstActiveBattle 是所有非 Login 主链 Hub 签票入口(IssueDSTicket(hub) /
@@ -985,7 +1053,14 @@ func (u *LoginUsecase) loadSelectedRole(ctx context.Context, playerID uint64) ui
 //
 // 幂等:重复选同角 / 换角重选都是覆盖式 upsert + 重签新票(新 jti),不破坏票据一次性语义。
 // roleRepo 未配(dev 裸跑)时跳过落库只签票,Warn 提示。
-func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID uint32) (addr, ticket string, expMs int64, err error) {
+//
+// sessJTI(R6 复审 P0-3):请求方会话 jti(service 层已预检 == 当前一代)。两个用途:
+//  1. 角色落库 precommit fencing:SetRole 事务在 UPSERT 后、COMMIT 前复核 jti 仍现行,
+//     被顶旧会话的角色写 ROLLBACK 不落地(不再"落库后才终检");
+//  2. 签进 hub 票据 sjti claim(VerifyDSTicket 在线核销时复核现行性)。
+//
+// 空 = dev 无网关证据:两处都跳过(与其余现行性门 dev 语义一致)。
+func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID uint32, sessJTI string) (addr, ticket string, expMs int64, err error) {
 	h := plog.With(ctx)
 	if playerID == 0 {
 		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "playerID must be > 0")
@@ -1012,7 +1087,24 @@ func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID u
 	}
 
 	if u.roleRepo != nil {
-		if serr := u.roleRepo.SetRole(ctx, playerID, roleID); serr != nil {
+		// 双层 fencing(R6 P0-3 + R7 P0-4):
+		//  1. expectedSessJTI → SetRole 在同一 MySQL 事务内 FOR UPDATE 复核持久化会话代际,
+		//     与登录代际写串行化,确定性挡掉被顶旧会话(主防线;由 sessionGenEnforce 门
+		//     控制——滚动窗口内旧 Login Pod 不写代际,MySQL 行陈旧会误拒合法会话,
+		//     必须全 fleet emit + 旧版本排空后才激活,见 SetSessionGenerationEnforce);
+		//  2. precommit → COMMIT 前读 Redis 会话权威复核(纵深,不受强制门控制)。
+		// sessJTI 空(dev 无网关证据)→ 两层都跳过,单语句路径行为不变。
+		var precommit func(context.Context) error
+		expectedSessJTI := ""
+		if sessJTI != "" && u.sessions != nil {
+			if u.sessionGenEnforce {
+				expectedSessJTI = sessJTI
+			}
+			precommit = func(pctx context.Context) error {
+				return u.requireCurrentSession(pctx, playerID, sessJTI)
+			}
+		}
+		if serr := u.roleRepo.SetRole(ctx, playerID, roleID, expectedSessJTI, precommit); serr != nil {
 			h.Errorw("msg", "select_role_persist_failed", "err", serr, "player_id", playerID, "role_id", roleID)
 			return "", "", 0, serr
 		}
@@ -1021,7 +1113,7 @@ func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID u
 	}
 
 	regionID, cellID := u.routeRegionCell(ctx, playerID)
-	addr, ticket, expMs, err = u.resolveHub(ctx, playerID, regionID, cellID, roleID, fenceMatchID)
+	addr, ticket, expMs, err = u.resolveHub(ctx, playerID, regionID, cellID, roleID, fenceMatchID, sessJTI)
 	if err != nil {
 		h.Errorw("msg", "select_role_resolve_hub_failed", "err", err, "player_id", playerID, "role_id", roleID)
 		return "", "", 0, err
@@ -1142,6 +1234,17 @@ func (u *LoginUsecase) Logout(ctx context.Context, sessionToken string) error {
 		h.Infow("msg", "logout_stale_session_ignored", "player_id", playerID)
 		return nil
 	}
+	// MySQL 代际墓碑(R8 收口,P2 纵深):只删 Redis 会让 player_session_generations
+	// 行继续持有已登出的旧 jti。条件 CAS 写(仅行内仍是本 jti 才改墓碑),并发新登录
+	// 已轮换则 no-op,不毒化新会话。best-effort:Redis 删除(主权威)已成功,MySQL
+	// 墓碑失败仅告警——残留旧 jti 行只在 Redis 同时失效的双故障下才可见,且所有
+	// 现行性门对 Redis 会话消失均 fail-closed。
+	if u.sessionGen != nil {
+		if _, terr := u.sessionGen.TombstoneSessionJTI(ctx, playerID, claims.ID); terr != nil {
+			h.Warnw("msg", "logout_session_generation_tombstone_failed_weak",
+				"player_id", playerID, "err", terr)
+		}
+	}
 	// owner 迁移释放(owner-authority.md migrate ⑤,弱依赖):显式登出后释放当前 owner。
 	// Query→Release 携带观察到的 epoch+operation(compare-delete 自己):并发迁移竞态下
 	// Release 在 owner 侧幂等 no-op,绝不误删新 owner;失败仅告警,不影响登出结果。
@@ -1156,6 +1259,35 @@ func (u *LoginUsecase) Logout(ctx context.Context, sessionToken string) error {
 	}
 	h.Infow("msg", "logout_ok", "player_id", playerID)
 	return nil
+}
+
+// RequireTicketSessionCurrent 票据兑换点会话复核(R6 复审 P0-3 → R8 收口,§9.23):DS 经
+// VerifyDSTicket 在线核销票据时,对票内 sjti claim 复核会话权威——签发与响应写出
+// 之间被新登录轮换的旧票,即使已交付到旧设备,也在兑换点作废。
+//   - sessions 未配(dev 裸跑):跳过(无权威可比,与其余现行性门同语义);
+//   - sjti 空(R8 收口,P0-5 滚动兼容):由 requireTicketSJTI 门控制——默认兼容档
+//     告警放行(滚动窗口内旧签发面仍持续签空票,硬拒会令混版期战斗准入整体不可用);
+//     全 fleet 签发面必带 sjti + 旧版本排空 + 等满票据最大 TTL 后开门硬拒(空票是
+//     绕过会话绑定的万能票,收口后不再允许)。发布顺序见
+//     docs/design/session-generation-rollout.md;
+//   - 权威不可达:ErrUnavailable(fail-closed,DS 拒绝准入可重试);
+//   - 会话已消失:ErrUnauthorized;已被新登录轮换:ErrSessionSuperseded。
+func (u *LoginUsecase) RequireTicketSessionCurrent(ctx context.Context, playerID uint64, ticketSessJTI string) error {
+	if u == nil || u.sessions == nil {
+		return nil
+	}
+	if ticketSessJTI == "" {
+		if u.requireTicketSJTI {
+			plog.With(ctx).Warnw("msg", "ticket_missing_session_binding_rejected", "player_id", playerID)
+			return errcode.New(errcode.ErrUnauthorized,
+				"ticket lacks session binding (sjti); reissue required")
+		}
+		plog.With(ctx).Warnw("msg", "ticket_missing_session_binding_compat_allow",
+			"player_id", playerID,
+			"hint", "混版兼容窗;签发面排空+等满票据最大 TTL 后开 login.require_ticket_sjti 收口")
+		return nil
+	}
+	return u.requireCurrentSession(ctx, playerID, ticketSessJTI)
 }
 
 // fenceLoginDelivery 登录副作用交付终检(R5 复审 P0-5,INC-20260722-004):

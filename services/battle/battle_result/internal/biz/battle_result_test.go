@@ -20,6 +20,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
+	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/data"
@@ -1769,4 +1770,302 @@ func TestDropTransientErrNoMailOverflow(t *testing.T) {
 	if len(repo.dropOutbox) != 1 {
 		t.Fatalf("transient err must retain row, got %d", len(repo.dropOutbox))
 	}
+}
+
+// ── canonical game_mode 权威绑定 + pve_coop 零 MMR(§9.6 数值不信 DS)────────────
+
+// countingMMRReader 记录 GetMMR 调用次数:canonical pve_coop 路径必须零调用。
+type countingMMRReader struct {
+	base  int
+	calls int
+}
+
+func (c *countingMMRReader) GetMMR(context.Context, uint64) (int, error) {
+	c.calls++
+	return c.base, nil
+}
+
+// newCountingUsecase 构造注入 countingMMRReader 的 usecase(等分基线 1500 / K=32:
+// terminalResult 的 A 胜结构在 Elo 路径产出 ±16,可与零 MMR 路径明确区分)。
+func newCountingUsecase(repo data.BattleRepo, mmr MMRReader) *BattleResultUsecase {
+	cfg := conf.BattleConf{EloKFactor: 32, BaseMMR: 1500, TerminalReleaseGrace: config.Duration(5 * time.Second)}
+	return NewBattleResultUsecase(repo, mmr, &fakePusher{}, nil, cfg)
+}
+
+// pveTerminalProof 组一份 canonical GameMode=pve_coop / MapID=10 的授权证明。
+func pveTerminalProof(matchID uint64, pod string) data.TerminalReleaseRecord {
+	proof := terminalProof(matchID, pod, "j1", 1)
+	proof.GameMode = canonicalGameModePVECoop
+	proof.MapID = 10
+	return proof
+}
+
+// assertAllDeltas 断言 result 内每个 stat 的 mmr_delta 按 team 命中期望。
+func assertAllDeltas(t *testing.T, result *battlev1.BattleResult, wantTeam0, wantTeam1 int32) {
+	t.Helper()
+	for _, s := range result.GetStats() {
+		want := wantTeam0
+		if s.GetTeam() == 1 {
+			want = wantTeam1
+		}
+		if s.GetMmrDelta() != want {
+			t.Fatalf("player %d team %d mmr_delta got %d want %d", s.GetPlayerId(), s.GetTeam(), s.GetMmrDelta(), want)
+		}
+	}
+}
+
+// TestAuthorizedPVECanonicalOverridesForgedRequestAndZeroesMMR(测试二):
+// canonical pve_coop + DS 伪报 game_mode/map_id/mmr_delta → 落库以 canonical 为准,
+// 全员 delta=0,MMR reader 零调用;正常结算、terminal release 与两路 outbox 仍生成。
+func TestAuthorizedPVECanonicalOverridesForgedRequestAndZeroesMMR(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	uc := newCountingUsecase(repo, mmr)
+
+	result := terminalResult(810, "battle-810")
+	result.GameMode = "5v5_ranked" // DS 伪报玩法
+	result.MapId = 99              // DS 伪报地图
+	result.Stats[0].MmrDelta = 77  // DS 脏值
+	result.Stats[1].MmrDelta = -77
+
+	already, err := uc.ReportAuthorizedResult(context.Background(), result, pveTerminalProof(810, "battle-810"), 0)
+	if err != nil || already {
+		t.Fatalf("authorized pve report already=%v err=%v", already, err)
+	}
+	saved, ok, _ := repo.GetResult(context.Background(), 810)
+	if !ok {
+		t.Fatal("pve settlement not persisted")
+	}
+	if saved.GetGameMode() != canonicalGameModePVECoop || saved.GetMapId() != 10 {
+		t.Fatalf("saved metadata not canonical: game_mode=%q map_id=%d", saved.GetGameMode(), saved.GetMapId())
+	}
+	if saved.GetOutcome() != battlev1.BattleOutcome_BATTLE_OUTCOME_NORMAL {
+		t.Fatalf("pve settle outcome got %v want NORMAL", saved.GetOutcome())
+	}
+	assertAllDeltas(t, result, 0, 0)
+	assertAllDeltas(t, saved, 0, 0)
+	if mmr.calls != 0 {
+		t.Fatalf("canonical pve_coop must not touch MMR reader, calls=%d", mmr.calls)
+	}
+	// 正常结算副作用不缺席:player.update 出箱 / terminal release 证明 / match release。
+	if len(repo.outbox) != 2 || len(repo.terminalOutbox) != 1 || len(repo.matchReleaseOutbox) != 1 {
+		t.Fatalf("pve settle side effects wrong: outbox=%d terminal=%d release=%d",
+			len(repo.outbox), len(repo.terminalOutbox), len(repo.matchReleaseOutbox))
+	}
+	// 出箱 payload 里的 delta 也必须是 0(玩家段位不因 PVE 变动)。
+	for _, o := range repo.outbox {
+		evt := &playerv1.PlayerUpdateEvent{}
+		if err := proto.Unmarshal(o.Payload, evt); err != nil {
+			t.Fatalf("decode outbox payload: %v", err)
+		}
+		if evt.GetMmrDelta() != 0 {
+			t.Fatalf("pve outbox player %d mmr_delta got %d want 0", evt.GetPlayerId(), evt.GetMmrDelta())
+		}
+	}
+}
+
+// TestAuthorizedPVPCannotMasqueradeAsPVE(测试三):canonical 是 5v5_ranked 时,
+// DS 请求伪填 pve_coop 也必须按 PVP 走 Elo(±16),且落库 game_mode 被覆盖回 canonical。
+func TestAuthorizedPVPCannotMasqueradeAsPVE(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	uc := newCountingUsecase(repo, mmr)
+
+	proof := terminalProof(811, "battle-811", "j1", 1)
+	proof.GameMode = "5v5_ranked"
+	proof.MapID = 3
+	result := terminalResult(811, "battle-811")
+	result.GameMode = canonicalGameModePVECoop // DS 伪装 PVE 想跳过掉分
+	result.MapId = 10
+
+	already, err := uc.ReportAuthorizedResult(context.Background(), result, proof, 0)
+	if err != nil || already {
+		t.Fatalf("authorized pvp report already=%v err=%v", already, err)
+	}
+	saved, ok, _ := repo.GetResult(context.Background(), 811)
+	if !ok {
+		t.Fatal("pvp settlement not persisted")
+	}
+	if saved.GetGameMode() != "5v5_ranked" || saved.GetMapId() != 3 {
+		t.Fatalf("pvp metadata not canonical: game_mode=%q map_id=%d", saved.GetGameMode(), saved.GetMapId())
+	}
+	// 等分基线 + A 胜 → 现有 Elo 口径 ±16;必须真实执行 MMR 读(每 stat 一次)。
+	assertAllDeltas(t, saved, 16, -16)
+	if mmr.calls != len(result.GetStats()) {
+		t.Fatalf("pvp must read MMR per player, calls=%d want %d", mmr.calls, len(result.GetStats()))
+	}
+}
+
+// TestAuthorizedEmptyCanonicalModeKeepsLegacyElo(测试四):滚动升级前的旧
+// BattleStorageRecord 无 game_mode → canonical 为空。此时不允许按 DS 请求的
+// pve_coop 跳过 MMR:保持旧保守行为照算 Elo,结算不失败不卡住;落库 game_mode
+// 覆盖为空(不把不可信请求字段伪装成权威事实)。
+func TestAuthorizedEmptyCanonicalModeKeepsLegacyElo(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	uc := newCountingUsecase(repo, mmr)
+
+	proof := terminalProof(812, "battle-812", "j1", 1) // GameMode 零值 = 旧局无 canonical
+	result := terminalResult(812, "battle-812")
+	result.GameMode = canonicalGameModePVECoop // DS 请求不能作为安全降级依据
+	result.MapId = 10
+
+	already, err := uc.ReportAuthorizedResult(context.Background(), result, proof, 0)
+	if err != nil || already {
+		t.Fatalf("legacy-mode settle already=%v err=%v", already, err)
+	}
+	saved, ok, _ := repo.GetResult(context.Background(), 812)
+	if !ok {
+		t.Fatal("legacy-mode settlement must not be stuck")
+	}
+	if saved.GetGameMode() != "" || saved.GetMapId() != 0 {
+		t.Fatalf("empty canonical must persist empty metadata, got game_mode=%q map_id=%d",
+			saved.GetGameMode(), saved.GetMapId())
+	}
+	assertAllDeltas(t, saved, 16, -16)
+	if mmr.calls != len(result.GetStats()) {
+		t.Fatalf("empty canonical must keep Elo, MMR calls=%d want %d", mmr.calls, len(result.GetStats()))
+	}
+	if len(repo.terminalOutbox) != 1 {
+		t.Fatalf("legacy-mode settle must still write terminal release, rows=%d", len(repo.terminalOutbox))
+	}
+}
+
+// TestLegacyReportResultPVEClaimStillRunsElo(测试五):无 terminalRelease 的
+// ReportResult(legacy kafka / 内部直调)不得把请求体 game_mode=pve_coop 当零 MMR
+// 依据——没有 canonical 权威时保持现行结算行为,不形成未授权的 MMR 绕过入口。
+func TestLegacyReportResultPVEClaimStillRunsElo(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	uc := newCountingUsecase(repo, mmr)
+
+	result := terminalResult(813, "battle-813")
+	result.GameMode = canonicalGameModePVECoop
+	result.MapId = 10
+
+	already, err := uc.ReportResult(context.Background(), result, 0)
+	if err != nil || already {
+		t.Fatalf("legacy report already=%v err=%v", already, err)
+	}
+	saved, ok, _ := repo.GetResult(context.Background(), 813)
+	if !ok {
+		t.Fatal("legacy settlement not persisted")
+	}
+	assertAllDeltas(t, saved, 16, -16)
+	if mmr.calls != len(result.GetStats()) {
+		t.Fatalf("legacy path must keep Elo, MMR calls=%d want %d", mmr.calls, len(result.GetStats()))
+	}
+}
+
+// TestAbandonedPVERegression(测试六):ABANDONED 补偿语义不被 PVE 改动破坏——
+// 强制 delta=0、不产生掉落、不触碰 MMR reader;HandleAbandoned(pve_coop)幂等不变。
+func TestAbandonedPVERegression(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	cfg := conf.BattleConf{
+		EloKFactor: 32, BaseMMR: 1500, DropWhitelist: []uint32{5001},
+		TerminalReleaseGrace: config.Duration(5 * time.Second),
+	}
+	uc := NewBattleResultUsecase(repo, mmr, &fakePusher{}, nil, cfg)
+
+	res := &battlev1.BattleResult{
+		MatchId: 830, WinnerTeam: winnerTeamA, EndedAtMs: 1000,
+		GameMode: canonicalGameModePVECoop, MapId: 10,
+		Outcome: battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED,
+		Stats: []*battlev1.PlayerStats{
+			{PlayerId: 1, Team: 0, MmrDelta: 50, DroppedItemConfigIds: []uint32{5001}},
+			{PlayerId: 2, Team: 1, MmrDelta: -50, DroppedItemConfigIds: []uint32{5001}},
+		},
+	}
+	if already, err := uc.ReportResult(context.Background(), res, 0); err != nil || already {
+		t.Fatalf("abandoned pve report already=%v err=%v", already, err)
+	}
+	saved, ok, _ := repo.GetResult(context.Background(), 830)
+	if !ok || saved.GetOutcome() != battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED {
+		t.Fatalf("abandoned pve outcome wrong: ok=%v outcome=%v", ok, saved.GetOutcome())
+	}
+	assertAllDeltas(t, saved, 0, 0)
+	if len(repo.dropOutbox) != 0 {
+		t.Fatalf("abandoned must produce no drops, rows=%d", len(repo.dropOutbox))
+	}
+	if mmr.calls != 0 {
+		t.Fatalf("abandoned must not touch MMR reader, calls=%d", mmr.calls)
+	}
+
+	// HandleAbandoned(pve_coop)补偿 + 幂等语义不变。
+	if err := uc.HandleAbandoned(context.Background(), 831, []uint64{1, 2}, 10, canonicalGameModePVECoop, 0); err != nil {
+		t.Fatalf("HandleAbandoned pve err: %v", err)
+	}
+	comp, ok, _ := repo.GetResult(context.Background(), 831)
+	if !ok || comp.GetOutcome() != battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED {
+		t.Fatalf("pve compensation wrong: ok=%v outcome=%v", ok, comp.GetOutcome())
+	}
+	assertAllDeltas(t, comp, 0, 0)
+	if err := uc.HandleAbandoned(context.Background(), 831, []uint64{1, 2}, 10, canonicalGameModePVECoop, 0); err != nil {
+		t.Fatalf("idempotent HandleAbandoned pve err: %v", err)
+	}
+	if mmr.calls != 0 {
+		t.Fatalf("compensation must not touch MMR reader, calls=%d", mmr.calls)
+	}
+}
+
+// TestAuthorizedAbandonedProofStillRejected(测试六补):PVE 主动退出走 NORMAL 失败,
+// 不占用 ABANDONED;带 completed 终态证明的 ABANDONED 上报仍必须整体拒绝、零副作用。
+func TestAuthorizedAbandonedProofStillRejected(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	uc := newCountingUsecase(repo, mmr)
+
+	result := terminalResult(832, "battle-832")
+	result.Outcome = battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED
+	if _, err := uc.ReportAuthorizedResult(
+		context.Background(), result, pveTerminalProof(832, "battle-832"), 0,
+	); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("code=%v err=%v", errcode.As(err), err)
+	}
+	if len(repo.store) != 0 || len(repo.terminalOutbox) != 0 || len(repo.matchReleaseOutbox) != 0 {
+		t.Fatalf("rejected abandoned wrote state: store=%d terminal=%d release=%d",
+			len(repo.store), len(repo.terminalOutbox), len(repo.matchReleaseOutbox))
+	}
+	if mmr.calls != 0 {
+		t.Fatalf("rejected abandoned touched MMR reader, calls=%d", mmr.calls)
+	}
+}
+
+// TestAuthorizedPVEIdempotentReplayNoSecondSideEffects(测试七):重复
+// ReportAuthorizedResult 幂等命中,不重复计算 MMR、不产生第二套出箱/终态行,
+// 落库 canonical 元数据保持首笔。
+func TestAuthorizedPVEIdempotentReplayNoSecondSideEffects(t *testing.T) {
+	repo := newFakeRepo()
+	mmr := &countingMMRReader{base: 1500}
+	uc := newCountingUsecase(repo, mmr)
+
+	result := terminalResult(833, "battle-833")
+	result.GameMode = "5v5_ranked"
+	result.MapId = 99
+	if already, err := uc.ReportAuthorizedResult(
+		context.Background(), result, pveTerminalProof(833, "battle-833"), 0,
+	); err != nil || already {
+		t.Fatalf("first pve report already=%v err=%v", already, err)
+	}
+
+	replay := proto.Clone(result).(*battlev1.BattleResult)
+	already, err := uc.ReportAuthorizedResult(context.Background(), replay, pveTerminalProof(833, "battle-833"), 0)
+	if err != nil || !already {
+		t.Fatalf("pve replay already=%v err=%v", already, err)
+	}
+	if len(repo.store) != 1 || len(repo.outbox) != 2 ||
+		len(repo.terminalOutbox) != 1 || len(repo.matchReleaseOutbox) != 1 {
+		t.Fatalf("replay duplicated side effects: store=%d outbox=%d terminal=%d release=%d",
+			len(repo.store), len(repo.outbox), len(repo.terminalOutbox), len(repo.matchReleaseOutbox))
+	}
+	if mmr.calls != 0 {
+		t.Fatalf("pve replay touched MMR reader, calls=%d", mmr.calls)
+	}
+	saved, ok, _ := repo.GetResult(context.Background(), 833)
+	if !ok || saved.GetGameMode() != canonicalGameModePVECoop || saved.GetMapId() != 10 {
+		t.Fatalf("replay drifted canonical metadata: ok=%v game_mode=%q map_id=%d",
+			ok, saved.GetGameMode(), saved.GetMapId())
+	}
+	assertAllDeltas(t, saved, 0, 0)
 }

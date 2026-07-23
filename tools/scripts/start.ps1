@@ -5378,7 +5378,8 @@ function Build-AllImages {
     }
 
     # ===== 离线镜像优先(免联网,拉不到 Docker Hub/加速站的机器双击一键脚本即用)=====
-    # deploy/offline-images/pandora-images.tar 由能联网机器 export_images.ps1 -Build 生成并随仓库同步。
+    # deploy/offline-images/pandora-images.tar 由构建机 publish_offline_images.ps1 发布到制品目录,
+    # 目标机用 fetch_offline_images.ps1 拉到本路径(tar 不入库;见 docs/design/release-pipeline.md)。
     # 判定:本机缺业务镜像 + 无 golang 构建基础镜像(= 这台机器多半构建不了)→ 自动 docker load 离线包,
     # 导入后齐全就跳过 docker build 直接起服务。开发机(有 golang 基础镜像)照常构建最新;强制构建加 -Rebuild。
     $offlineTar = Join-Path $ProjectRoot 'deploy/offline-images/pandora-images.tar'
@@ -5389,7 +5390,7 @@ function Build-AllImages {
     # 导入离线包 → 校验齐全 → 直接返回,不联网、不构建、不受 Docker DNS 抖动影响。
     if (($env:PANDORA_OFFLINE -eq '1') -and -not $Rebuild -and -not $StrictRelease) {
         if (-not (Test-Path $offlineTar)) {
-            throw "PANDORA_OFFLINE=1 但找不到离线包:$offlineTar(请在能联网机跑 export_images.ps1 -Build 生成并同步过来)。"
+            throw "PANDORA_OFFLINE=1 但找不到离线包:$offlineTar(先跑 tools/scripts/fetch_offline_images.ps1 从制品目录拉取)。"
         }
         Write-Step "纯离线模式(PANDORA_OFFLINE=1):直接导入离线镜像包,跳过所有 docker build"
         Write-Info "  $offlineTar"
@@ -5399,7 +5400,7 @@ function Build-AllImages {
         if ($missing.Count -gt 0) {
             Write-Err "离线包导入后仍缺以下镜像:"
             $missing | ForEach-Object { Write-Err "  - pandora/$($_.Name):dev" }
-            throw "离线包与服务清单不一致,请在能联网机跑 export_images.ps1 -Build 重新生成并同步。"
+            throw "离线包与服务清单不一致,请在构建机重跑 publish_offline_images.ps1 后再 fetch_offline_images.ps1 拉取。"
         }
         Write-Ok "已用离线镜像包起服务(纯离线,未构建)。要改代码后重建请在开发机做,或临时 -Rebuild。"
         return
@@ -5428,7 +5429,7 @@ function Build-AllImages {
             }
             Write-Err "离线导入后仍缺以下镜像,且本机无构建能力(host 缺 Go / incontainer 缺 golang 基础镜像):"
             $missing | ForEach-Object { Write-Err "  - pandora/$($_.Name):dev" }
-            throw "请在能联网的机器跑 export_images.ps1 -Build 重新生成 deploy/offline-images/pandora-images.tar 并同步过来。"
+            throw "请在构建机跑 publish_offline_images.ps1 重新发布,再用 fetch_offline_images.ps1 拉取到 deploy/offline-images/。"
         }
     }
 

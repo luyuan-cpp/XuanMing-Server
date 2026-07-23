@@ -79,9 +79,12 @@ deploy/k8s/local/
 # Docker 本地数据卷
 deploy/data/
 
-# 离线镜像目录只允许受管的 20 业务镜像包入库；完整基础设施包必须放仓库外
+# 镜像 tar 是构建产物,一律不入库(2026-07-23 起走制品目录分发,见 docs/design/release-pipeline.md;
+# 旧的 pandora-images.tar 入库属过渡方案,已退役)
 deploy/offline-images/*.tar
-!deploy/offline-images/pandora-images.tar
+
+# 制品库本地根目录(若把制品根指到仓库内,兜底不入库)
+artifacts/
 
 # 第三方下载缓存
 third_party/_cache/

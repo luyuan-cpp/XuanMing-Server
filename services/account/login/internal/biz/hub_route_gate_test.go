@@ -149,7 +149,7 @@ func TestResolveHubEndpoint_ActiveBattle_ZeroSideEffects(t *testing.T) {
 	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: true, MatchID: 9001}}
 	uc := newHubGateUsecase(t, hub, notifier, &loginBattleAuthorizerFake{}, true)
 
-	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42)
+	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42, "")
 	wantCode(t, err, errcode.ErrInvalidState)
 	if addr != "" || ticket != "" {
 		t.Errorf("rejected hub route must not leak endpoint/ticket, got addr=%q ticket=%q", addr, ticket)
@@ -165,7 +165,7 @@ func TestResolveHubEndpoint_UnknownPlacement_ZeroSideEffects(t *testing.T) {
 	notifier := &fakeNotifier{blErr: errors.New("locator down")}
 	uc := newHubGateUsecase(t, hub, notifier, &loginBattleAuthorizerFake{}, true)
 
-	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42)
+	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42, "")
 	wantCode(t, err, errcode.ErrUnavailable)
 	if addr != "" || ticket != "" {
 		t.Errorf("rejected hub route must not leak endpoint/ticket, got addr=%q ticket=%q", addr, ticket)
@@ -182,7 +182,12 @@ type fakeRoleRepo struct {
 }
 
 func (f *fakeRoleRepo) GetRole(context.Context, uint64) (uint32, error) { return f.roleID, nil }
-func (f *fakeRoleRepo) SetRole(_ context.Context, _ uint64, roleID uint32) error {
+func (f *fakeRoleRepo) SetRole(ctx context.Context, _ uint64, roleID uint32, _ string, precommit func(context.Context) error) error {
+	if precommit != nil {
+		if err := precommit(ctx); err != nil {
+			return err
+		}
+	}
 	f.setCalls++
 	f.roleID = roleID
 	return nil
@@ -195,7 +200,7 @@ func TestResolveHubEndpoint_RosterDrift_ZeroSideEffects(t *testing.T) {
 	authz := &loginBattleAuthorizerFake{err: errcode.New(errcode.ErrPermissionDeny, "player not in roster (drifted)")}
 	uc := newHubGateUsecase(t, hub, notifier, authz, true)
 
-	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42)
+	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42, "")
 	wantCode(t, err, errcode.ErrUnavailable)
 	if addr != "" || ticket != "" {
 		t.Errorf("rejected hub route must not leak endpoint/ticket, got addr=%q ticket=%q", addr, ticket)
@@ -217,7 +222,7 @@ func TestResolveHubEndpoint_ExplicitTerminal_Allowed(t *testing.T) {
 	uc := newHubGateUsecase(t, hub, notifier, authz, true)
 	uc.v2Verifier = keys.verifier
 
-	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42)
+	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42, "")
 	if err != nil {
 		t.Fatalf("explicit terminal should allow hub, got %v", err)
 	}
@@ -249,14 +254,14 @@ func TestResolveHubEndpoint_TOCTOU_ConcurrentTerminalFlip(t *testing.T) {
 	uc := newHubGateUsecase(t, hub, notifier, authz, true)
 	uc.v2Verifier = keys.verifier
 
-	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42)
+	addr, ticket, _, err := uc.ResolveHubEndpoint(context.Background(), 42, "")
 	wantCode(t, err, errcode.ErrInvalidState)
 	if addr != "" || ticket != "" || hub.gotPlayerID != 0 {
 		t.Fatalf("first (ACTIVE) attempt must be zero side effects: addr=%q ticket=%q assignPID=%d",
 			addr, ticket, hub.gotPlayerID)
 	}
 
-	addr, ticket, _, err = uc.ResolveHubEndpoint(context.Background(), 42)
+	addr, ticket, _, err = uc.ResolveHubEndpoint(context.Background(), 42, "")
 	if err != nil {
 		t.Fatalf("second (TERMINAL) attempt should allow, got %v", err)
 	}
@@ -277,7 +282,7 @@ func TestSelectRole_ActiveBattle_Rejected_ZeroRoleWrite(t *testing.T) {
 	uc.roleRepo = roles
 	uc.devAllowAnyRole = true // 隔离白名单逻辑,确保拒绝只来自三态门
 
-	addr, ticket, _, err := uc.SelectRole(context.Background(), 42, 1)
+	addr, ticket, _, err := uc.SelectRole(context.Background(), 42, 1, "")
 	wantCode(t, err, errcode.ErrInvalidState)
 	if addr != "" || ticket != "" {
 		t.Errorf("rejected SelectRole must not leak endpoint/ticket, got addr=%q ticket=%q", addr, ticket)
@@ -300,7 +305,7 @@ func TestSelectRole_RosterDrift_Rejected_ZeroRoleWrite(t *testing.T) {
 	uc.roleRepo = roles
 	uc.devAllowAnyRole = true
 
-	addr, ticket, _, err := uc.SelectRole(context.Background(), 42, 1)
+	addr, ticket, _, err := uc.SelectRole(context.Background(), 42, 1, "")
 	wantCode(t, err, errcode.ErrUnavailable)
 	if addr != "" || ticket != "" {
 		t.Errorf("rejected SelectRole must not leak endpoint/ticket, got addr=%q ticket=%q", addr, ticket)
@@ -328,7 +333,7 @@ func TestSelectRole_ExplicitTerminal_Allowed(t *testing.T) {
 	uc.roleRepo = roles
 	uc.devAllowAnyRole = true
 
-	addr, ticket, _, err := uc.SelectRole(context.Background(), 42, 7)
+	addr, ticket, _, err := uc.SelectRole(context.Background(), 42, 7, "")
 	if err != nil {
 		t.Fatalf("explicit terminal SelectRole should succeed, got %v", err)
 	}

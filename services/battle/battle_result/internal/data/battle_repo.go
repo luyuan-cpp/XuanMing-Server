@@ -77,6 +77,20 @@ type TerminalReleaseRecord struct {
 	// prevents a compromised DS from omitting a player or adding an outsider to
 	// recovery side effects.
 	PlayerIDs []uint64
+	// GameMode / MapID are the canonical battle metadata copied from the same
+	// canonical BattleStorageRecord snapshot as PlayerIDs at authorization time.
+	// They are NOT DS BattleResult request fields: reportResult overwrites the
+	// untrusted request game_mode/map_id with these values before any MMR/DB/
+	// outbox side effect, and the MMR policy (canonical "pve_coop" never runs
+	// Elo) keys off GameMode here, never off the request. GameMode may be empty
+	// for BattleStorageRecords written before the field existed (rolling
+	// upgrade); empty means "canonical mode unknown" and must keep the legacy
+	// conservative behavior (NORMAL still runs Elo), never trust the request to
+	// fill the gap. Like PlayerIDs, both fields are only used inside this
+	// authorized settlement and are not persisted in terminal_release_outbox
+	// (no DB migration).
+	GameMode string
+	MapID    uint32
 	// ReleasedAtMs>0 是阶段1“永久 Redis terminal + UID delete 已明确成功”的
 	// MySQL durable ACK。只有该状态才允许阶段2给墓碑设 TTL并删除本行。
 	ReleasedAtMs int64

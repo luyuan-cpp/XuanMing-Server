@@ -24,7 +24,7 @@ type jtiSessionRepo struct {
 	err   error
 }
 
-func (f *jtiSessionRepo) Set(_ context.Context, _ uint64, _, _, _ string, _ time.Duration) error {
+func (f *jtiSessionRepo) Set(_ context.Context, _ uint64, _, _, _ string, _ time.Duration, _ uint64) error {
 	return nil
 }
 func (f *jtiSessionRepo) Delete(_ context.Context, _ uint64) error { return nil }

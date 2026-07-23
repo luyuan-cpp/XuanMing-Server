@@ -21,6 +21,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/placement"
+	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
@@ -39,6 +40,15 @@ type GrpcDSAllocator struct {
 	abortAuth *internalrpcauth.Signer
 	mapID     uint32
 	gameMode  string
+	// sessGate 会话现行性权威只读视图(R7 复审 P0-2,SetSessionGate 注入)。非 nil 时
+	// READY 批签的每张 battle 票都携带该玩家当前会话 jti(sjti claim),Login 兑换点
+	// 复核现行性——被新登录顶掉的旧设备即使还留着 READY 推送的票也无法入场。
+	sessGate sessiongate.Gate
+}
+
+// SetSessionGate 注入会话现行性权威(启动期、撮合循环开跑前调用;nil = dev 无权威)。
+func (g *GrpcDSAllocator) SetSessionGate(gate sessiongate.Gate) {
+	g.sessGate = gate
 }
 
 // NewGrpcDSAllocator 直连 ds_allocator 服务 endpoint(host:port,内网 insecure)。
@@ -238,15 +248,34 @@ func battleTargetFromFields(
 
 // SignBattleTicket 只使用 READY match 持久化的 exact target。
 // 不允许降级 legacy HMAC 票。
-func (g *GrpcDSAllocator) SignBattleTicket(_ context.Context, playerID, matchID uint64, allocation *model.BattleAllocation) (string, error) {
+//
+// R7 复审 P0-2:sessGate 非 nil 时读玩家当前会话 jti 签进 sjti claim。
+//   - 权威不可达 → fail-closed 拒签(票不能在"无法判定会话"时盲签);
+//   - 无会话(已登出/过期) → 拒签:没有现行会话就不存在合法的入场交付对象,
+//     重登后的重连链(login tryBattleReconnect)会用新会话重签。
+func (g *GrpcDSAllocator) SignBattleTicket(ctx context.Context, playerID, matchID uint64, allocation *model.BattleAllocation) (string, error) {
 	if g.v2 == nil || allocation == nil || !allocation.Target.CompleteBattle() {
 		return "", errcode.New(errcode.ErrDSAllocationFailed,
 			"complete v2 target required, player %d match %d", playerID, matchID)
+	}
+	var sessJTI string
+	if g.sessGate != nil {
+		jti, found, err := g.sessGate.CurrentJTI(ctx, playerID)
+		if err != nil {
+			return "", errcode.NewCause(errcode.ErrUnavailable, err,
+				"session authority unavailable while signing battle ticket, player %d match %d", playerID, matchID)
+		}
+		if !found {
+			return "", errcode.New(errcode.ErrUnauthorized,
+				"player %d has no current session; battle ticket withheld, match %d", playerID, matchID)
+		}
+		sessJTI = jti
 	}
 	target := auth.DSTicketTarget{
 		DSPodName: allocation.Target.PodName, DSInstanceUID: allocation.Target.InstanceUID,
 		DSInstanceEpoch: allocation.Target.InstanceEpoch, ReleaseTrack: allocation.Target.ReleaseTrack,
 		MatchID: matchID, AllocationID: allocation.Target.AllocationID,
+		SessionJTI: sessJTI,
 	}
 	token, _, err := g.v2.SignBattleTicket(playerID, 0, 0, uuid.NewString(), target)
 	if err != nil {

@@ -107,12 +107,14 @@ func (s *LoginService) SelectRole(ctx context.Context, req *loginv1.SelectRoleRe
 	// 会话现行性门(2026-07-18,封"顶号后旧设备仍可 SelectRole 拿 hub 票"缺口):
 	// jti 取自 Envoy 验签后重写的 x-pandora-jwt-payload(入站剥离,客户端无法伪造),
 	// 与 IssueDSTicket 的请求体 token 走同一 Redis session 判定。
-	if err := s.loginUC.RequireCurrentSessionJTI(ctx, playerID, middleware.SessionJTIFromContext(ctx)); err != nil {
+	callerJTI := middleware.SessionJTIFromContext(ctx)
+	if err := s.loginUC.RequireCurrentSessionJTI(ctx, playerID, callerJTI); err != nil {
 		// 权威缺失、过期或读取失败都在 SelectRole 业务写前返回，保证 fail-closed 且零签票副作用。
 		return &loginv1.SelectRoleResponse{Code: toProtoCode(err)}, nil
 	}
 	// addr 与 ticket 只会在会话现行性已确认后生成，旧设备不能越过 fencing 取得 Hub 入口。
-	addr, ticket, _, err := s.loginUC.SelectRole(ctx, playerID, req.GetRoleId())
+	// callerJTI 下传(R6 复审 P0-3):角色落库 precommit fencing + hub 票 sjti 绑定。
+	addr, ticket, _, err := s.loginUC.SelectRole(ctx, playerID, req.GetRoleId(), callerJTI)
 	if err != nil {
 		return &loginv1.SelectRoleResponse{Code: toProtoCode(err)}, nil
 	}
@@ -166,14 +168,17 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 	// R5 复审 P0-5 终检(闭包供三条分支复用):预检通过后、分配/签票期间会话可能已被
 	// 新登录轮换(检查与副作用之间的 TOCTOU)。交付前复核当前 token 仍是当前一代,
 	// 失败则扣留票据——票据已签但从未离开服务端 = 旧在途请求未取得可用票据。
+	// R6 复审 P0-3 兜底:即便终检与响应写出之间被轮换,票内 sjti(callerJTI)绑定使
+	// 已交付旧票在 VerifyDSTicket 兑换点被拒。
 	fenceTicketDelivery := func() error {
 		return s.loginUC.RequireCurrentSessionToken(ctx, playerID, req.GetSessionToken())
 	}
+	callerJTI := middleware.SessionJTIFromContext(ctx)
 
 	if req.GetDsType() == "hub" {
 		// target_id 历史上携带来源 match;现在仅作日志参考,路由权威是
 		// locator 租约 + match 三态门(biz.ResolveHubEndpointFromMatch)。
-		addr, ticket, _, err := s.loginUC.ResolveHubEndpointFromMatch(ctx, playerID, req.GetTargetId())
+		addr, ticket, _, err := s.loginUC.ResolveHubEndpointFromMatch(ctx, playerID, req.GetTargetId(), callerJTI)
 		if err != nil {
 			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
 		}
@@ -189,7 +194,7 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 	}
 
 	if req.GetDsType() == "battle" {
-		_, ticket, _, err := s.loginUC.ResolveBattleEndpoint(ctx, playerID, req.GetTargetId())
+		_, ticket, _, err := s.loginUC.ResolveBattleEndpoint(ctx, playerID, req.GetTargetId(), callerJTI)
 		if err != nil {
 			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
 		}
@@ -200,7 +205,7 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 		return &loginv1.IssueDSTicketResponse{Code: commonv1.ErrCode_OK, Ticket: ticket}, nil
 	}
 
-	res, err := s.ticketUC.IssueDSTicket(ctx, playerID, req.GetDsType(), req.GetTargetId())
+	res, err := s.ticketUC.IssueDSTicket(ctx, playerID, req.GetDsType(), req.GetTargetId(), callerJTI)
 	if err != nil {
 		return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
 	}
@@ -255,6 +260,14 @@ func (s *LoginService) VerifyDSTicket(ctx context.Context, req *loginv1.VerifyDS
 	}
 	if err != nil {
 		return &loginv1.VerifyDSTicketResponse{Code: toProtoCode(err)}, nil
+	}
+	// 兑换点会话复核(R6 复审 P0-3,§9.23):票内 sjti 非空时必须仍是该玩家会话权威的
+	// 当前一代——签发与响应写出之间被新登录轮换的旧票,即使已交付到旧设备,在此作废。
+	// sjti 空 = 兼容窗(matchmaker 批签/Transfer 重签/滚动升级旧票),不做判定。
+	if serr := s.loginUC.RequireTicketSessionCurrent(ctx, claims.PlayerID, claims.SessJTI); serr != nil {
+		plog.With(ctx).Warnw("msg", "ds_ticket_session_stale_rejected",
+			"player_id", claims.PlayerID, "ds_type", claims.DSType)
+		return &loginv1.VerifyDSTicketResponse{Code: toProtoCode(serr)}, nil
 	}
 	return &loginv1.VerifyDSTicketResponse{
 		Code: commonv1.ErrCode_OK,

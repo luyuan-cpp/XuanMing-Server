@@ -261,7 +261,17 @@ func (r *RedisOfflineCacheRepo) Range(ctx context.Context, playerID uint64, afte
 	// LostSince(baseline) 即检出并向客户端发 resync;坏 member 同时物理删除(自愈,
 	// 防每轮重复扫到)。删除+记哨兵走单 key Lua,跨 Pod 并发不回退 fl。
 	var corruptTop int64
+	corruptMin := int64(-1)
 	var corruptMembers []interface{}
+	markCorrupt := func(score int64, raw string) {
+		if score > corruptTop {
+			corruptTop = score
+		}
+		if corruptMin < 0 || score < corruptMin {
+			corruptMin = score
+		}
+		corruptMembers = append(corruptMembers, raw)
+	}
 	for _, z := range zs {
 		raw, ok := z.Member.(string)
 		if !ok || raw == watermarkMember || raw == trimFloorMember {
@@ -270,19 +280,13 @@ func (r *RedisOfflineCacheRepo) Range(ctx context.Context, playerID uint64, afte
 		payload := decodeMember([]byte(raw))
 		if payload == nil {
 			// 格式不识别(dev 旧格式残留/外部脏写):按坏帧记账。
-			if s := int64(z.Score); s > corruptTop {
-				corruptTop = s
-			}
-			corruptMembers = append(corruptMembers, raw)
+			markCorrupt(int64(z.Score), raw)
 			continue
 		}
 		var frame pushv1.PushFrame
 		if err := proto.Unmarshal(payload, &frame); err != nil {
 			// 单帧坏不阻断其它(避免一条脏数据拖死整个补推),但必须留痕并触发 resync。
-			if s := int64(z.Score); s > corruptTop {
-				corruptTop = s
-			}
-			corruptMembers = append(corruptMembers, raw)
+			markCorrupt(int64(z.Score), raw)
 			continue
 		}
 		cursor := int64(z.Score)
@@ -292,11 +296,21 @@ func (r *RedisOfflineCacheRepo) Range(ctx context.Context, playerID uint64, afte
 	if len(corruptMembers) > 0 {
 		plog.With(ctx).Errorw("msg", "push_offline_corrupt_members",
 			"player_id", playerID, "count", len(corruptMembers), "top_cursor", corruptTop)
-		// best-effort 自愈:失败只记日志(下一轮还会扫到,不影响本轮好帧交付)。
 		if _, cerr := markCorruptScript.Run(ctx, r.rdb, []string{key},
 			append([]interface{}{corruptTop}, corruptMembers...)...).Result(); cerr != nil {
+			// R7 收口(P1):fl 抬升失败时绝不交付坏帧之上的好帧——Range 严格 >afterCursor,
+			// 客户端游标一旦越过坏帧,坏 member 永远不会再被扫描,丢失就成了既无 fl 记账
+			// 也无 resync 的永久静默漏报。截到最低坏帧之下,坏帧仍留在 key 里,下一轮
+			// 重扫重试 fl 记账,游标不越过未记账的丢失。
 			plog.With(ctx).Warnw("msg", "push_offline_corrupt_cleanup_failed",
-				"player_id", playerID, "err", cerr)
+				"player_id", playerID, "err", cerr, "withheld_above", corruptMin)
+			kept := out[:0]
+			for _, f := range out {
+				if f.ScoreMs < corruptMin {
+					kept = append(kept, f)
+				}
+			}
+			out = kept
 		}
 	}
 	return out, nil

@@ -1,72 +1,48 @@
-# 离线镜像分发目录(随仓库同步,免联网拷贝)
+# 离线镜像本地目录(构建/拉取落点,不入库)
 
-拉不到 Docker Hub / 国内加速站的机器(内网 / 断网 / 加速器被墙)用这里的镜像包离线起服务。
+拉不到 Docker Hub / 内网受限的机器用离线镜像包起服务。**本目录只是 tar 的本地落点,
+tar 本身不进 git/svn**(2026-07-23 起走制品目录发布线,旧「tar 入库随仓库同步」过渡方案退役,
+见 `docs/design/release-pipeline.md`)。
 
 ## 里面放什么
 
 - `pandora-images.tar` —— 21 个业务镜像(`pandora/*:dev`)打包,约 150 MB。
-  由能联网的机器用 `tools/scripts/export_images.ps1 -Build` 生成后放到这里,
-  随仓库(git / svn)同步到其它机器,**不用 U 盘、不用联网拷贝**。
+  由构建机 `publish_offline_images.ps1` 生成并发布到制品目录;目标机用
+  `fetch_offline_images.ps1` 拉到本目录。`.gitignore` 已排除,不会被提交。
 
-> 说明:业务运行镜像用 `scratch` 基底(见 `deploy/services/Dockerfile`),体积很小,
-> 适合入库同步。基础设施镜像(mysql/redis/kafka/etcd/prometheus/grafana/loki/alloy/envoy)
-> 不在此包内——目标机通常已经拉到过并在跑;若目标机也缺,用
-> `export_images.ps1 -Build -IncludeInfra -Out D:\pandora-full-images.tar` 打仓库外的完整大包。
+> 业务运行镜像用 `scratch` 基底(见 `deploy/services/Dockerfile`),体积小。
+> 基础设施镜像(mysql/redis/kafka/etcd/prometheus/grafana/loki/alloy/envoy)不在此包内;
+> 目标机也缺时用 `export_images.ps1 -Build -IncludeInfra -Out D:\pandora-full-images.tar`
+> 打制品目录外的完整大包。
 
-## 生成(能联网的机器)
-
-```powershell
-# 默认走宿主 Go 交叉编译，需 Go 1.26.5 与 Docker；构建 21 个业务镜像并打包到本目录
-pwsh tools/scripts/export_images.ps1 -Build
-
-# 只有宿主 Go 不可用或 host 构建明确失败、并经人工确认后，才改用容器内慢路径
-pwsh tools/scripts/export_images.ps1 -Build -BuildMode incontainer
-```
-
-生成后把 `pandora-images.tar` 纳入版本控制(`git add` / `svn add`)并提交/同步。
-
-开发机临时只重建某个服务镜像时,可双击仓库根目录的 `重建镜像-选打包方式.cmd`,
-选择宿主编译或容器内编译,再输入服务名(如 `battle-result`)。
-
-## 使用(拉不到镜像的机器)
+## 构建机:构建并发布
 
 ```powershell
-# 1) svn update / git pull 拿到本目录的 pandora-images.tar
-# 2) 直接双击一键启动 .cmd 即可 —— 启动脚本会自动检测并导入离线镜像,无需手动命令。
-#    (含战斗 battle 模式已于 2026-07-14 废弃;真 DS 用 内网服务器一键启动-k8s集群.cmd)
+# 从当前源码重建 21 个业务镜像并发布到制品目录(要求 git 工作区干净,版本号 = git sha)
+pwsh tools/scripts/publish_offline_images.ps1
 ```
 
-启动脚本(`start.ps1` 的 `Build-AllImages`)会判定:本机缺业务镜像 + 无 golang 构建基础镜像
-(= 这台机器多半构建不了)→ 自动 `docker load` 本目录的 tar,导入后齐全就跳过构建直接起服务。
+制品落在 `<PANDORA_ARTIFACT_ROOT>\images\<版本>\`(默认根 `F:\work\artifacts`),
+带 `images-manifest.json`(每镜像 ID)与 `sha256sums.txt`,版本目录不可变。
 
-### 打包机 / 内网运行机(不改代码):设一次强制纯离线
-
-如果这台机器**只跑不改代码**(打包机 / 内网运行机),不想每次先试构建、遇 Docker DNS 抖动才兜底,
-在它上面**一次性**设一个环境变量,以后双击 cmd 就直接用离线包、完全不 `docker build`:
+## 目标机:拉取并启动
 
 ```powershell
-setx PANDORA_OFFLINE 1      # 只需执行一次;之后新开的终端 / 双击 cmd 都会走纯离线
+# 1) 目标机能访问制品目录(本机路径或共享盘;必要时 setx PANDORA_ARTIFACT_ROOT \\共享机\artifacts)
+# 2) 拉取(自动校验 sha256):
+pwsh tools/scripts/fetch_offline_images.ps1
+# 3) 直接双击一键启动 .cmd —— 启动脚本自动检测并 docker load 本目录的 tar,无需手动命令。
 ```
 
-设了 `PANDORA_OFFLINE=1` 后,启动脚本直接导入离线包 → 校验齐全 → 起服务,**不联网、不构建、不受 DNS 影响**。
-需要临时构建最新代码时,加 `-Rebuild` 覆盖(如 `pwsh tools/scripts/start.ps1 -Mode docker -Rebuild`)。
+只跑不改代码的机器(打包机/内网运行机)仍可 `setx PANDORA_OFFLINE 1` 强制纯离线:
+启动脚本直接导入离线包 → 校验齐全 → 起服务,不联网、不构建。
+需要临时构建最新代码时加 `-Rebuild`(如 `pwsh tools/scripts/start.ps1 -Mode docker -Rebuild`)。
 
-手动导入(可选,一般用不到):
-
-```powershell
-pwsh tools/scripts/import_images.ps1     # 默认读本目录的 pandora-images.tar
-```
+手动导入(一般用不到):`pwsh tools/scripts/import_images.ps1`。
 
 ## 注意
 
-- tar 是二进制大文件,入库会增大仓库体积;更新镜像时**覆盖同名文件**再提交,避免堆历史。
-- 镜像有业务改动 → 在联网机重跑 `export_images.ps1 -Build` 覆盖此 tar 再提交。
-## ❗ 这是「过渡方案」，不是长期正规做法
-
-把镜像 tar 塞进源码仓库不是大厂标准做法，只是「当前没有内网镜像仓库 + 目标机拉不到公网镜像」时的务实过渡方案。
-
-- **正规做法**：搭内网私有 Registry（Harbor / Nexus / 云厂商 ACR），各机器 `docker pull 内网harbor/pandora/<svc>:<tag>`；源码仓只放文本（代码 / Dockerfile / yaml），二进制制品走制品库。
-- **本方案适用前提**：没有内网 Registry、目标机又在受限内网拉不到公网镜像；且运行镜像已用 `scratch` 基底（~150MB）体积可控。
-- **后续迁移**：一旦有了内网 Harbor，就把分发切成 `docker pull`，本目录退役。
-
-> 决策记录见本文件；如后续搭建 Harbor，在 `docs/design/pandora-arch.md` §11 补一笔迁移决策。
+- **不要把 tar 提交进任何版本库**;历史上的入库过渡方案已退役,git 服务端规则会拒收 `*.tar`。
+- 镜像有业务改动 → 构建机重跑 `publish_offline_images.ps1`(新 git sha = 新版本目录,不覆盖旧版);
+  目标机重新 `fetch_offline_images.ps1` 即可。
+- 正式对外交付按 `make_release.ps1` 生成的 release manifest 取对应版本,不直接拿 latest。

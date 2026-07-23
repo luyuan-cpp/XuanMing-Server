@@ -210,7 +210,7 @@ func TestModelB_AssignBlockedWithoutActivation(t *testing.T) {
 		t.Fatalf("seed ready shard: %v", err)
 	}
 
-	if _, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0, 0); errcode.As(err) != errcode.ErrHubNoAvailable {
+	if _, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0, 0, ""); errcode.As(err) != errcode.ErrHubNoAvailable {
 		t.Fatalf("assign to never-activated shard must be blocked, got %v", err)
 	}
 }
@@ -223,7 +223,7 @@ func TestModelB_AssignAllowsActivatedAndBinds(t *testing.T) {
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
 
-	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
+	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, "")
 	if err != nil {
 		t.Fatalf("assign to activated shard must succeed: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestModelB_AdmissionCrossSlotDriftWaitsForPhysicalDeparture(t *testing.T) {
 	now := time.Now().UnixMilli()
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatal(err)
 	}
 	oldAssignment, found, err := repo.GetAssignment(ctx, 1001)
@@ -304,7 +304,7 @@ func TestModelB_AdmissionCrossSlotDriftWaitsForPhysicalDeparture(t *testing.T) {
 		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
 	}
 	_, err = uc.AcknowledgeAdmission(ctx, 1001, oldAssignment.GetAssignmentId(), pod,
-		admissionID, 1, cred)
+		admissionID, 1, "", cred)
 	if errcode.As(err) != errcode.ErrInvalidState {
 		t.Fatalf("cross-slot drift code=%v err=%v", errcode.As(err), err)
 	}
@@ -337,7 +337,7 @@ func TestModelB_AssignSignFailureExactReservationCleanup(t *testing.T) {
 	activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
 	uc.signer = &failingHubTicketSigner{}
 
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); errcode.As(err) != errcode.ErrInternal {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); errcode.As(err) != errcode.ErrInternal {
 		t.Fatalf("sign failure code=%v err=%v", errcode.As(err), err)
 	}
 	if assignment, found, err := repo.GetAssignment(ctx, 1001); err != nil || found {
@@ -363,7 +363,7 @@ func TestModelB_TransferSignFailureKeepsOldOwnerAndCleansTargetReservation(t *te
 	seedWarming(t, repo, pod2, 2, 500, now)
 	activate(t, uc, authRepo, pod1, "uid-A", 42, "j42", now)
 	activate(t, uc, authRepo, pod2, "uid-B", 52, "j52", now)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatal(err)
 	}
 	before, _, _ := repo.GetAssignment(ctx, 1001)
@@ -411,7 +411,7 @@ func TestModelB_ConcurrentAssignSingleSeatAndBinding(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			result, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0, 0)
+			result, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0, 0, "")
 			if result != nil {
 				ticketCh <- result.HubTicket
 			}
@@ -458,6 +458,188 @@ func TestModelB_ConcurrentAssignSingleSeatAndBinding(t *testing.T) {
 	}
 }
 
+// ackFakeSessionGate 是可编程的会话现行性权威 fake(R7 复审 P0-3 测试用)。
+// queue 非空时每次调用依次弹出作为当前 jti(found=true,err=nil),用于模拟
+// 「两次检查之间会话被并发登录轮换」的确定性交错;弹空后回落到静态字段。
+type ackFakeSessionGate struct {
+	jti   string
+	found bool
+	err   error
+	queue []string
+}
+
+func (g *ackFakeSessionGate) CurrentJTI(context.Context, uint64) (string, bool, error) {
+	if len(g.queue) > 0 {
+		j := g.queue[0]
+		g.queue = g.queue[1:]
+		return j, true, nil
+	}
+	return g.jti, g.found, g.err
+}
+
+// R7 复审 P0-3:v2 Hub 本地验票不经 Login 在线兑换,AcknowledgeAdmission 是唯一在线
+// 权威接触点。装配 session gate 后:空 sjti 硬拒、非当前代拒(顶号旧票在入场确认点
+// 作废)、权威不可达 fail-closed、无会话拒;全部失败路径不得消费 reservation;
+// 当前代放行。确定性交错:每一步都在固定的 gate 状态下同步断言。
+func TestModelB_AcknowledgeAdmissionSessionGate(t *testing.T) {
+	uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const (
+		pod      = "pandora-hub-global-1"
+		playerID = uint64(1001)
+	)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	cred := &HubCredential{
+		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+	}
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	assignment, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("assignment found=%v err=%v", found, err)
+	}
+	gate := &ackFakeSessionGate{jti: "jti-new", found: true}
+	uc.SetSessionGate(gate)
+	// 本测试断言强制档语义;兼容档(默认)见 TestModelB_AcknowledgeAdmissionEmptySJTITolerant。
+	uc.SetSessionGateRequireSJTI(true)
+
+	requireNotConsumed := func(step string) {
+		t.Helper()
+		s, _, serr := repo.GetShard(ctx, pod)
+		if serr != nil || s.GetConnectedOwnershipCount() != 0 {
+			t.Fatalf("%s must not consume reservation: shard=%+v err=%v", step, s, serr)
+		}
+	}
+	// ① 空 sjti(旧签发面残票/旧 DS 镜像)→ 强制档 ErrUnauthorized,零副作用。
+	if _, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 1, "", cred); errcode.As(aerr) != errcode.ErrUnauthorized {
+		t.Fatalf("empty sjti must be rejected, code=%v err=%v", errcode.As(aerr), aerr)
+	}
+	requireNotConsumed("empty sjti")
+	// ② 顶号旧票:票内 sjti=jti-old,当前会话 jti-new → ErrSessionSuperseded。
+	if _, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 2, "jti-old", cred); errcode.As(aerr) != errcode.ErrSessionSuperseded {
+		t.Fatalf("superseded sjti must be rejected, code=%v err=%v", errcode.As(aerr), aerr)
+	}
+	requireNotConsumed("superseded sjti")
+	// ③ 权威不可达 → fail-closed ErrUnavailable(可重试,不消费)。
+	gate.err = errors.New("redis down")
+	if _, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 3, "jti-new", cred); errcode.As(aerr) != errcode.ErrUnavailable {
+		t.Fatalf("gate outage must fail closed, code=%v err=%v", errcode.As(aerr), aerr)
+	}
+	gate.err = nil
+	requireNotConsumed("gate outage")
+	// ④ 已登出(无会话)→ ErrUnauthorized。
+	gate.found = false
+	if _, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 4, "jti-new", cred); errcode.As(aerr) != errcode.ErrUnauthorized {
+		t.Fatalf("logged-out session must be rejected, code=%v err=%v", errcode.As(aerr), aerr)
+	}
+	gate.found = true
+	requireNotConsumed("logged out")
+	// ⑤ 当前代票放行,reservation 正常转 connected owner。
+	if admitted, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 5, "jti-new", cred); aerr != nil || !admitted.Admitted {
+		t.Fatalf("current-session admission result=%+v err=%v", admitted, aerr)
+	}
+}
+
+// R7 收口(P0-5)混版兼容档:require_ticket_sjti 默认 false 时,空 sjti(旧 Hub DS 不
+// 转发/旧签发面残票)告警放行,ACK 正常消费 reservation——滚动窗口内旧 DS 上的玩家
+// 不被误拒。非空 sjti 仍全量复核(上面的强制档测试覆盖)。
+func TestModelB_AcknowledgeAdmissionEmptySJTITolerant(t *testing.T) {
+	uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const (
+		pod      = "pandora-hub-global-1"
+		playerID = uint64(1001)
+	)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	cred := &HubCredential{
+		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+	}
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	assignment, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("assignment found=%v err=%v", found, err)
+	}
+	uc.SetSessionGate(&ackFakeSessionGate{jti: "jti-new", found: true})
+	// 默认兼容档(不调用 SetSessionGateRequireSJTI):空 sjti 放行并正常入场。
+	admitted, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 1, "", cred)
+	if aerr != nil || !admitted.Admitted {
+		t.Fatalf("tolerant profile must admit empty-sjti ticket: result=%+v err=%v", admitted, aerr)
+	}
+}
+
+// R7 收口(P0-2)确定性交错:预检通过后、durable 消费 reservation 完成之间发生顶号轮换。
+// durable 写后复核必须检出 → exact 回退 connected owner + ErrSessionSuperseded,旧会话
+// 永远拿不到 spawn gate;曾短暂建立的 seat 不残留容量。
+func TestModelB_AcknowledgeAdmissionPostWriteRotationReverted(t *testing.T) {
+	uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const (
+		pod      = "pandora-hub-global-1"
+		playerID = uint64(1001)
+	)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	cred := &HubCredential{
+		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+	}
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	assignment, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("assignment found=%v err=%v", found, err)
+	}
+	// 第一次调用(预检)返回 jti-old(票据代,现行) → 通过;第二次调用(durable 写后
+	// 复核)返回 jti-new → 轮换发生在消费点之后、开门之前,必须回退。
+	gate := &ackFakeSessionGate{queue: []string{"jti-old", "jti-new"}}
+	uc.SetSessionGate(gate)
+
+	admitted, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 1, "jti-old", cred)
+	if errcode.As(aerr) != errcode.ErrSessionSuperseded {
+		t.Fatalf("post-write rotation must be superseded, result=%+v code=%v err=%v",
+			admitted, errcode.As(aerr), aerr)
+	}
+	s, _, serr := repo.GetShard(ctx, pod)
+	if serr != nil || s.GetConnectedOwnershipCount() != 0 {
+		t.Fatalf("reverted admission must not leave a connected owner: shard=%+v err=%v", s, serr)
+	}
+	// 复核不可判定(权威不可达)同样 fail-closed:回退 + ErrUnavailable。
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
+		t.Fatalf("re-assign: %v", err)
+	}
+	assignment, found, err = repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("re-assignment found=%v err=%v", found, err)
+	}
+	gate.queue = []string{"jti-old"} // 预检过;post-check 弹空回落到静态 err
+	gate.err = errors.New("redis down")
+	if _, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 2, "jti-old", cred); errcode.As(aerr) != errcode.ErrUnavailable {
+		t.Fatalf("post-check outage must fail closed, code=%v err=%v", errcode.As(aerr), aerr)
+	}
+	if s, _, serr := repo.GetShard(ctx, pod); serr != nil || s.GetConnectedOwnershipCount() != 0 {
+		t.Fatalf("outage path must also revert the seat: shard=%+v err=%v", s, serr)
+	}
+}
+
 func TestModelB_AssignIdempotentReuse(t *testing.T) {
 	uc, repo, authRepo, _ := newModelBUsecase(t, 500, 1)
 	ctx := context.Background()
@@ -466,11 +648,11 @@ func TestModelB_AssignIdempotentReuse(t *testing.T) {
 	seedWarming(t, repo, pod, 1, 500, now)
 	activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
 
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	// 再分配同玩家 → 复用(不重复占位):player_count 仍 1。
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("reuse assign: %v", err)
 	}
 	s, _, _ := repo.GetShard(ctx, pod)
@@ -494,7 +676,7 @@ func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
 		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
 	}
 
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	assignment, found, err := repo.GetAssignment(ctx, playerID)
@@ -503,7 +685,7 @@ func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
 	}
 	firstAdmissionID := uuid.NewString()
 	if admitted, err := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
-		firstAdmissionID, 1, cred); err != nil || !admitted.Admitted {
+		firstAdmissionID, 1, "", cred); err != nil || !admitted.Admitted {
 		t.Fatalf("first admission result=%+v err=%v", admitted, err)
 	}
 	if _, err := uc.HeartbeatWithCredential(ctx, pod, 1, []uint64{playerID}, 500, "ready", now+1, cred); err != nil {
@@ -526,7 +708,7 @@ func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
 	}
 	// Departure 与下一次 5s heartbeat 之间，audit=1 > connected=0 必须安全暂停路由；
 	// 不能为了重登在 DS 尚未证明连接已消失时超发。
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); errcode.As(err) != errcode.ErrHubNoAvailable {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); errcode.As(err) != errcode.ErrHubNoAvailable {
 		t.Fatalf("stale connected audit must pause relogin, code=%v err=%v", errcode.As(err), err)
 	}
 	if _, err := uc.HeartbeatWithCredential(ctx, pod, 0, nil, 500, "ready", now+2, cred); err != nil {
@@ -534,7 +716,7 @@ func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
 	}
 
 	// assignment 仍用于线路粘性，但 admission ledger 已空；重签必须原子补回 reservation。
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("relogin assign: %v", err)
 	}
 	current, found, err := repo.GetAssignment(ctx, playerID)
@@ -549,7 +731,7 @@ func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
 		t.Fatalf("relogin reservation projection invalid: %+v", shard)
 	}
 	if admitted, err := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
-		uuid.NewString(), 2, cred); err != nil || !admitted.Admitted {
+		uuid.NewString(), 2, "", cred); err != nil || !admitted.Admitted {
 		t.Fatalf("relogin admission result=%+v err=%v", admitted, err)
 	}
 }
@@ -564,7 +746,7 @@ func TestModelB_ExpiredReservationThenReloginRefreshesLease(t *testing.T) {
 	now := time.Now().UnixMilli()
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	assignment, found, err := repo.GetAssignment(ctx, playerID)
@@ -585,7 +767,7 @@ func TestModelB_ExpiredReservationThenReloginRefreshesLease(t *testing.T) {
 		t.Fatalf("assignment must outlive reservation: found=%v err=%v", found, err)
 	}
 
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("assign after reservation expiry: %v", err)
 	}
 	current, _, _ := repo.GetAssignment(ctx, playerID)
@@ -601,7 +783,7 @@ func TestModelB_ExpiredReservationThenReloginRefreshesLease(t *testing.T) {
 		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
 	}
 	if admitted, err := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
-		uuid.NewString(), 1, cred); err != nil || !admitted.Admitted {
+		uuid.NewString(), 1, "", cred); err != nil || !admitted.Admitted {
 		t.Fatalf("admission after lease refresh result=%+v err=%v", admitted, err)
 	}
 }
@@ -616,7 +798,7 @@ func TestModelB_ActiveSessionReuseDoesNotDoubleCountOrDeleteOwner(t *testing.T) 
 	now := time.Now().UnixMilli()
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	assignment, _, _ := repo.GetAssignment(ctx, playerID)
@@ -626,7 +808,7 @@ func TestModelB_ActiveSessionReuseDoesNotDoubleCountOrDeleteOwner(t *testing.T) 
 		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
 	}
 	if admitted, err := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
-		admissionID, 7, cred); err != nil || !admitted.Admitted {
+		admissionID, 7, "", cred); err != nil || !admitted.Admitted {
 		t.Fatalf("first admission result=%+v err=%v", admitted, err)
 	}
 	sessionKey := "pandora:hub:sessions:{" + pod + "}"
@@ -635,7 +817,7 @@ func TestModelB_ActiveSessionReuseDoesNotDoubleCountOrDeleteOwner(t *testing.T) 
 		t.Fatal("active session missing before reuse")
 	}
 
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("active session reuse: %v", err)
 	}
 	if reservations, _ := mr.HKeys("pandora:hub:reservations:{" + pod + "}"); len(reservations) != 0 {
@@ -667,7 +849,7 @@ func TestModelB_AssignIdempotentReuseRefreshesAssignmentTTL(t *testing.T) {
 		t.Fatalf("extend shard ttl: %v", err)
 	}
 
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	assignmentKey := "pandora:hub:player:1001"
@@ -681,7 +863,7 @@ func TestModelB_AssignIdempotentReuseRefreshesAssignmentTTL(t *testing.T) {
 	if remaining := mr.TTL(assignmentKey); remaining <= 0 || remaining > time.Second {
 		t.Fatalf("assignment must be near expiry before reuse, got %s", remaining)
 	}
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("reuse assign: %v", err)
 	}
 	if refreshed := mr.TTL(assignmentKey); refreshed < initialTTL-time.Second {
@@ -706,7 +888,7 @@ func TestModelB_AssignRejectsIncompleteOrFutureWriterAssignmentWithoutMutation(t
 			now := time.Now().UnixMilli()
 			seedWarming(t, repo, pod, 1, 500, now)
 			activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
-			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 				t.Fatal(err)
 			}
 			before, found, err := repo.GetAssignment(ctx, 1001)
@@ -719,7 +901,7 @@ func TestModelB_AssignRejectsIncompleteOrFutureWriterAssignmentWithoutMutation(t
 				t.Fatalf("poison assignment swapped=%v err=%v", swapped, err)
 			}
 			shardBefore, _, _ := repo.GetShard(ctx, pod)
-			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); errcode.As(err) != errcode.ErrInvalidState {
+			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); errcode.As(err) != errcode.ErrInvalidState {
 				t.Fatalf("incomplete/future assignment must fail closed, code=%v err=%v", errcode.As(err), err)
 			}
 			after, _, _ := repo.GetAssignment(ctx, 1001)
@@ -743,7 +925,7 @@ func TestModelB_FutureWriterAssignmentRejectedByAllConsumerPaths(t *testing.T) {
 			seedWarming(t, repo, pod2, 2, 500, now)
 			activate(t, uc, authRepo, pod1, "uid-A", 42, "j42", now)
 			activate(t, uc, authRepo, pod2, "uid-B", 52, "j52", now)
-			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 				t.Fatal(err)
 			}
 			before, found, err := repo.GetAssignment(ctx, 1001)
@@ -802,6 +984,82 @@ func TestModelB_FutureWriterAssignmentRejectedByAllConsumerPaths(t *testing.T) {
 	}
 }
 
+// R7 收口(P1)迁移通知必达重试:drain 迁移已 CAS 落地(归属在目标分片、源 member 索引
+// 未清)后,补发通知的会话权威不可达 → 返回 false 且**源索引必须保留**,下个 tick 重扫
+// 补发;权威恢复后补发成功才清索引。旧实现先删索引,失败后玩家退出 drain 扫描,
+// "下 tick 重试"永不发生 = 迁移通知永久丢失。
+func TestModelB_DrainMigrateNotifyRetryKeepsSourceIndex(t *testing.T) {
+	uc, repo, authRepo, _ := newModelBUsecase(t, 500, 2)
+	ctx := context.Background()
+	now := time.Now().UnixMilli()
+	const (
+		pod1, pod2 = "pandora-hub-global-1", "pandora-hub-global-2"
+		playerID   = uint64(1001)
+	)
+	seedWarming(t, repo, pod1, 1, 500, now)
+	seedWarming(t, repo, pod2, 2, 500, now)
+	activate(t, uc, authRepo, pod1, "uid-A", 42, "j42", now)
+	activate(t, uc, authRepo, pod2, "uid-B", 52, "j52", now)
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	assign, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found || assign.GetHubPodName() != pod1 {
+		t.Fatalf("assignment=%+v found=%v err=%v", assign, found, err)
+	}
+
+	// 手工推进到「迁移已落地、通知未发」状态(复现前一次尝试在 CAS 后失败):
+	// 占目标座位 → 登记 owner cleanup → CAS 归属到 pod2;源 member 索引仍在 pod1。
+	newID := uuid.NewString()
+	seat, rerr := uc.reserveRoutableSeat(ctx, pod2, playerID, newID)
+	if rerr != nil {
+		t.Fatalf("reserve target seat: %v", rerr)
+	}
+	next := proto.Clone(assign).(*hubv1.HubAssignmentStorageRecord)
+	target2, _, _ := repo.GetShard(ctx, pod2)
+	next.HubPodName, next.HubAddr = pod2, target2.GetHubAddr()
+	next.ShardId, next.Region = target2.GetShardId(), target2.GetRegion()
+	next.AssignmentId = newID
+	next.ReleaseTrack = target2.GetReleaseTrack()
+	bindAssignmentAuth(next, seat)
+	if cerr := uc.registerTransferCleanup(ctx, next, assign); cerr != nil {
+		t.Fatalf("register cleanup: %v", cerr)
+	}
+	if swapped, serr := repo.CompareAndSwapAssignment(ctx, playerID, assign, next, uc.assignmentSagaTTL()); serr != nil || !swapped {
+		t.Fatalf("CAS to target swapped=%v err=%v", swapped, serr)
+	}
+
+	// 显式落源 member 索引(drain 扫描来源;夹具 AssignHub 路径不维护该反向索引)。
+	if aerr := repo.AddShardMember(ctx, pod1, playerID, time.Hour); aerr != nil {
+		t.Fatalf("seed source member index: %v", aerr)
+	}
+
+	from, _, _ := repo.GetShard(ctx, pod1)
+	target, _, _ := repo.GetShard(ctx, pod2)
+
+	// ① 会话权威不可达:补发失败,返回 false,源索引必须保留(下个 tick 还能扫到)。
+	gate := &ackFakeSessionGate{err: errors.New("redis down")}
+	uc.SetSessionGate(gate)
+	if uc.migratePlayer(ctx, playerID, from, target) {
+		t.Fatal("notify with unavailable session authority must not report success")
+	}
+	members, merr := repo.ListShardMembers(ctx, pod1)
+	if merr != nil || !slices.Contains(members, playerID) {
+		t.Fatalf("source member index must survive failed notify: members=%v err=%v", members, merr)
+	}
+
+	// ② 权威恢复:重扫补发成功(true),源索引清理,退出 drain 扫描。
+	gate.err = nil
+	gate.jti, gate.found = "jti-cur", true
+	if !uc.migratePlayer(ctx, playerID, from, target) {
+		t.Fatal("recovered notify retry must succeed")
+	}
+	members, merr = repo.ListShardMembers(ctx, pod1)
+	if merr != nil || slices.Contains(members, playerID) {
+		t.Fatalf("source member index must be cleared after successful notify: members=%v err=%v", members, merr)
+	}
+}
+
 // TestModelB_ReuseInvalidatesOnInstanceDrift:玩家已分配后,分片被新 DS 实例顶替(uid 变、
 // epoch 递增、active gen 前进),旧归属钉的元组不再等于当前 active → 复用失效 → 退旧重分配,
 // 新归属钉新元组(审核二轮 CE1/CE2 misassignment 防护)。
@@ -813,7 +1071,7 @@ func TestModelB_ReuseInvalidatesOnInstanceDrift(t *testing.T) {
 	seedWarming(t, repo, pod, 1, 500, now)
 	ep1 := activate(t, uc, authRepo, pod, "uid-A", 9, "j9", now)
 
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	a1, _, _ := repo.GetAssignment(ctx, 1001)
@@ -830,7 +1088,7 @@ func TestModelB_ReuseInvalidatesOnInstanceDrift(t *testing.T) {
 
 	// 再分配同玩家:旧归属元组 (uid-A,ep1,gen9) != 当前 active (uid-B,ep2,gen20)
 	// → reuseRoutable=false → 退旧重分配,新归属钉新元组。
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("reassign after drift: %v", err)
 	}
 	a2, _, _ := repo.GetAssignment(ctx, 1001)
@@ -846,7 +1104,7 @@ func TestModelB_SameInstanceRotationRebindsWithoutDoubleSeatAndKeepsUnknown(t *t
 	now := time.Now().UnixMilli()
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 9, "j9", now)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatal(err)
 	}
 	old, found, err := repo.GetAssignment(ctx, 1001)
@@ -854,7 +1112,7 @@ func TestModelB_SameInstanceRotationRebindsWithoutDoubleSeatAndKeepsUnknown(t *t
 		t.Fatalf("assignment found=%v err=%v", found, err)
 	}
 	oldID := old.GetAssignmentId()
-	if admission, err := uc.AcknowledgeAdmission(ctx, 1001, oldID, pod, uuid.NewString(), 1, &HubCredential{
+	if admission, err := uc.AcknowledgeAdmission(ctx, 1001, oldID, pod, uuid.NewString(), 1, "", &HubCredential{
 		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 9, JTI: "j9",
 		TokenSHA256: "sha-j9", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
 	}); err != nil || !admission.Admitted {
@@ -882,7 +1140,7 @@ func TestModelB_SameInstanceRotationRebindsWithoutDoubleSeatAndKeepsUnknown(t *t
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0, ""); err != nil {
 		t.Fatal(err)
 	}
 	got, _, _ := repo.GetAssignment(ctx, 1001)

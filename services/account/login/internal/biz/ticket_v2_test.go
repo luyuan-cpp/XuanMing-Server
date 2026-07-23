@@ -35,7 +35,7 @@ func TestVerifyDSTicketSignatureExactHS256RS256Dispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	uc.SetDSTicketV2Verifier(v2Verifier)
-	if _, err := uc.IssueDSTicket(t.Context(), 1001, string(auth.DSTypeHub), 0); err == nil {
+	if _, err := uc.IssueDSTicket(t.Context(), 1001, string(auth.DSTypeHub), 0, ""); err == nil {
 		t.Fatal("RS256 verifier profile self-signed a legacy HS256 hub ticket")
 	}
 

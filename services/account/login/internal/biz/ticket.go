@@ -68,6 +68,9 @@ type DSTicketClaims struct {
 	DSInstanceEpoch uint32
 	AllocationID    string
 	ReleaseTrack    string
+	// SessJTI:签发本票的请求方会话 jti(R6 复审 P0-3)。VerifyDSTicket 核销时对非空值
+	// 复核会话权威现行性;空 = 兼容窗(legacy 票/批签路径/滚动升级旧票)。
+	SessJTI string
 }
 
 // verifiedDSTicket 是 legacy HS256 与 v2 RS256 在 Login 内部的统一、只读视图。
@@ -90,6 +93,8 @@ type verifiedDSTicket struct {
 	ReleaseTrack    string
 	AllocationID    string
 	HubAssignmentID string
+	// SessJTI:v2 票内签发方会话 jti(R6 复审 P0-3;legacy 票恒空)。
+	SessJTI string
 	// legacy Model-B callback credential binding（v2 有意不携带）。
 	DSProtocolEpoch uint32
 	DSCredentialGen uint64
@@ -123,6 +128,22 @@ type TicketUsecase struct {
 	// v2Verifier 供 Login VerifyDSTicket 在线端点使用；非 nil 同时机械激活玩家票
 	// RS256-only。B1 DS 正常准入仍本地验签，不依赖此在线调用。
 	v2Verifier *auth.DSTicketVerifier
+
+	// sessionGate 票据兑换点会话现行性门(R7 复审 P2-1,由 LoginUsecase 实现)。
+	// 非 nil 时 verifyDSTicket 在写 replay marker **之前**复核票内 sjti 仍是当前一代:
+	// 已被顶旧票不再消耗 jti marker/短幂等窗名额,合法新登录链路不受旧票干扰。
+	// service 层在响应写出前另有一道终检,两道共同覆盖验票期间被轮换的窗口。
+	sessionGate TicketSessionGate
+}
+
+// TicketSessionGate 是票据兑换点的会话现行性复核接口(LoginUsecase.RequireTicketSessionCurrent)。
+type TicketSessionGate interface {
+	RequireTicketSessionCurrent(ctx context.Context, playerID uint64, ticketSessJTI string) error
+}
+
+// SetTicketSessionGate 注入会话现行性门(启动期、对外监听前调用;nil-safe)。
+func (u *TicketUsecase) SetTicketSessionGate(g TicketSessionGate) {
+	u.sessionGate = g
 }
 
 // NewTicketUsecase 构造用例。
@@ -184,9 +205,10 @@ func (u *TicketUsecase) routeRegionCell(ctx context.Context, playerID uint64) (r
 // dsType: "hub" / "battle"
 // targetID: hub 为 0;battle 必须填 match_id
 // playerID: 已通过 session 校验(本用例不再二次解 session_token,只信调用方)
+// sessJTI: 请求方会话 jti(R6 复审 P0-3,签进 v2 票 sjti claim;空 = dev/兼容窗)。
 //
 // 失败返回 *errcode.Error。
-func (u *TicketUsecase) IssueDSTicket(ctx context.Context, playerID uint64, dsType string, targetID uint64) (*DSTicketResult, error) {
+func (u *TicketUsecase) IssueDSTicket(ctx context.Context, playerID uint64, dsType string, targetID uint64, sessJTI string) (*DSTicketResult, error) {
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "playerID must be > 0")
 	}
@@ -204,7 +226,7 @@ func (u *TicketUsecase) IssueDSTicket(ctx context.Context, playerID uint64, dsTy
 	}
 	if ds == auth.DSTypeBattle {
 		regionID, cellID := u.routeRegionCell(ctx, playerID)
-		return u.IssueBattleDSTicketAtCell(ctx, playerID, targetID, regionID, cellID)
+		return u.IssueBattleDSTicketAtCell(ctx, playerID, targetID, regionID, cellID, sessJTI)
 	}
 	if ds == auth.DSTypeHub && u.rs256DSTicketProfileEnabled() {
 		// v2(方案 B):hub 票必须带完整实例绑定,只能由 hub_allocator 签;login 不再自签。
@@ -228,6 +250,7 @@ func (u *TicketUsecase) IssueBattleDSTicketAtCell(
 	ctx context.Context,
 	playerID, matchID uint64,
 	regionID, cellID uint32,
+	sessJTI string,
 ) (*DSTicketResult, error) {
 	if playerID == 0 || matchID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "battle ticket requires player and match")
@@ -245,7 +268,7 @@ func (u *TicketUsecase) IssueBattleDSTicketAtCell(
 	if u.v2Signer != nil {
 		// v2(方案 B):票据绑死到 roster 权威门同一 Redis 快照里的唯一 DS 实例。
 		// 实例身份缺一即拒(旧记录/降级路径),绝不退回无绑定票。
-		return u.issueBattleDSTicketV2(ctx, playerID, matchID, regionID, cellID, target)
+		return u.issueBattleDSTicketV2(ctx, playerID, matchID, regionID, cellID, target, sessJTI)
 	}
 	if u.rs256DSTicketProfileEnabled() {
 		return nil, errcode.New(errcode.ErrUnavailable,
@@ -278,11 +301,13 @@ func (u *TicketUsecase) InspectBattleRoute(ctx context.Context, playerID, matchI
 }
 
 // issueBattleDSTicketV2 用 v2 签发器签实例绑定 battle 票(RS256,方案 B)。
+// sessJTI 签进 sjti claim(R6 复审 P0-3,VerifyDSTicket 核销时复核;空 = 兼容窗)。
 func (u *TicketUsecase) issueBattleDSTicketV2(
 	ctx context.Context,
 	playerID, matchID uint64,
 	regionID, cellID uint32,
 	target data.BattleTicketTarget,
+	sessJTI string,
 ) (*DSTicketResult, error) {
 	h := plog.With(ctx)
 	if target.PodName == "" || target.InstanceUID == "" || target.InstanceEpoch == 0 || target.AllocationID == "" ||
@@ -301,6 +326,7 @@ func (u *TicketUsecase) issueBattleDSTicketV2(
 		ReleaseTrack:    target.ReleaseTrack,
 		MatchID:         matchID,
 		AllocationID:    target.AllocationID,
+		SessionJTI:      sessJTI, // R6 P0-3:会话绑定,VerifyDSTicket 核销时复核
 	})
 	if err != nil {
 		h.Errorw("msg", "sign_ds_ticket_v2_failed", "err", err, "player_id", playerID, "match_id", matchID)
@@ -481,6 +507,19 @@ func (u *TicketUsecase) verifyDSTicket(
 		}
 	}
 
+	// R7 复审 P2-1:会话现行性复核前置到 replay marker 写入之前。顺序意义:
+	// 已被新登录轮换的旧票在此即被拒,不消耗 jti 防重放名额,也不占 admission
+	// 短幂等窗;空 sjti 由 login.require_ticket_sjti 门控制(R8 收口,P0-5 滚动兼容:
+	// 默认兼容档告警放行,签发面排空 + 等满票据最大 TTL 后开门硬拒)。service 层
+	// 响应写出前还有终检。
+	if u.sessionGate != nil {
+		if err := u.sessionGate.RequireTicketSessionCurrent(ctx, claims.PlayerID, claims.SessJTI); err != nil {
+			h.Warnw("msg", "ds_ticket_session_gate_rejected_pre_marker",
+				"player_id", claims.PlayerID, "ds_pod", dsPodName, "jti", claims.JTI, "err", err)
+			return nil, err
+		}
+	}
+
 	// W3 ②:防重放。legacy/off 保持原始单次 SETNX；Redis authority 每次都用 Lua
 	// 原子确认短幂等窗：missing→marker，existing same-attempt 仅确认、不覆盖/不续 TTL；
 	// 这也封住 Peek 后验证期间刚好跨出 replay_until 的竞态。
@@ -529,6 +568,7 @@ func (u *TicketUsecase) verifyDSTicket(
 		DSInstanceEpoch: claims.DSInstanceEpoch,
 		AllocationID:    claims.AllocationID,
 		ReleaseTrack:    claims.ReleaseTrack,
+		SessJTI:         claims.SessJTI,
 	}
 	return out, nil
 }
@@ -583,6 +623,7 @@ func (u *TicketUsecase) verifyDSTicketSignature(ticket string) (*verifiedDSTicke
 			DSPodName: claims.DSPodName, DSInstanceUID: claims.DSInstanceUID,
 			DSInstanceEpoch: claims.DSInstanceEpoch, ReleaseTrack: claims.ReleaseTrack,
 			AllocationID: claims.AllocationID, HubAssignmentID: claims.HubAssignmentID,
+			SessJTI: claims.SessJTI, // R6 P0-3:兑换点会话复核用
 		}
 		if claims.IssuedAt != nil {
 			out.IssuedAtMs = claims.IssuedAt.UnixMilli()

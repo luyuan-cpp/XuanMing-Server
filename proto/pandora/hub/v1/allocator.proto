@@ -459,6 +459,10 @@ message AcknowledgeAdmissionRequest {
   uint64 placement_version = 6;
   string placement_operation_id = 7;
   uint64 source_match_id = 8;
+  // 票据 sjti claim(R7 复审 P0-3):DS 本地验签通过的 Hub DSTicket 内签发方会话 jti。
+  // v2 Hub 本地验票不经 Login 在线兑换,ACK 是唯一在线权威接触点——hub_allocator
+  // 装配 session gate 后对空值/非当前代一律拒绝(旧设备残票在入场确认点作废)。
+  string session_jti = 9;
 }
 
 message AcknowledgeAdmissionResponse {
