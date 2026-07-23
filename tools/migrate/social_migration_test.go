@@ -20,6 +20,8 @@ const (
 	socialV2DownPath   = "migrations/pandora_social/000002_guild_counter_tables.down.sql"
 	socialV3UpPath     = "migrations/pandora_social/000003_mail_growth_bounded.up.sql"
 	socialV3DownPath   = "migrations/pandora_social/000003_mail_growth_bounded.down.sql"
+	socialV6UpPath     = "migrations/pandora_social/000006_friend_guard_tables.up.sql"
+	socialV6DownPath   = "migrations/pandora_social/000006_friend_guard_tables.down.sql"
 )
 
 func TestPandoraSocialV2MigrationContract(t *testing.T) {
@@ -27,8 +29,8 @@ func TestPandoraSocialV2MigrationContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 5 {
-		t.Fatalf("pandora_social latest version=%d, 期望=5", version)
+	if version != 6 {
+		t.Fatalf("pandora_social latest version=%d, 期望=6", version)
 	}
 
 	baseline := readEmbeddedMigration(t, socialBaselinePath)
@@ -71,6 +73,24 @@ func TestPandoraSocialV2MigrationContract(t *testing.T) {
 		}
 	}
 	assertAdditiveOnlyDown(t, "000003", readEmbeddedMigration(t, socialV3DownPath))
+
+	// 000006(R8 收口 + R9 复审 P1):守卫行表补齐存量库,pair 守卫带 created_at +
+	// sweep 索引(无上界增长收口),并对已存在旧形态表做 information_schema 守卫补列。
+	upV6 := readEmbeddedMigration(t, socialV6UpPath)
+	requiredV6Fragments := []string{
+		"CREATE TABLE IF NOT EXISTS `friend_player_guards`",
+		"CREATE TABLE IF NOT EXISTS `friend_pair_guards`",
+		"`created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+		"KEY `idx_created` (`created_at`)",
+		"information_schema.columns",
+		"information_schema.statistics",
+	}
+	for _, fragment := range requiredV6Fragments {
+		if !strings.Contains(upV6, fragment) {
+			t.Fatalf("000006 up 缺少契约片段 %q", fragment)
+		}
+	}
+	assertAdditiveOnlyDown(t, "000006", readEmbeddedMigration(t, socialV6DownPath))
 }
 
 // assertAdditiveOnlyDown 校验 down 迁移为 additive-only no-op(不在线删除兼容结构)。

@@ -586,6 +586,9 @@ type TransferResult struct {
 	NewHubTicket  string
 	NewHubPodName string
 	TicketExpMs   int64
+	// NewAssignmentID 本次迁移落地后的 assignment 标识(R9 复审 P0-6):供调用方
+	// 在 post-check 失败时做「仍是本次迁移产物才回退」的条件补偿。
+	NewAssignmentID string
 }
 
 // TransferHub 跨分片传送:先占新分片(失败不动旧分片),再切归属到新分片,最后退旧分片占位,重签票据。
@@ -985,14 +988,20 @@ func (u *HubUsecase) transferToLineInner(ctx context.Context, playerID uint64, t
 		return nil, err
 	}
 
+	// 迁移前先固定原线路:post-check 发现被顶时用它做条件回退(R9 复审 P0-6)。
+	originalShardID := assignment.ShardId
+
 	tr, err := u.TransferHub(ctx, playerID, uint64(targetShardID))
 	if err != nil {
 		return nil, err
 	}
 	// post-check:CAS 已落地后复核。此刻发现被顶,说明轮换落在上面终检与 CAS 之间的
-	// 毫秒窗内——归属已切换(由清退链/新会话下次 resolve 收敛),但绝不把票交给旧设备
-	//(票本就绑旧 jti,兑换点必拒;扣留只是提前失败)。
+	// 毫秒窗内。除扣票外(票本就绑旧 jti,兑换点必拒;扣留只是提前失败),还尝试把
+	// 路由副作用回退到原线路(R9 复审 P0-6):否则旧会话的失败请求仍把新会话的归属
+	// 搬去目标线路(卡容量/改位置)。回退是条件化 best-effort:仅当归属仍是本次迁移
+	// 产物时才回退,失败只记日志(新会话下次 resolve/自行切线即可收敛,不影响安全面)。
 	if err := u.requireCallerSessionCurrent(ctx, playerID); err != nil {
+		u.revertLineTransfer(ctx, playerID, originalShardID, tr)
 		return nil, err
 	}
 	lineNo := lineNoOfShard(shards, assignment.Region, assignmentTrack, targetShardID)
@@ -1002,6 +1011,36 @@ func (u *HubUsecase) transferToLineInner(ctx context.Context, playerID uint64, t
 		NewShardID:   targetShardID,
 		LineNo:       lineNo,
 	}, nil
+}
+
+// revertLineTransfer(R9 复审 P0-6):TransferToLine post-check 判被顶后,条件回退本次
+// 迁移的路由副作用。仅当当前归属仍是本次迁移落地的 assignment(assignment_id 精确
+// 匹配)时才把玩家迁回原线路;归属已被并发操作(新会话切线/清退链)推进则跳过,
+// 绝不回滚别人的落地结果。回退动作本身复用 TransferHub 全套占坑/清退/重签语义;
+// check 到内部 CAS 之间的残余毫秒窗只影响路由位置(票据始终绑 jti,无凭据面影响),
+// 最坏情况新会话被多弹一次线路、可自行再切。失败仅告警,不改写调用方错误。
+func (u *HubUsecase) revertLineTransfer(ctx context.Context, playerID uint64, originalShardID uint32, tr *TransferResult) {
+	if tr == nil || tr.NewAssignmentID == "" {
+		return
+	}
+	cur, found, err := u.repo.GetAssignment(ctx, playerID)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "transfer_supersede_revert_read_failed",
+			"player_id", playerID, "err", err)
+		return
+	}
+	if !found || cur.GetAssignmentId() != tr.NewAssignmentID {
+		plog.With(ctx).Infow("msg", "transfer_supersede_revert_skipped",
+			"player_id", playerID, "reason", "assignment already advanced by another actor")
+		return
+	}
+	if _, rerr := u.TransferHub(ctx, playerID, uint64(originalShardID)); rerr != nil {
+		plog.With(ctx).Warnw("msg", "transfer_supersede_revert_failed",
+			"player_id", playerID, "original_shard_id", originalShardID, "err", rerr)
+		return
+	}
+	plog.With(ctx).Infow("msg", "transfer_supersede_reverted",
+		"player_id", playerID, "original_shard_id", originalShardID)
 }
 
 // ── RPC 4:ListHubs ────────────────────────────────────────────────────────────
@@ -1358,34 +1397,45 @@ func (u *HubUsecase) AcknowledgeAdmission(ctx context.Context, playerID uint64, 
 		return &AcknowledgeAdmissionResult{Admitted: false}, nil
 	}
 	// R7 收口(P0-2):durable ledger 写是入场线性化点,写成功后必须再复核一次会话现行性,
-	// 关闭「预检通过 → 消费 reservation 之间轮换」的 TOCTOU:任何发生在本复核之前的顶号
-	// 都会被检出并 exact 回退刚建立的 connected owner(AcknowledgeDeparture 同 identity,
-	// 幂等),DS 收到非 OK 必 Kick、不开 spawn gate。本复核之后的轮换 = 正常「已在 Hub 中
-	// 被顶号」,由 successor 替换(新 admission 更大 seq 接管)+ push 顶号清退链处理。
-	// 回退本身失败也拒绝:seat 残留由 DS Kick 后的物理 Logout proof(Departure 幂等重试)
-	// 收敛,绝不向已判定非现行的会话开门。空 sjti(兼容窗放行)无绑定可比,跳过。
+	// 关闭「预检通过 → 消费 reservation 之间轮换」的 TOCTOU。
+	//
+	// R9 复审 P1(结果分型,回退只用于确定性否定):
+	//   - 权威不可达(gerr)= 结果未知:**不回退** connected owner,返回 Unavailable。
+	//     ledger 的 ACK 对相同 (admission_id, seq) 幂等(AlreadyAdmitted),DS 用同一
+	//     identity 重试会完整重跑两次会话复核拿到确定结果;若回退,普通 reservation
+	//     已被消费且 Departure 不会恢复它,重试必然 fail-closed 死路,玩家被迫整链重
+	//     resolve。owner 保留期间客户端仍未过 spawn gate,无授权面影响。
+	//   - 确定性否定(会话消失/已被顶):exact 回退刚建立的 connected owner
+	//     (AcknowledgeDeparture 同 identity,幂等)。回退后同票重试本就该失败
+	//     (持票会话已死),新会话走完整 resolve;这不是可重试场景。
+	//   - 回退本身失败也拒绝:seat 残留由 DS Kick 后的物理 Logout proof(Departure
+	//     幂等重试)收敛,绝不向已判定非现行的会话开门。
+	// 本复核之后的轮换 = 正常「已在 Hub 中被顶号」,由 successor 替换(新 admission
+	// 更大 seq 接管)+ push 顶号清退链处理。空 sjti(兼容窗放行)无绑定可比,跳过。
 	if u.sessGate != nil && ticketSessionJTI != "" {
 		curJTI, curFound, gerr := u.sessGate.CurrentJTI(ctx, playerID)
-		if gerr != nil || !curFound || curJTI != ticketSessionJTI {
+		if gerr != nil {
+			plog.With(ctx).Warnw("msg", "hub_admission_postcheck_indeterminate",
+				"player_id", playerID, "assignment_id", assignmentID, "pod", pod, "err", gerr,
+				"hint", "owner 保留,DS 以同 identity 重试 ACK 重跑复核;spawn gate 未开")
+			return nil, errcode.NewCause(errcode.ErrUnavailable, gerr,
+				"session authority unavailable during hub admission post-check")
+		}
+		if !curFound || curJTI != ticketSessionJTI {
 			if _, derr := u.authRepo.AcknowledgeDeparture(ctx, pod, id, reservation,
 				admissionID, admissionSeq, time.Now().UnixMilli(), u.shardTTL()); derr != nil {
 				plog.With(ctx).Errorw("msg", "hub_admission_postcheck_revert_failed",
 					"player_id", playerID, "assignment_id", assignmentID, "pod", pod, "err", derr,
 					"hint", "connected owner 残留,等待 DS Kick 后物理 Logout proof 收敛")
 			}
-			switch {
-			case gerr != nil:
-				return nil, errcode.NewCause(errcode.ErrUnavailable, gerr,
-					"session authority unavailable during hub admission post-check")
-			case !curFound:
+			if !curFound {
 				return nil, errcode.New(errcode.ErrUnauthorized,
 					"player %d session vanished during hub admission; spawn refused", playerID)
-			default:
-				plog.With(ctx).Warnw("msg", "hub_admission_postcheck_superseded",
-					"player_id", playerID, "assignment_id", assignmentID, "pod", pod)
-				return nil, errcode.New(errcode.ErrSessionSuperseded,
-					"hub admission superseded by a newer login before spawn gate opened")
 			}
+			plog.With(ctx).Warnw("msg", "hub_admission_postcheck_superseded",
+				"player_id", playerID, "assignment_id", assignmentID, "pod", pod)
+			return nil, errcode.New(errcode.ErrSessionSuperseded,
+				"hub admission superseded by a newer login before spawn gate opened")
 		}
 	}
 	// assignment 与 {pod} ledger 不同 slot：ACK 后必须再查一次。若 Transfer/Release
@@ -2399,10 +2449,11 @@ func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, roleID
 		return nil, err
 	}
 	return &TransferResult{
-		NewHubDSAddr:  assignment.HubAddr,
-		NewHubTicket:  token,
-		NewHubPodName: assignment.HubPodName,
-		TicketExpMs:   expMs,
+		NewHubDSAddr:    assignment.HubAddr,
+		NewHubTicket:    token,
+		NewHubPodName:   assignment.HubPodName,
+		TicketExpMs:     expMs,
+		NewAssignmentID: assignment.GetAssignmentId(),
 	}, nil
 }
 
@@ -2809,9 +2860,10 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 			if signErr != nil {
 				return keepScanned() // 同上:回源索引,重扫重试
 			}
-			u.pushMigrate(ctx, playerID, from, authoritativeShard(target, ensured), token)
-			// 通知路径已走完(push 本身 best-effort,失败兜底 = 清退链 + 客户端 resolve),
-			// 此时才清源索引,退出 drain 扫描。
+			if !u.pushMigrate(ctx, playerID, from, authoritativeShard(target, ensured), token) {
+				return keepScanned() // 真实发布失败(R9 复审 P2):回源索引,下个 tick 重签补发
+			}
+			// 通知路径已走完(发布已确认或功能关闭),此时才清源索引,退出 drain 扫描。
 			u.removeShardMember(ctx, from.HubPodName, playerID)
 			return true
 		}
@@ -2899,15 +2951,23 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		u.removeShardMember(ctx, from.HubPodName, playerID)
 	}
 
-	// 通知仍是 best-effort；若推送失败，Login 从 durable assignment/op 重签恢复。
-	u.pushMigrate(ctx, playerID, from, target, token)
+	// 通知仍是异步交付;若发布失败,把玩家加回源 member 索引(R9 复审 P2):迁移已
+	// 落地,下个 tick「归属已在 drain 目标」分支会重签票据并补发通知;Login 从 durable
+	// assignment 重签恢复仍是最终兜底,但不再把「发布失败」静默当作已送达。
+	if !u.pushMigrate(ctx, playerID, from, target, token) {
+		u.addShardMember(ctx, from.HubPodName, playerID)
+		return false
+	}
 	return true
 }
 
 // pushMigrate 推送 HubMigrateEvent 给被迁移玩家(migrate pusher 未接时静默跳过)。
-func (u *HubUsecase) pushMigrate(ctx context.Context, playerID uint64, from, target *hubv1.HubShardStorageRecord, token string) {
+// 返回是否可视为「通知路径已走完」(R9 复审 P2):pusher 未装配=true(功能关闭,
+// 兜底链接管);真实发布失败=false,调用方必须把玩家留在/加回源 member 索引,
+// 下个 tick「归属已在 drain 目标」分支重签重发,不得静默丢失唯一迁移通知。
+func (u *HubUsecase) pushMigrate(ctx context.Context, playerID uint64, from, target *hubv1.HubShardStorageRecord, token string) bool {
 	if u.migrate == nil {
-		return
+		return true
 	}
 	ev := &hubv1.HubMigrateEvent{
 		PlayerId:     playerID,
@@ -2923,11 +2983,13 @@ func (u *HubUsecase) pushMigrate(ctx context.Context, playerID uint64, from, tar
 	payload, merr := proto.Marshal(ev)
 	if merr != nil {
 		plog.With(ctx).Warnw("msg", "migrate_marshal_failed", "player_id", playerID, "err", merr)
-		return
+		return false
 	}
 	if perr := u.migrate.PushMigrate(ctx, playerID, payload); perr != nil {
 		plog.With(ctx).Warnw("msg", "migrate_push_failed", "player_id", playerID, "err", perr)
+		return false
 	}
+	return true
 }
 
 // reclaimDrainedShards intentionally does not erase a mirror merely because a

@@ -367,17 +367,27 @@ func (s *fakeSigner) SignHubTicket(playerID uint64, roleID uint32, binding HubTi
 	return "hub-ticket-fake", time.Now().Add(5 * time.Minute).UnixMilli(), nil
 }
 
-// fakeMigratePusher 记录强制整合迁移推送(测试断言用)。
+// fakeMigratePusher 记录强制整合迁移推送(测试断言用);err 非 nil 时模拟发布失败。
 type fakeMigratePusher struct {
 	mu     sync.Mutex
 	pushes []uint64
+	err    error
 }
 
 func (p *fakeMigratePusher) PushMigrate(_ context.Context, playerID uint64, _ []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.err != nil {
+		return p.err
+	}
 	p.pushes = append(p.pushes, playerID)
 	return nil
+}
+
+func (p *fakeMigratePusher) setErr(err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.err = err
 }
 
 func (p *fakeMigratePusher) count() int {
@@ -1309,9 +1319,11 @@ func (h transferHeader) Keys() []string {
 
 type transferTransport struct{ header transferHeader }
 
-func (t *transferTransport) Kind() transport.Kind            { return transport.KindGRPC }
-func (t *transferTransport) Endpoint() string                { return "" }
-func (t *transferTransport) Operation() string               { return "/pandora.hub.v1.HubAllocatorService/TransferToLine" }
+func (t *transferTransport) Kind() transport.Kind { return transport.KindGRPC }
+func (t *transferTransport) Endpoint() string     { return "" }
+func (t *transferTransport) Operation() string {
+	return "/pandora.hub.v1.HubAllocatorService/TransferToLine"
+}
 func (t *transferTransport) RequestHeader() transport.Header { return t.header }
 func (t *transferTransport) ReplyHeader() transport.Header   { return transferHeader{} }
 
@@ -1377,8 +1389,9 @@ func TestTransferToLine_CurrentCallerAllowed(t *testing.T) {
 	}
 }
 
-// 确定性交错:前置终检通过后、CAS 落地前发生顶号 → post-check 检出,扣留票据。
-// 归属已切换由清退链/新会话下次 resolve 收敛;旧设备拿不到任何可用票。
+// 确定性交错:前置终检通过后、CAS 落地前发生顶号 → post-check 检出,扣留票据,
+// 并把路由副作用条件回退到原线路(R9 复审 P0-6):旧会话的失败请求不得把新会话的
+// 归属留在目标线路。
 func TestTransferToLine_PostCASRotationWithholdsTicket(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	seedShard(repo, "hub-a", 1, 1)
@@ -1395,5 +1408,8 @@ func TestTransferToLine_PostCASRotationWithholdsTicket(t *testing.T) {
 	}
 	if res != nil {
 		t.Fatalf("no ticket may be delivered to a superseded caller, got %+v", res)
+	}
+	if a, _, _ := repo.GetAssignment(context.Background(), 1001); a.GetHubPodName() != "hub-a" {
+		t.Fatalf("routing side effect must be reverted to the original line, pod=%s", a.GetHubPodName())
 	}
 }

@@ -66,13 +66,14 @@ login:
   require_hub_assignment_binding: false
   # require_hub_assignment_binding=true 时由集群配置生成器原子注入 hub_assignment_fence。
 
-  # 会话代际强制门(R7/R8 收口,分阶段激活;顺序见 docs/design/session-generation-rollout.md):
-  #   session_generation_enforce: 首次上线必须 false(只 emit 双写);全 fleet emit +
-  #     旧版本排空 + 000003 迁移已跑后才可置 true(SetRole 同事务 FOR UPDATE 复核代际)。
-  #   require_ticket_sjti: 首次上线必须 false(空 sjti 票告警放行,混版兼容窗);
-  #     全 fleet 签发面必带 sjti + 旧版本排空 + 等满票据最大 TTL 后才可置 true(硬拒空票)。
-  session_generation_enforce: false
-  require_ticket_sjti: false
+  # 会话代际强制门(R9 复审 P0-1 改为默认开启;顺序见 docs/design/session-generation-rollout.md):
+  # dev 一键启动自带 MySQL(迁移先行)且无混版旧节点,直接保持 true 与生产同构验证。
+  # 只有「从不带会话代际的旧版本升级的环境」才按 rollout 文档阶段序临时置 false:
+  #   session_generation_enforce: 需 000003 迁移 + 全 fleet emit + 旧版本排空 +
+  #     等满一个会话 TTL(24h,或强制全量重登)后再开。
+  #   require_ticket_sjti: 需全 fleet 签发面必带 sjti + 旧版本排空 + 等满票据最大 TTL 后再开。
+  session_generation_enforce: true
+  require_ticket_sjti: true
 
   # 开发期免密登录(⚠️ 仅本机 / 联调,严禁上生产):
   #   true  → 跳过密码校验;账号不存在时自动懒注册,返回稳定 player_id

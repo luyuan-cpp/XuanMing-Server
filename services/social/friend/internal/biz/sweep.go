@@ -14,12 +14,20 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 )
 
-// SweepTerminalRequests 跑一轮终态请求清理(至多一批 cfg.SweepBatch),由调用方 ticker 驱动。
+// SweepTerminalRequests 跑一轮保留期清理(各至多一批 cfg.SweepBatch),由调用方 ticker 驱动:
+//   - 终态好友请求(accepted/rejected/expired,超 RequestRetentionDays);
+//   - 关系对守卫行(friend_pair_guards,超 PairGuardRetentionDays;R9 复审 P1:
+//     pair 守卫随社交图 O(n²) 累积无上界,守卫行仅锁载体删除安全,下次 acquire 重建)。
 func (u *FriendUsecase) SweepTerminalRequests(ctx context.Context) {
 	if n, err := u.repo.DeleteTerminalRequestsBefore(ctx, u.cfg.RequestRetentionDays, u.cfg.SweepBatch); err != nil {
 		plog.With(ctx).Warnw("msg", "friend_request_sweep_failed", "err", err)
 	} else if n > 0 {
 		plog.With(ctx).Infow("msg", "friend_request_swept", "deleted", n, "retention_days", u.cfg.RequestRetentionDays)
+	}
+	if n, err := u.repo.DeletePairGuardsBefore(ctx, u.cfg.PairGuardRetentionDays, u.cfg.SweepBatch); err != nil {
+		plog.With(ctx).Warnw("msg", "friend_pair_guard_sweep_failed", "err", err)
+	} else if n > 0 {
+		plog.With(ctx).Infow("msg", "friend_pair_guard_swept", "deleted", n, "retention_days", u.cfg.PairGuardRetentionDays)
 	}
 }
 

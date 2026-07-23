@@ -109,3 +109,77 @@ func CheckColumns(ctx context.Context, db *sql.DB, migrationHint, table string, 
 	}
 	return nil
 }
+
+// ColumnSpec 描述一列的期望形状(R9 复审 P2 收口:只查列名不验类型/约束,识别不出
+// 「列在但类型错/可空性错/键缺失」的畸形 schema,运行期写入才炸或静默截断)。
+// 空字符串字段表示不校验该维度(渐进接入,不强迫一次写全)。
+type ColumnSpec struct {
+	Name string
+	// DataType 对照 information_schema.columns.DATA_TYPE(小写,如 "bigint" / "varchar" / "datetime")。
+	DataType string
+	// Nullable 对照 IS_NULLABLE:"NO" / "YES"。
+	Nullable string
+	// Key 对照 COLUMN_KEY:"PRI" / "UNI" / "MUL" / ""(空串=不校验;要求非键列请勿依赖本维度)。
+	Key string
+}
+
+// CheckColumnSpecs 校验表中给定列存在且类型/可空性/键形状符合预期(R9 复审 P2)。
+//
+// 与 CheckColumns 的关系:CheckColumns 只判列存在;本函数额外对照 DATA_TYPE、
+// IS_NULLABLE、COLUMN_KEY,识别「旧库手工建过同名列但形状不对」的半旧 schema。
+// 比较不区分大小写。specs 为空时直接返回 nil。
+func CheckColumnSpecs(ctx context.Context, db *sql.DB, migrationHint, table string, specs ...ColumnSpec) error {
+	if len(specs) == 0 {
+		return nil
+	}
+	rows, err := db.QueryContext(ctx,
+		`SELECT column_name, data_type, is_nullable, column_key FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?`,
+		table)
+	if err != nil {
+		return fmt.Errorf("query information_schema.columns for %s: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	type colShape struct {
+		dataType string
+		nullable string
+		key      string
+	}
+	present := make(map[string]colShape)
+	for rows.Next() {
+		var name, dataType, nullable, key string
+		if serr := rows.Scan(&name, &dataType, &nullable, &key); serr != nil {
+			return fmt.Errorf("scan column shape: %w", serr)
+		}
+		present[strings.ToLower(name)] = colShape{
+			dataType: strings.ToLower(dataType),
+			nullable: strings.ToUpper(nullable),
+			key:      strings.ToUpper(key),
+		}
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return fmt.Errorf("iterate information_schema.columns: %w", rerr)
+	}
+
+	var problems []string
+	for _, spec := range specs {
+		shape, ok := present[strings.ToLower(spec.Name)]
+		if !ok {
+			problems = append(problems, fmt.Sprintf("%s: 列缺失", spec.Name))
+			continue
+		}
+		if spec.DataType != "" && shape.dataType != strings.ToLower(spec.DataType) {
+			problems = append(problems, fmt.Sprintf("%s: 类型 %s ≠ 期望 %s", spec.Name, shape.dataType, strings.ToLower(spec.DataType)))
+		}
+		if spec.Nullable != "" && shape.nullable != strings.ToUpper(spec.Nullable) {
+			problems = append(problems, fmt.Sprintf("%s: 可空性 %s ≠ 期望 %s", spec.Name, shape.nullable, strings.ToUpper(spec.Nullable)))
+		}
+		if spec.Key != "" && shape.key != strings.ToUpper(spec.Key) {
+			problems = append(problems, fmt.Sprintf("%s: 键形状 %q ≠ 期望 %q", spec.Name, shape.key, strings.ToUpper(spec.Key)))
+		}
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("表 %s 列形状不符 [%s]:schema 与迁移产物不一致(旧库手工改过表/迁移未跑全),请对照 %s 修复后再启动", table, strings.Join(problems, "; "), migrationHint)
+	}
+	return nil
+}

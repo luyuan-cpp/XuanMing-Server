@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS `blocks` (
 -- 好友域并发守卫行(R5 复审 P1-2/3/4,2026-07-22):TiDB 无 gap/next-key 锁,
 -- 限额校验与关系变更先锁守卫行(存在行的悲观点锁两库语义一致)再进入临界区;
 -- 单 MySQL 下同样生效(与 TiDB DDL deploy/tidb-init/01-social-tidb.sql 同步维护)。
--- 行数有界:每玩家/每关系对至多 1 行(§9.24 登记豁免,同 auction_owner_guards)。
+-- 行数界定(R9 复审 P1):player 守卫每玩家至多 1 行,被玩家数有界(§9.24 登记豁免,
+-- 同 auction_owner_guards);pair 守卫每关系对 1 行,随社交图 O(n²) 累积无上界 →
+-- 增设 created_at 走保留期 sweep(守卫行仅锁载体,任意时刻删除安全,下次 acquire 重建)。
 CREATE TABLE IF NOT EXISTS `friend_player_guards` (
     `player_id` BIGINT UNSIGNED NOT NULL COMMENT '守卫行归属玩家(锁粒度=单玩家限额域)',
     PRIMARY KEY (`player_id`)
@@ -69,9 +71,11 @@ CREATE TABLE IF NOT EXISTS `friend_player_guards` (
 CREATE TABLE IF NOT EXISTS `friend_pair_guards` (
     `lo_id` BIGINT UNSIGNED NOT NULL COMMENT '关系对较小 player_id',
     `hi_id` BIGINT UNSIGNED NOT NULL COMMENT '关系对较大 player_id',
-    PRIMARY KEY (`lo_id`, `hi_id`)
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次取守卫时间(保留期 sweep 依据)',
+    PRIMARY KEY (`lo_id`, `hi_id`),
+    KEY `idx_created` (`created_at`) COMMENT '保留期 sweep 扫描索引(§9.24)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 好友域关系对写守卫行(Accept/Block/AddFriend 同对串行化;§9.24 豁免)';
+  COMMENT='Pandora 好友域关系对写守卫行(Accept/Block/AddFriend 同对串行化;保留期 sweep,§9.24)';
 
 -- chat 服务私聊历史(2026-06-16)。
 --   只有私聊(PRIVATE)落库支持离线 PullHistory;世界 / 队伍是即时频道,不持久化。

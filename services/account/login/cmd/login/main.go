@@ -205,6 +205,16 @@ func main() {
 	// SetRole 的 MySQL 代际强制复核由 session_generation_enforce 分阶段激活(默认只 emit)。
 	loginUC.SetSessionGenerationRepo(sessionGenRepo)
 	loginUC.SetSessionGenerationEnforce(cfg.Login.SessionGenerationEnforce)
+	// R9 复审 P1(开关依赖门禁):两个强制门都以「Redis 会话权威存在」为前提——
+	// enforce 的 SetRole 复核对象与 sjti 强制门的现行性判定都来自会话仓储。缺 Redis
+	// 时开关只会静默变形为"永不强制",安全开关必须 fail-fast 而不是装饰性存在。
+	if (cfg.Login.SessionGenerationEnforce || cfg.Login.RequireTicketSJTI) && sessionRepo == nil {
+		helper.Errorw("msg", "session_enforce_requires_redis_sessions",
+			"session_generation_enforce", cfg.Login.SessionGenerationEnforce,
+			"require_ticket_sjti", cfg.Login.RequireTicketSJTI,
+			"hint", "配置 node.redis_client(会话权威)或按 rollout 文档显式关闭强制门")
+		os.Exit(1)
+	}
 	if cfg.Login.SessionGenerationEnforce {
 		helper.Infow("msg", "session_generation_enforce_active",
 			"note", "SetRole 同事务复核 MySQL 会话代际;前提=全 fleet emit 且旧版本已排空")
@@ -402,11 +412,16 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, d
 		h.Errorw("msg", "mysql_schema_check_failed", "err", serr)
 		os.Exit(1)
 	}
-	// 列级检查(R8 收口):player_session_generations 的 generation 列是 000003 迁移新增,
-	// 早期只建过旧版表的库表名检查会通过、运行期首条含 generation 的 SQL 才炸。fail-fast。
-	if serr := mysqlx.CheckColumns(schemaCtx, db,
+	// 列级检查(R8 收口;R9 复审 P2 升级为形状校验):player_session_generations 的
+	// generation 列是 000003 迁移新增,早期只建过旧版表的库表名检查会通过、运行期首条
+	// 含 generation 的 SQL 才炸;只查列名又识别不出「列在但类型/可空性错」的手工库。
+	// 对照迁移产物校验 DATA_TYPE / IS_NULLABLE / COLUMN_KEY,不符 fail-fast。
+	if serr := mysqlx.CheckColumnSpecs(schemaCtx, db,
 		"tools/migrate/migrations/pandora_account/000003_session_generations.up.sql",
-		"player_session_generations", "sess_jti", "generation"); serr != nil {
+		"player_session_generations",
+		mysqlx.ColumnSpec{Name: "player_id", DataType: "bigint", Nullable: "NO", Key: "PRI"},
+		mysqlx.ColumnSpec{Name: "sess_jti", DataType: "varchar", Nullable: "NO"},
+		mysqlx.ColumnSpec{Name: "generation", DataType: "bigint", Nullable: "NO"}); serr != nil {
 		h.Errorw("msg", "mysql_schema_check_failed", "err", serr)
 		os.Exit(1)
 	}

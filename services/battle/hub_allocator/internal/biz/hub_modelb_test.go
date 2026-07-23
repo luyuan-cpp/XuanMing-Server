@@ -621,7 +621,9 @@ func TestModelB_AcknowledgeAdmissionPostWriteRotationReverted(t *testing.T) {
 	if serr != nil || s.GetConnectedOwnershipCount() != 0 {
 		t.Fatalf("reverted admission must not leave a connected owner: shard=%+v err=%v", s, serr)
 	}
-	// 复核不可判定(权威不可达)同样 fail-closed:回退 + ErrUnavailable。
+	// 复核不可判定(权威不可达)fail-closed 拒绝开门,但**不回退** owner(R9 复审 P1):
+	// 普通 reservation 已被消费且 Departure 不恢复它,回退会把重试变成死路。owner 保留 +
+	// ledger 幂等重认,权威恢复后 DS 以同一 identity 重试即可拿到确定结果。
 	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0, ""); err != nil {
 		t.Fatalf("re-assign: %v", err)
 	}
@@ -631,12 +633,22 @@ func TestModelB_AcknowledgeAdmissionPostWriteRotationReverted(t *testing.T) {
 	}
 	gate.queue = []string{"jti-old"} // 预检过;post-check 弹空回落到静态 err
 	gate.err = errors.New("redis down")
+	retryAdmissionID := uuid.NewString()
 	if _, aerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
-		uuid.NewString(), 2, "jti-old", cred); errcode.As(aerr) != errcode.ErrUnavailable {
+		retryAdmissionID, 2, "jti-old", cred); errcode.As(aerr) != errcode.ErrUnavailable {
 		t.Fatalf("post-check outage must fail closed, code=%v err=%v", errcode.As(aerr), aerr)
 	}
-	if s, _, serr := repo.GetShard(ctx, pod); serr != nil || s.GetConnectedOwnershipCount() != 0 {
-		t.Fatalf("outage path must also revert the seat: shard=%+v err=%v", s, serr)
+	if s, _, serr := repo.GetShard(ctx, pod); serr != nil || s.GetConnectedOwnershipCount() != 1 {
+		t.Fatalf("outage path must retain the owner for an idempotent retry: shard=%+v err=%v", s, serr)
+	}
+	// 权威恢复后同 identity 重试:幂等重认 + 两次复核通过 → 开门。
+	gate.queue = nil
+	gate.err = nil
+	gate.jti, gate.found = "jti-old", true
+	retried, rerr := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		retryAdmissionID, 2, "jti-old", cred)
+	if rerr != nil || retried == nil || !retried.Admitted {
+		t.Fatalf("same-identity retry after authority recovery must admit, result=%+v err=%v", retried, rerr)
 	}
 }
 
@@ -1048,11 +1060,28 @@ func TestModelB_DrainMigrateNotifyRetryKeepsSourceIndex(t *testing.T) {
 		t.Fatalf("source member index must survive failed notify: members=%v err=%v", members, merr)
 	}
 
-	// ② 权威恢复:重扫补发成功(true),源索引清理,退出 drain 扫描。
+	// ② Kafka 发布失败(R9 复审 P2):重签成功但真实推送失败,同样必须保留源索引,
+	// 不得把「发布失败」静默当作已送达。
 	gate.err = nil
 	gate.jti, gate.found = "jti-cur", true
+	pusher := &fakeMigratePusher{}
+	pusher.setErr(errors.New("kafka down"))
+	uc.SetMigratePusher(pusher)
+	if uc.migratePlayer(ctx, playerID, from, target) {
+		t.Fatal("failed publish must not report migration notify success")
+	}
+	members, merr = repo.ListShardMembers(ctx, pod1)
+	if merr != nil || !slices.Contains(members, playerID) {
+		t.Fatalf("source member index must survive failed publish: members=%v err=%v", members, merr)
+	}
+
+	// ③ 发布恢复:重扫补发成功(true),源索引清理,退出 drain 扫描。
+	pusher.setErr(nil)
 	if !uc.migratePlayer(ctx, playerID, from, target) {
 		t.Fatal("recovered notify retry must succeed")
+	}
+	if pusher.count() != 1 {
+		t.Fatalf("recovered retry must deliver exactly one push, got %d", pusher.count())
 	}
 	members, merr = repo.ListShardMembers(ctx, pod1)
 	if merr != nil || slices.Contains(members, playerID) {

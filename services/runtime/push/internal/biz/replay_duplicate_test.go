@@ -523,6 +523,9 @@ func TestRunSubscribeStream_GapCheckFailClosed(t *testing.T) {
 
 // 无丢失 / 首连:不得发 resync 帧(首连空缓冲连检测都不做——新客户端无增量历史;
 // 首连有帧时丢失上界 ≤ 已投递游标同样不触发)。
+// R9 复审 P1-e:首连跳过是**有前提的交付契约**而非漏洞——其安全性依赖客户端时序
+// 契约「登录成功提交点先订阅 push、后发起任何业务域快照拉取」(已写入 push.proto
+// last_seen_ms 注释与 drainBuffer 注释);本测试锁定的是该契约下的预期行为。
 func TestRunSubscribeStream_NoResyncWhenNoGap(t *testing.T) {
 	for name, repo := range map[string]*pullRepo{
 		"no-gap":               {pageSize: 10},

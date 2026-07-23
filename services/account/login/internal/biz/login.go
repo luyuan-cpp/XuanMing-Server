@@ -320,26 +320,39 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 最终都收敛到最高代际那次登录;输掉定序的登录(条件写被拒)直接失败,不交付凭据,
 	// 不再出现「Redis=B、MySQL=A」的撕裂(旧实现先写 Redis 再无条件覆盖 MySQL 的缺陷)。
 	//
-	// 部分失败口径:MySQL 已提交、Redis 写失败(网络类错误)时本次登录失败,MySQL 代际
-	// 领先于 Redis 会话——方向是 fail-closed(SetRole 代际强制门开启时,旧会话角色写会被
-	// 拒到下一次成功登录为止),不产生任何"旧会话获得新权威"的口子;下一次成功登录
-	// 原子推进两个存储自愈。
+	// 部分失败口径(R9 复审 P0-2 收口):MySQL 已提交、Redis 写失败(网络类错误)时本次
+	// 登录失败并做条件回补(RestoreSessionJTI)——把 MySQL 行内 sess_jti 回写为覆盖前的
+	// 值(generation 不回退),消除「上一代合法会话被 SetRole 代际强制门误拒到下一次
+	// 成功登录」的撕裂窗口。回补是 CAS:并发新登录已推进代际则 no-op;回补本身失败仅
+	// 记日志(方向仍是 fail-closed,不产生任何"旧会话获得新权威"的口子,下一次成功
+	// 登录原子推进两个存储自愈)。定序失败(ErrSessionSuperseded)不回补:行已属于赢家。
 	sessTTL := u.signer.SessionTTL()
 	var sessGen uint64
+	var sessGenLease data.SessionGenerationLease
 	if u.sessionGen != nil {
-		gen, gerr := u.sessionGen.PersistSessionJTI(ctx, playerID, sessJTI)
+		lease, gerr := u.sessionGen.PersistSessionJTI(ctx, playerID, sessJTI)
 		if gerr != nil {
 			h.Errorw("msg", "session_generation_persist_failed", "err", gerr, "player_id", playerID)
 			return nil, errcode.NewCause(errcode.ErrUnavailable, gerr,
 				"session generation persistence unavailable; login rejected")
 		}
-		sessGen = gen
+		sessGenLease = lease
+		sessGen = lease.Generation
 	}
 	if u.sessions != nil {
 		if err := u.sessions.Set(ctx, playerID, sessionToken, sessJTI, deviceID, sessTTL, sessGen); err != nil {
 			// ErrSessionSuperseded = 并发更新一代登录已完成写入,本次登录定序失败;
 			// 其余为基础设施错误。两者都不得交付凭据。
 			h.Warnw("msg", "session_set_failed", "err", err, "player_id", playerID, "gen", sessGen)
+			if u.sessionGen != nil && errcode.As(err) != errcode.ErrSessionSuperseded {
+				if restored, rerr := u.sessionGen.RestoreSessionJTI(ctx, playerID, sessJTI, sessGenLease); rerr != nil {
+					h.Errorw("msg", "session_generation_restore_failed", "err", rerr,
+						"player_id", playerID, "gen", sessGen)
+				} else if !restored {
+					h.Infow("msg", "session_generation_restore_noop",
+						"player_id", playerID, "gen", sessGen)
+				}
+			}
 			return nil, err
 		}
 	}

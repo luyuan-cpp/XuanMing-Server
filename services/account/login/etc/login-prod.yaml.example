@@ -52,17 +52,22 @@ login:
   # true 后 login 只接受 hub_allocator 权威签发且绑定 Redis 当前 assignment 的 hub 票。
   require_hub_assignment_binding: false
   # hub_assignment_fence: binding=true 时必填，使用与 DS auth 相同 required writer epoch。
-  # 会话代际强制门(R7/R8 收口,发布顺序硬约束,见 docs/design/session-generation-rollout.md):
-  # 两个开关首次上线本版本时都必须保持 false,提前开启会误拒/硬拒存量合法会话与票据。
+  # 会话代际强制门(R7/R8 收口;R9 复审 P0-1 改为默认开启,安全默认 fail-closed,
+  # 见 docs/design/session-generation-rollout.md):
+  # 全新部署(迁移先行 + 全 fleet 均为本版本)保持 true——顶号后旧会话的 SetRole /
+  # 无 sjti 票据在权威点被拒。只有「从不带会话代际的旧版本升级」才允许按 rollout
+  # 文档的阶段序临时置 false,并在满足下列前提后尽快改回 true:
   #   session_generation_enforce: 激活前提 ① pandora_account 已跑 000003 迁移;
-  #     ② 全 fleet login 已升级(emit 双写)且旧版本 Pod 排空;③ 观察
-  #     session_generation_persist_failed 为零。之后置 true 滚动重启。
+  #     ② 全 fleet login 已升级(emit 双写)且旧版本 Pod 排空;③ 等满一个会话
+  #     TTL(session_ttl,默认 24h;或强制全量重登/清空会话)——旧版本 login 建立
+  #     的会话不会写 MySQL 代际行,残留的陈旧行会误拒合法会话;④ 观察
+  #     session_generation_persist_failed 为零。
   #   require_ticket_sjti: 激活前提 ① 全 fleet matchmaker/hub_allocator 签票必带 sjti
   #     且旧版本排空;② 等满一个票据最大 TTL(v2 RS256 上限 180s;legacy HS256 为
   #     ds_ticket_ttl,默认 5min);③ 观察 ticket_missing_session_binding_compat_allow
-  #     日志为零。之后置 true 滚动重启。
-  session_generation_enforce: false
-  require_ticket_sjti: false
+  #     日志为零。
+  session_generation_enforce: true
+  require_ticket_sjti: true
   dev_skip_password: false          # ⚠️ 必须 false:走正常 bcrypt 密码校验
   # 选角白名单(⚠️ prod 必填):对齐客户端 CfgMisc.DefaultRoleIDs(选角界面可选列表)。
   # 留空 = fail-closed,SelectRole 全部拒绝(dev_allow_any_role 默认 false,严禁上生产)。

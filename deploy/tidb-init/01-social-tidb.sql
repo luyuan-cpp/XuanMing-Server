@@ -77,8 +77,9 @@ CREATE TABLE IF NOT EXISTS `blocks` (
 -- (可并发形成「既好友又拉黑」「已拉黑+pending」)。guild 域用父行(guilds)/计数表锁;
 -- friend 域无天然父行,引入显式守卫行:限额校验与关系变更先锁守卫行(存在行的悲观
 -- 点锁在 MySQL/TiDB 语义一致),再在串行化临界区内做一致性 COUNT 与写入。
--- 行数有界:player 守卫每玩家至多 1 行、pair 守卫每关系对至多 1 行(§9.24 登记豁免,
--- 与 auction_owner_guards 同类;守卫行无业务语义,不参与展示,不清理)。
+-- 行数界定(R9 复审 P1):player 守卫每玩家至多 1 行(§9.24 登记豁免,与
+-- auction_owner_guards 同类);pair 守卫每关系对 1 行,随社交图 O(n²) 累积无上界 →
+-- 增设 created_at 走保留期 sweep(守卫行无业务语义,任意时刻删除安全,下次 acquire 重建)。
 CREATE TABLE IF NOT EXISTS `friend_player_guards` (
     `player_id` BIGINT UNSIGNED NOT NULL COMMENT '守卫行归属玩家(锁粒度=单玩家限额域)',
     PRIMARY KEY (`player_id`)
@@ -88,9 +89,11 @@ CREATE TABLE IF NOT EXISTS `friend_player_guards` (
 CREATE TABLE IF NOT EXISTS `friend_pair_guards` (
     `lo_id` BIGINT UNSIGNED NOT NULL COMMENT '关系对较小 player_id',
     `hi_id` BIGINT UNSIGNED NOT NULL COMMENT '关系对较大 player_id',
-    PRIMARY KEY (`lo_id`, `hi_id`)
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次取守卫时间(保留期 sweep 依据)',
+    PRIMARY KEY (`lo_id`, `hi_id`),
+    KEY `idx_created` (`created_at`) COMMENT '保留期 sweep 扫描索引(§9.24)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
-  COMMENT='Pandora 好友域关系对写守卫行(Accept/Block/AddFriend 同对串行化;§9.24 豁免)';
+  COMMENT='Pandora 好友域关系对写守卫行(Accept/Block/AddFriend 同对串行化;保留期 sweep,§9.24)';
 
 -- chat 私聊历史。主键是显式雪花 message_id,同 friend_requests 处理(NONCLUSTERED + 分片)。
 -- 与好友图同库 pandora_social,迁 TiDB 时一并迁,避免拆库。

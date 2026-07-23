@@ -37,19 +37,51 @@ R7/R8 引入了两类新的会话安全机制,它们都要求"写入方先全量
 
 三个开关相互独立、可分别激活;但都遵守同一顺序纪律。
 
+**代码默认 vs 模板默认(R9 复审 P0-1)**:上表"默认"列是**代码零值**(未配置时
+false,兼容旧库/dev 裸跑)。而 prod/dev **配置模板已全部改为 `true`**(安全默认
+fail-closed):全新部署按模板直接强制;只有「从不带会话代际的旧版本升级」才允许
+按本手册阶段序临时置 false,并尽快改回。login/hub_allocator 启动期对
+enforce=true 但依赖未就位(迁移未跑/权威未配)会 fail-fast 拒启。
+
 **关闭档不是"无防护"**:非空 sjti 的现行性复核、Login 的 MySQL-first 定序 +
 Redis 条件写、fenceLoginDelivery 交付终检、Transfer 前后终检、ACK 后置复核+回滚
 均不受开关控制,始终生效。开关只决定「对**不带新字段的旧流量**是放行还是硬拒」。
 
-## 2. 票据最大 TTL 怎么取
+## 2. 等待窗口怎么取:票据 TTL ≠ 会话 TTL(R9 复审 P0-3)
 
-排空后必须等满"仍在外面流通的最旧票据"的寿命再开 require:
+两类开关的等待窗口**不同**,不能统一按票据 TTL 算:
+
+### 2.1 sjti 票据门(`require_ticket_sjti` 两处):等票据最大 TTL
+
+排空后必须等满“仍在外面流通的最旧票据”的寿命再开 require:
 
 - DSTicket v2(RS256):默认 120s,**上限 180s**(`pkg/auth/dsticket.go`)。
 - legacy HS256 DSTicket:`login.ds_ticket_ttl`,默认 **5min**(`pkg/auth/jwt.go`)。
 
 部署内若两种签发器并存(v2 未全量),取 **5min**;v2 全量后取 **180s**。
 拿不准就等 5min——多等没有代价,少等会硬拒尚未过期的合法票。
+
+### 2.2 代际强制门(`session_generation_enforce`):等**会话完整生命周期(24h)**
+
+这是 R9 复审指出的漏算项,单独强调:
+
+- Redis 会话(`pandora:sess`)的权威寿命 = **session JWT TTL = 24 小时**,
+  与票据 TTL 无关。经**旧版 login Pod**登录的玩家,MySQL 代际行缺失或陈旧,
+  但其 Redis 会话在排空旧 Pod 之后仍可存活长达 24h。
+- 若只等票据 TTL(180s/5min)就开 `session_generation_enforce`,SetRole 的
+  MySQL `FOR UPDATE` 复核会把这些**合法在线会话**全部确定性误拒,直到
+  玩家重登。
+
+因此 `session_generation_enforce` 的前置条件二选一:
+
+1. **自然等满**:旧版 login Pod 全部排空后,再等满一个完整 session TTL
+   (当前 24h)再开强制档;或
+2. **主动收敛**:运维确认或清理所有无 MySQL 代际行的存活会话
+   (强制全量重登窗口/停服维护期刷会话),确认后立即开。
+
+判据(确定性,不依赖观测):按「最后一个旧版 login Pod 终止时刻 + 24h」计算。
+注意:非强制档(emit-only)下 SetRole **不执行** MySQL 代际复核,不存在"代际
+不匹配告警"可观测——不能靠日志判断窗口是否走完,只能按时间或主动收敛判定。
 
 ## 3. 发布顺序(runbook)
 
@@ -74,12 +106,16 @@ Redis 条件写、fenceLoginDelivery 交付终检、Transfer 前后终检、ACK 
 3. hub-allocator 是 `Recreate` 单写者(见 §5),发布时有秒级不可用窗;其余服务
    RollingUpdate 无中断。
 
-### 阶段 C:排空旧版本 + 等满票据最大 TTL
+### 阶段 C:排空旧版本 + 等满对应窗口(R9 复审 P0-3 修正)
 
 1. 确认无旧版本 Pod:`kubectl -n pandora get pods -o wide` 对照镜像 digest;
    Hub DS fleet 同样确认全部滚到新版(旧 DS 不发 sjti)。
-2. 等满一个票据最大 TTL(§2:混用 5min / v2-only 180s),让存量空 sjti 票自然过期。
-3. 观察以下信号**为零**后才进入阶段 D:
+2. **分开两个窗口**(§2):
+   - sjti 票据门:等满票据最大 TTL(混用 5min / v2-only 180s),存量空 sjti
+     票自然过期后即可进入阶段 D 的第 2/3 步。
+   - 代际强制门:等满完整 session TTL(**24h**)或按 §2.2 主动收敛并验证,
+     才能执行阶段 D 的第 1 步。**票据窗口满不代表会话窗口满。**
+3. 观察以下信号**为零**后才进入对应开关的阶段 D 步骤:
    - login 日志 `ticket_missing_session_binding_compat_allow`
    - hub_allocator 日志 `hub_admission_missing_sjti_tolerated`(兼容档告警)
    - login 日志 `session_generation_persist_failed`(若有,说明 MySQL 定序权威不稳,先修)
@@ -87,6 +123,7 @@ Redis 条件写、fenceLoginDelivery 交付终检、Transfer 前后终检、ACK 
 ### 阶段 D:开启 require(逐服务,可分批)
 
 1. `login.session_generation_enforce: true` → 滚动重启 login。
+   **前置:§2.2 的 24h 会话窗口/主动收敛已满足**,仅票据 TTL 满不够。
 2. `login.require_ticket_sjti: true` → 滚动重启 login。
 3. `session_gate.require_ticket_sjti: true` → 重启 hub_allocator(Recreate)。
 4. 每步之间观察误拒率(`ticket_missing_session_binding_rejected`、
@@ -113,24 +150,45 @@ Redis 条件写、fenceLoginDelivery 交付终检、Transfer 前后终检、ACK 
   仍有进程内窗口;窗口内交付的是"已再次被轮换"的凭据,后续任何过门请求都会被拒,
   不构成持续能力(见 login.go 注释)。
 
-## 5. hub-allocator `Recreate` 与不停服约束
+## 5. hub-allocator `Recreate` 与不停服红线——**未解决冲突,状态 OPEN**(R9 复审 P0-7)
 
-`deploy/k8s/services/services.yaml` 中 hub-allocator 显式 `strategy: Recreate`,
-与「不停服更新」硬约束(PROGRESS.md 2026-07-01)存在张力,这是**记录在案的取舍**:
+`deploy/k8s/services/services.yaml` 中 hub-allocator 显式 `strategy: Recreate` +
+replicas=1,与「不停服更新」硬约束(PROGRESS.md 2026-07-01)**直接冲突**。
+R9 复审认定这不能再以“记录在案的取舍”关闭——本节如实升级为**待决冲突**,
+需要业务方对“发布窗口控制面秒级不可用”与“不停服红线”之间做显式裁决:
 
-- hub-allocator 是 assignment/capacity ledger 的**单写者**(replicas=1)。
-  RollingUpdate 即使 replicas=1 也会短暂并行旧+新二进制;旧写者不理解后继租约,
-  会重新打开重连竞态(正是本事故要关死的窗口)。
-- Recreate 的代价是秒级控制面不可用:期间 AssignHub/Transfer 短暂失败可重试,
-  **在场玩家不受影响**(DS 会话与已签票据继续有效)。
-- 终局方向:leader 选举 + 租约 fencing 的多副本写者(pkg/leader 已有地基),
-  届时才能切回 RollingUpdate。在那之前,把秒级控制面窗口换成写者互踢竞态是
-  净损失,不做。
+### 5.1 为什么现在不能直接改 RollingUpdate
+
+- hub-allocator 是 assignment/capacity ledger 的**单写者**;dsauthfence V3 的
+  激活契约就是单 Hub 写者(测试 `TestV3ActivationRequiresSingleHubWriter`
+  已把该前提锁死)。
+- RollingUpdate 即使 replicas=1 也会短暂并行旧+新二进制;旧写者不理解
+  后继租约,会重新打开重连竞态(正是本事故要关死的窗口)。把秒级控制面
+  窗口换成写者互踢竞态是净损失。
+
+### 5.2 影响面(诚实表述)
+
+- Recreate 发布窗口内 AssignHub/TransferToLine/AcknowledgeAdmission 控制面
+  短暂失败(客户端可重试);**在场玩家不受影响**(DS 会话与已签票据继续有效)。
+- 但这仍是“发布必然产生可观测不可用窗口”,不满足不停服红线的字面要求。
+
+### 5.3 终局方案草图(succession fencing,待排期)
+
+1. **跨 Pod 继任租约**:基于 pkg/leader(etcd lease)选举当前写者;新 Pod
+   启动后先竞选,拿到租约才打开写路径。
+2. **每次继任单调 fencing token**:租约变更时分配单调递增的 succession 代际,
+   所有 ledger 写入(Redis Lua/MySQL 条件写)携带并比较该代际,旧写者的
+   迟到写被存储层确定性拒绝(与会话代际同构)。
+3. **dsauthfence V3 契约同步改造**:单写者前提放宽为“单活跃代际写者”,
+   测试契约同步更新。
+4. 上述完成前,`Recreate` 是安全下界,**不得**单独把 strategy 改回
+   RollingUpdate(会重新引入本事故的竞态窗口)。
 
 ## 6. 存量库检查(dbcheck)
 
 - login 启动期:`CheckTables(player_roles, player_session_generations)` +
-  `CheckColumns(player_session_generations: sess_jti, generation)`,缺失拒启。
+  `CheckColumnSpecs(player_session_generations: player_id/sess_jti/generation
+  含类型与可空性对照,R9 复审 P2)`,缺失/形状不符拒启。
 - friend 启动期:`CheckTables(friendships, friend_requests, blocks,
   friend_player_guards, friend_pair_guards)`,缺失拒启。
 - 全新库:`deploy/mysql-init/*.sql` / `deploy/tidb-init/*.sql` 已含最终结构;

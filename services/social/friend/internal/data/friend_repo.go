@@ -128,6 +128,10 @@ type FriendRepo interface {
 	// 好友请求行(保留期清理,§9.24;单批 limit 行)。pending 永不清;删后再次发起等价于
 	// 全新请求(好友关系权威在 friendships,请求行无资产语义)。返回删除行数。
 	DeleteTerminalRequestsBefore(ctx context.Context, retentionDays, limit int) (int64, error)
+	// DeletePairGuardsBefore 删 created_at 超保留期的关系对守卫行(R9 复审 P1:pair 守卫
+	// 随社交图 O(n²) 累积无上界,§9.24 不能豁免)。守卫行仅锁载体,任意时刻删除安全:
+	// 正被事务持有的行锁会阻塞 DELETE 到提交,下次 acquirePairGuard 重新 INSERT。
+	DeletePairGuardsBefore(ctx context.Context, retentionDays, limit int) (int64, error)
 }
 
 // MySQLFriendRepo 是基于 database/sql 的 FriendRepo 实现。
@@ -186,13 +190,19 @@ func (r *MySQLFriendRepo) CreateRequest(ctx context.Context, newRequestID, reque
 	// pair 守卫(R5 复审 P1-3):与同对的 Block/Accept 串行化。biz 层的拉黑/已好友预检
 	// 在事务外只是 fail-fast,并发 Block/Accept 可在预检后落库;守卫锁内的复核才是权威,
 	// 消除「已拉黑+pending」「已好友+pending」交错。
+	//
+	// R9 复审 P1(快照隔离):InnoDB RR 下事务的一致读快照在**第一条普通 SELECT**时
+	// 固定,守卫锁(INSERT/FOR UPDATE 是当前读)不会刷新它——守卫锁内的普通 SELECT 仍
+	// 可能读到守卫获取前的陈旧快照,串行化被架空。因此本事务内所有权威判定读
+	//(block/好友存在性探针、限额 COUNT)一律用锁定读(FOR UPDATE = 当前读,InnoDB
+	// 与 TiDB 悲观事务都读最新已提交);写者已被守卫串行化,锁冲突面可控。
 	if gerr := acquirePairGuard(ctx, tx, requesterID, targetID); gerr != nil {
 		return 0, false, gerr
 	}
 	var probeX int
 	berr := tx.QueryRowContext(ctx,
 		`SELECT 1 FROM blocks
-WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) LIMIT 1`,
+WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) LIMIT 1 FOR UPDATE`,
 		requesterID, targetID, targetID, requesterID).Scan(&probeX)
 	if berr == nil {
 		return 0, false, errcode.New(errcode.ErrFriendBlocked, "blocked between %d and %d", requesterID, targetID)
@@ -201,7 +211,7 @@ WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) L
 		return 0, false, errcode.New(errcode.ErrInternal, "check block %d-%d: %v", requesterID, targetID, berr)
 	}
 	ferr := tx.QueryRowContext(ctx,
-		`SELECT 1 FROM friendships WHERE player_id = ? AND friend_id = ? LIMIT 1`,
+		`SELECT 1 FROM friendships WHERE player_id = ? AND friend_id = ? LIMIT 1 FOR UPDATE`,
 		requesterID, targetID).Scan(&probeX)
 	if ferr == nil {
 		return 0, false, errcode.New(errcode.ErrFriendAlreadyAdded, "already friends: %d-%d", requesterID, targetID)
@@ -347,11 +357,13 @@ WHERE request_id = ? FOR UPDATE`, requestID).Scan(&requesterID, &targetID, &stat
 		return false, nil
 	}
 
-	// 4. block 权威校验(pair 守卫串行化后,此判定与并发 Block 全序,无交错窗口)
+	// 4. block 权威校验。pair 守卫串行化了写者;读侧必须用锁定读(R9 复审 P1):
+	// 步骤 0 的普通预读已把 RR 快照固定在守卫获取之前,普通 SELECT 会读陈旧快照
+	//(看不到守卫等待期间提交的 Block);FOR UPDATE 是当前读,两库都读最新已提交。
 	var blockedX int
 	berr := tx.QueryRowContext(ctx,
 		`SELECT 1 FROM blocks
-WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) LIMIT 1`,
+WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) LIMIT 1 FOR UPDATE`,
 		accepterID, requesterID, requesterID, accepterID).Scan(&blockedX)
 	if berr == nil {
 		return false, errcode.New(errcode.ErrFriendBlocked, "blocked between %d and %d", accepterID, requesterID)
@@ -360,12 +372,13 @@ WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) L
 		return false, errcode.New(errcode.ErrInternal, "query block %d-%d: %v", accepterID, requesterID, berr)
 	}
 
-	// 5. 好友上限权威校验(player 守卫已锁,普通 COUNT 即串行化一致读)。
+	// 5. 好友上限权威校验。player 守卫串行化写者;COUNT 用锁定读拿当前读
+	//(R9 复审 P1:普通 COUNT 在 RR 陈旧快照下会漏计守卫等待期间提交的建边)。
 	if maxFriends > 0 {
 		for _, pid := range [...]uint64{requesterID, targetID} {
 			var cnt int
 			if cerr := tx.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM friendships WHERE player_id = ?`, pid).Scan(&cnt); cerr != nil {
+				`SELECT COUNT(*) FROM friendships WHERE player_id = ? FOR UPDATE`, pid).Scan(&cnt); cerr != nil {
 				return false, errcode.New(errcode.ErrInternal, "count friends %d: %v", pid, cerr)
 			}
 			if cnt >= maxFriends {
@@ -505,22 +518,23 @@ func (r *MySQLFriendRepo) Block(ctx context.Context, playerID, targetID uint64, 
 	}
 
 	// 0. 黑名单上限校验(不变量 §9.18):先确认未重复拉黑(幂等命中不占新名额)再校量。
+	// 探针/COUNT 用锁定读(R9 复审 P1:普通 SELECT 在 RR 陈旧快照下会漏看守卫等待期间提交的写)。
 	if maxBlocks > 0 {
 		var existsX int
 		eerr := tx.QueryRowContext(ctx,
-			`SELECT 1 FROM blocks WHERE player_id = ? AND blocked_id = ? LIMIT 1`, playerID, targetID).Scan(&existsX)
+			`SELECT 1 FROM blocks WHERE player_id = ? AND blocked_id = ? LIMIT 1 FOR UPDATE`, playerID, targetID).Scan(&existsX)
 		if eerr != nil && !errors.Is(eerr, sql.ErrNoRows) {
 			return errcode.New(errcode.ErrInternal, "check block %d->%d: %v", playerID, targetID, eerr)
 		}
 		if errors.Is(eerr, sql.ErrNoRows) {
 			// 新拉黑 → 先锁本玩家守卫行(R5 复审 P1-2:TiDB 无 gap 锁,原 COUNT ...
-			// FOR UPDATE 挡不住并发插入),守卫锁内 COUNT 即权威,防并发超限。
+			// FOR UPDATE 挡不住并发插入),守卫锁内的**锁定读** COUNT 即权威,防并发超限。
 			if gerr := acquirePlayerGuard(ctx, tx, playerID); gerr != nil {
 				return gerr
 			}
 			var cnt int
 			if cerr := tx.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM blocks WHERE player_id = ?`, playerID).Scan(&cnt); cerr != nil {
+				`SELECT COUNT(*) FROM blocks WHERE player_id = ? FOR UPDATE`, playerID).Scan(&cnt); cerr != nil {
 				return errcode.New(errcode.ErrInternal, "count blocks %d: %v", playerID, cerr)
 			}
 			if cnt >= maxBlocks {
@@ -641,7 +655,8 @@ ON DUPLICATE KEY UPDATE player_id = player_id`, playerID); err != nil {
 // checkIncomingLimit 在 CreateRequest 事务内校验 target 的「收到的待处理好友申请」数量上限
 // (不变量 §9.18)。maxIncoming<=0 关闭校验;否则先锁 target 守卫行(R5 复审 P1-2:
 // TiDB 无 gap 锁,原 COUNT ... FOR UPDATE 挡不住并发插入),守卫锁内的 COUNT 即权威,
-// 达到上限回 ErrFriendRequestLimit。
+// 达到上限回 ErrFriendRequestLimit。COUNT 用锁定读拿当前读(R9 复审 P1:普通 COUNT
+// 在 RR 陈旧快照下会漏计守卫等待期间提交的 pending)。
 func checkIncomingLimit(ctx context.Context, tx *sql.Tx, targetID uint64, maxIncoming int) error {
 	if maxIncoming <= 0 {
 		return nil
@@ -651,7 +666,7 @@ func checkIncomingLimit(ctx context.Context, tx *sql.Tx, targetID uint64, maxInc
 	}
 	var cnt int
 	if err := tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM friend_requests WHERE target_id = ? AND status = ?`,
+		`SELECT COUNT(*) FROM friend_requests WHERE target_id = ? AND status = ? FOR UPDATE`,
 		targetID, requestStatusPending).Scan(&cnt); err != nil {
 		return errcode.New(errcode.ErrInternal, "count incoming requests %d: %v", targetID, err)
 	}
@@ -780,6 +795,20 @@ func (r *MySQLFriendRepo) DeleteTerminalRequestsBefore(ctx context.Context, rete
 		requestStatusPending, retentionDays, limit)
 	if err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "delete terminal requests: %v", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// DeletePairGuardsBefore 删超保留期的关系对守卫行(§9.24,R9 复审 P1)。
+// 条件走 idx_created(created_at);多副本并发调用安全(各删各的行)。
+// 正被事务持有的守卫行:DELETE 阻塞到其提交后再删,不破坏串行化语义。
+func (r *MySQLFriendRepo) DeletePairGuardsBefore(ctx context.Context, retentionDays, limit int) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM friend_pair_guards WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`,
+		retentionDays, limit)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "delete pair guards: %v", err)
 	}
 	n, _ := res.RowsAffected()
 	return n, nil

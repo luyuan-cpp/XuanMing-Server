@@ -13,6 +13,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
+	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
 
 // genOrderSessionRepo 记录 Set 收到的代际与调用时序,并可注入条件写失败。
@@ -36,23 +37,43 @@ func (f *genOrderSessionRepo) Set(ctx context.Context, playerID uint64, token, j
 	return f.fakeSessionRepo.Set(ctx, playerID, token, jti, deviceID, ttl, gen)
 }
 
-// fakeSessionGenRepo 模拟 MySQL 定序权威:返回预设代际或注入失败。
+// fakeSessionGenRepo 模拟 MySQL 定序权威:返回预设代际或注入失败,并记录条件回补调用。
 type fakeSessionGenRepo struct {
-	gen       uint64
-	err       error
-	called    bool
-	callOrder *[]string
+	gen        uint64
+	err        error
+	called     bool
+	callOrder  *[]string
+	restoreErr error
+	// restoreCalls 记录每次 RestoreSessionJTI 收到的 (failedJTI, lease)。
+	restoreCalls []struct {
+		FailedJTI string
+		Lease     data.SessionGenerationLease
+	}
 }
 
-func (f *fakeSessionGenRepo) PersistSessionJTI(_ context.Context, _ uint64, _ string) (uint64, error) {
+func (f *fakeSessionGenRepo) PersistSessionJTI(_ context.Context, _ uint64, jti string) (data.SessionGenerationLease, error) {
 	f.called = true
 	if f.callOrder != nil {
 		*f.callOrder = append(*f.callOrder, "mysql-gen")
 	}
 	if f.err != nil {
-		return 0, f.err
+		return data.SessionGenerationLease{}, f.err
 	}
-	return f.gen, nil
+	return data.SessionGenerationLease{Generation: f.gen, PrevJTI: "prev-jti", HadPrev: f.gen > 1}, nil
+}
+
+func (f *fakeSessionGenRepo) RestoreSessionJTI(_ context.Context, _ uint64, failedJTI string, lease data.SessionGenerationLease) (bool, error) {
+	f.restoreCalls = append(f.restoreCalls, struct {
+		FailedJTI string
+		Lease     data.SessionGenerationLease
+	}{failedJTI, lease})
+	if f.callOrder != nil {
+		*f.callOrder = append(*f.callOrder, "mysql-restore")
+	}
+	if f.restoreErr != nil {
+		return false, f.restoreErr
+	}
+	return true, nil
 }
 
 func (f *fakeSessionGenRepo) TombstoneSessionJTI(_ context.Context, _ uint64, _ string) (bool, error) {
@@ -91,12 +112,14 @@ func TestLogin_GenerationAllocatedBeforeRedisWrite(t *testing.T) {
 	}
 }
 
-// 条件写被更高代际拒绝(并发新登录已完成)→ 本次登录失败且零凭据交付。
+// 条件写被更高代际拒绝(并发新登录已完成)→ 本次登录失败且零凭据交付;
+// 行已属于赢家,绝不触发条件回补(R9 复审 P0-2)。
 func TestLogin_SupersededByNewerGeneration_NoCredentials(t *testing.T) {
 	sessions := &genOrderSessionRepo{
 		setErr: errcode.New(errcode.ErrSessionSuperseded, "superseded"),
 	}
-	uc := newGenUsecase(t, sessions, &fakeSessionGenRepo{gen: 3})
+	gen := &fakeSessionGenRepo{gen: 3}
+	uc := newGenUsecase(t, sessions, gen)
 
 	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
 	if err == nil {
@@ -107,6 +130,54 @@ func TestLogin_SupersededByNewerGeneration_NoCredentials(t *testing.T) {
 	}
 	if res != nil {
 		t.Fatalf("no credentials may leak past a lost generation race, got: %+v", res)
+	}
+	if len(gen.restoreCalls) != 0 {
+		t.Fatalf("lost sequencing race must not restore the winner's row, got %d restore calls", len(gen.restoreCalls))
+	}
+}
+
+// Redis 条件写基础设施失败 → 登录失败、零凭据,且必须条件回补 MySQL 代际行
+// (R9 复审 P0-2):否则撕裂窗口内上一代合法会话会被 SetRole 强制门误拒。
+func TestLogin_RedisInfraFailure_RestoresMySQLGeneration(t *testing.T) {
+	var order []string
+	sessions := &genOrderSessionRepo{
+		callOrder: &order,
+		setErr:    errcode.New(errcode.ErrUnavailable, "redis down"),
+	}
+	gen := &fakeSessionGenRepo{gen: 5, callOrder: &order}
+	uc := newGenUsecase(t, sessions, gen)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	if err == nil || res != nil {
+		t.Fatalf("infra failure must fail the login with zero credentials, err=%v res=%+v", err, res)
+	}
+	if len(gen.restoreCalls) != 1 {
+		t.Fatalf("Redis infra failure must trigger exactly one conditional restore, got %d", len(gen.restoreCalls))
+	}
+	call := gen.restoreCalls[0]
+	if call.FailedJTI == "" || call.Lease.Generation != 5 || !call.Lease.HadPrev || call.Lease.PrevJTI != "prev-jti" {
+		t.Fatalf("restore must carry the failed jti and the exact persisted lease, got %+v", call)
+	}
+	want := []string{"mysql-gen", "redis-set", "mysql-restore"}
+	if len(order) != 3 || order[0] != want[0] || order[1] != want[1] || order[2] != want[2] {
+		t.Fatalf("restore must follow the failed Redis write, got order=%v", order)
+	}
+}
+
+// 回补自身失败只允许影响日志:登录仍以原始基础设施错误失败,不得掩盖或改写错误。
+func TestLogin_RestoreFailure_DoesNotMaskOriginalError(t *testing.T) {
+	sessions := &genOrderSessionRepo{
+		setErr: errcode.New(errcode.ErrUnavailable, "redis down"),
+	}
+	gen := &fakeSessionGenRepo{gen: 2, restoreErr: errcode.New(errcode.ErrInternal, "mysql down too")}
+	uc := newGenUsecase(t, sessions, gen)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	if res != nil {
+		t.Fatalf("no credentials on failure, got %+v", res)
+	}
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("login must surface the original Redis failure, got: %v", err)
 	}
 }
 

@@ -75,10 +75,12 @@ agones:
 # 会话现行性门(R5 复审 P0-1,INC-20260722-004):生产强制档,顶号后旧 JWT 立即失效;
 # 权威端点漏配拒启,权威不可达 fail-closed。与 gen_cluster_config.ps1 -Prod 产物一致。
 #
-# require_ticket_sjti(R7 收口,发布顺序硬约束):首次上线本版本时必须保持 false
-# (兼容档:空 sjti 告警放行,旧 Hub DS/旧签发面残票混版可用)。待全 fleet Hub DS
-# 已转发 sjti、旧 DS 排空、并等满一个票据最大 TTL 后,再置 true 滚动重启收口。
-# 提前置 true = 旧 DS 上所有玩家无法进入大厅。
+# require_ticket_sjti(R7 收口;R9 复审 P0-1 改为默认开启,安全默认 fail-closed):
+# 全新部署(全 fleet 均为本版本)保持 true——顶号后旧设备残票在 Hub 入场确认点作废。
+# 只有「从不带 sjti 的旧版本升级」才按 docs/design/session-generation-rollout.md 阶段序
+# 临时置 false(兼容档:空 sjti 告警放行),待全 fleet Hub DS 已转发 sjti、旧 DS 排空、
+# 并等满一个票据最大 TTL 后,尽快改回 true 滚动重启收口。
+# 升级期提前置 true = 旧 DS 上所有玩家无法进入大厅。
 session_gate:
   require: true
-  require_ticket_sjti: false
+  require_ticket_sjti: true

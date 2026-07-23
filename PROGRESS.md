@@ -1593,3 +1593,65 @@ R6 只读复审推翻上一条"P0 5/5 完成"的结论(上一条中"旧流零轮
   发布(svnversion 大工作副本耗时)、两条 Jenkins 流水线真实跑(Jenkins 服务与 agent 由人/Codex 装)、
   SVN 服务端钩子部署(需仓库管理员)。git 历史里的 177MB tar 未重写历史,瘦身需 filter-repo 单独拍板。
 - 本轮未提交(SVN 与 git 改动均待用户审核提交)。
+
+## 2026-07-23(续:INC-20260722-004 R7/R8 复审收口——会话代际定序 + sjti 分阶段收口,Claude)
+
+- **R7 收口(此前未记录,本轮审计确认已在库)**:①UE 自动恢复登录废除,会话失效一律转
+  交互登录(反顶窗口消除);②matchmaker READY 批签票签入当前 sjti(fail-closed);
+  ③hub Transfer/迁移重签补 sjti + `AcknowledgeAdmission` 会话复核(proto session_jti=9,
+  go/cpp pb 重生,UE 生成物同步);④Login 同步写 `player_session_generations`(MySQL,
+  fail-closed),SetRole 同事务 FOR UPDATE 比对 fencing;⑤push 断层先 resync 信号后帧;
+  ⑥UE code14 终态走顶号清理链;⑦VerifyDSTicket 会话门双检(marker 前+响应写出前)。
+- **R8 复审判定 R7 仍有 5 条 P0**,本轮处置:P0-1 并发 Login 定序——000003 迁移加单调
+  `generation` 列,MySQL-first 原子分配代际 + Redis「仅更高代际覆盖」条件写;P0-2 Hub
+  ACK TOCTOU——耐久写后重读会话权威,不匹配 `AcknowledgeDeparture` 回滚再拒;P0-3 DS
+  缓存 claims——准入缓存双重到期 + InitNewPlayer 匹配消费 + PostLogin 幂等重验;P0-4
+  TransferToLine 前后双 `requireCallerSessionCurrent` 终检;P0-5 滚动发布——空 sjti 硬拒
+  回退为三个分阶段门(`login.session_generation_enforce`/`login.require_ticket_sjti`(新增)/
+  hub `session_gate.require_ticket_sjti`,默认全 false 兼容档),发布顺序权威文档
+  **docs/design/session-generation-rollout.md** 新增(迁移→全 fleet emit→排空+等满票据
+  最大 TTL(v2 180s/legacy 5min/混用 5min)→开 require;含 hub Recreate 单写者取舍记录)。
+- **P1/P2**:pandora_account 000003 + pandora_social 000006(friend 守卫表)存量迁移;
+  `mysqlx.CheckColumns` 新增,login 启动列级 dbcheck,friend 启动 CheckTables;push 坏
+  member 折账失败扣发不漏报;match 重签失败 fail-closed 不回退旧票;hub 迁移通知失败
+  保留源索引下 tick 补发;Logout MySQL 代际 CAS 墓碑;push.proto 注释对齐实现 + 客户端
+  resync 契约(regen go/cpp,UE 两处同步)。
+- **验证**:login(biz/service)/friend/pkg 构建+测试绿(其余服务全量测试见本轮末次跑批);
+  UE 侧仅生成物与注释,待用户编译。**诚实边界**:签发器不结构性拒空 sjti(兑换点收口,
+  migrate 对已登出玩家签空票合法);resync 无 ACK(重连补推再检出兜底);chat/guild 客户端
+  推送消费未实现、mail 纯拉取;B1 模式仍短 TTL 兜底;真实并发/混版矩阵/故障注入未跑。
+  **INC-20260722-004 保持未关闭**。本轮未提交(新文件 000006 SQL、rollout doc 未纳管)。
+
+## 2026-07-23(续:INC-20260722-004 R9 复审处置——spawn 后复核 fail-closed + 混版窗口口径修正,Claude)
+
+- **R9 复审在 HEAD 4b5f9adb 判定 7 条 P0 未闭**,本轮逐条处置:
+  - P0-1 fencing 默认未启用:login/hub 部署模板 `session_generation_enforce` /
+    `require_ticket_sjti` 置 true(生产口径硬拒),启动时对开关组合 fail-fast;
+    rollout doc §1 记录「代码默认 false 仅为混版过渡,模板即生产默认」。
+  - P0-2 MySQL-first 撕裂:login 代际分配回归 MySQL 单权威定序,Redis 仅作
+    「更高代际才覆盖」的条件投影,消除双写撕裂窗口(r7_login_generation_test 扩展)。
+  - P0-3 混版窗口漏算:rollout doc §2 拆成「票据 TTL 窗口(v2 180s/legacy 5min)」与
+    「session 24h 生命周期窗口」两个独立等待面;阶段 D 前置改为「最后一个旧版 login Pod
+    终止时刻 + 24h」或主动收敛;并修正原文错误——emit-only 档 SetRole 传空 sjti 不执行
+    MySQL 代际比对,**没有**可观测 mismatch 告警,不能以「无告警」判定窗口已满。
+  - P0-4 Hub gate 打开后终态竞态:UE PandoraHubGameMode 在 spawn gate 开放+locator 写回后
+    以同 (admission_id, seq, sjti) 幂等重发一次 ACK,服务端 AlreadyAdmitted 路径重跑前置+
+    后置会话复核;定性失效→FailAdmission 清退,未知→有界重试(共 3 次,ABA 门,可取消),
+    耗尽仍未定性→fail-closed 清退。
+  - P0-5 Battle spawn 后复核 fail-open:UE PandoraDSGameModeBase 复核改为在途状态机;
+    结果未知/凭据缺失按未知处理,2s 间隔有界重试(共 3 次,同 ticket+admission_id 幂等),
+    耗尽未确证→fail-closed Kick+销毁 Pawn;Logout/EndPlay 全量取消复核定时器。
+  - P0-6 TransferToLine 路由副作用:终检失败不再遗留半程路由,失败路径补偿/回滚后再拒绝。
+  - P0-7 hub-allocator Recreate 停服窗口:**未解决,保持 OPEN**;rollout doc §5 重写为冲突
+    记录(dsauthfence V3 单写者 vs 不停服红线),附 succession-lease+单调 fencing token
+    设计草案,明令禁止在未实现继任协议前单独改回 RollingUpdate。
+- **P1/P2**:hub ACK postcheck 结果分型(未知不回退 owner,定性否定 exact 回退);friend 热
+  路径读加 FOR UPDATE;friend_pair_guards 增 created_at+保留期清扫(000006 扩展);push
+  resync 客户端脏标记+有界重试(Team/Friend;Match 靠既有进度轮询,注释说明豁免理由);
+  cursor=0 首连跳过 LostSince 落为 push.proto 显式交付契约(依赖客户端「先订阅后拉快照」
+  时序,MyAccountModel 唯一订阅点);mysqlx.CheckColumnSpecs 新增列类型/可空/键形状校验
+  (login 接入);Kafka migrate 发布失败补偿;tools/migrate 测试修绿。
+- **验证**:login/hub_allocator/friend/push/tools-migrate 测试绿(见本轮末次跑批);UE 改动
+  (MyTeamModel/MyFriendModel/MyMatchModel/PandoraDSGameModeBase/PandoraHubGameMode)仅过
+  静态诊断,**编译由用户执行,本轮无编译证据**。**诚实边界**:P0-7 未解决;真实并发/混版
+  矩阵/故障注入未跑。**INC-20260722-004 保持未关闭,待 R10 复审**。

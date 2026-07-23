@@ -239,6 +239,10 @@ func (f *fakeRepo) DeleteTerminalRequestsBefore(context.Context, int, int) (int6
 	return 0, nil
 }
 
+func (f *fakeRepo) DeletePairGuardsBefore(context.Context, int, int) (int64, error) {
+	return 0, nil
+}
+
 func pickRecommendRows(rows []data.RecommendRow, exclude []uint64, limit int) []data.RecommendRow {
 	blocked := map[uint64]bool{}
 	for _, id := range exclude {

@@ -329,6 +329,70 @@ R8 只读复审判定 R7 后仍有 5 条上线阻断级 P0 及多项 P1/P2。逐
 **部署警示**：本轮涉及的服务端实现文件多数尚未提交版本库（git/svn），上线前须
 逐一核对提交清单；`require_*` 三开关首次上线必须保持 false。
 
+### 4.1.7 R9 复审收口（2026-07-23，同日）
+
+R9 只读复审（HEAD `4b5f9adb`）判定 7 条 P0 阻断面，结论"没有修完，P0 不能关闭，
+当前不应上线"。逐条处置：
+
+**P0：**
+
+1. **fencing 默认未启用**（已落码）：deploy 模板 `session_generation_enforce` /
+   `require_ticket_sjti` 置 true（生产口径硬拒），login/hub 启动期对开关组合
+   fail-fast（enforce 开而 require 关等非法组合直接拒启）；rollout doc §1 记录
+   「代码默认 false 仅为混版过渡档，模板即生产默认」。
+2. **MySQL-first 撕裂会话权威**（已落码）：login 代际分配回归 MySQL 单权威定序，
+   Redis 仅作「更高代际才覆盖」条件投影；`r7_login_generation_test.go` 扩展交错
+   用例。
+3. **混版流程漏算 24h Session 生命周期**（文档修正）：rollout doc §2 拆分
+   「票据 TTL 窗口（v2 180s / legacy 5min）」与「session 24h 生命周期窗口」两个
+   独立等待面；阶段 D 前置改为「最后一个旧版 login Pod 终止时刻 + 24h」或主动
+   收敛。同时修正原文错误结论：emit-only 档 SetRole 传空 sjti 时**不执行** MySQL
+   代际比对，没有可观测 mismatch 告警，不能以「无告警」判定窗口已满。
+4. **Hub Admission spawn gate 打开后的终态竞态**（UE 落码，待用户编译）：
+   `PandoraHubGameMode` 在 spawn gate 开放 + locator 写回后，以同
+   (admission_id, seq, sjti) 幂等重发一次 ACK；服务端 AlreadyAdmitted 路径重跑
+   前置+后置会话复核。定性失效（14/8/InvalidState 等非瞬态码）→ FailAdmission
+   清退；结果未知 → 有界重试（共 3 次，ABA 门校验连接代际，可取消）；耗尽仍未
+   定性 → fail-closed 清退。
+5. **Battle spawn 后复核 fail-open**（UE 落码，待用户编译）：
+   `PandoraDSGameModeBase` 的 PostSpawnSessionRecheck 从"一次性 best-effort、
+   未知结果放行"改为在途状态机：结果未知/DS 凭据缺失一律按未知处理，2s 间隔
+   有界重试（共 3 次，同 (ticket, admission_id) 幂等、不消耗防重放名额），耗尽
+   仍未确证 → fail-closed Kick + 销毁 Pawn；Logout/EndPlay 全量取消复核定时器；
+   非会话失效语义的定性拒绝仍不误杀（仅留痕）。
+6. **TransferToLine 路由副作用不补偿**（已落码）：终检失败不再遗留半程路由副作用，
+   失败路径补偿/回滚后再拒绝；`hub_test.go` 用例扩展。
+7. **hub-allocator 单副本 Recreate 违反不停服红线**：**未解决，保持 OPEN**。
+   rollout doc §5 重写为公开冲突记录：dsauthfence V3 单写者约束
+   （`TestV3ActivationRequiresSingleHubWriter`）与不停服红线当前不可同时满足；
+   附 succession-lease + 单调 fencing token 的继任协议设计草案；明令禁止在继任
+   协议实现前单独把 strategy 改回 RollingUpdate（那会引入双写者，比停服窗口更糟）。
+
+**P1/P2：**
+
+- hub ACK postcheck 结果分型：权威不可达=未知，不回退 connected owner（返回
+  Unavailable，DS 同 identity 重试重跑复核）；确定性否定才 exact 回退
+  （AcknowledgeDeparture 幂等）。
+- friend 热路径读加 FOR UPDATE（旧快照穿透）；`friend_pair_guards` 增 created_at
+  + 保留期清扫（迁移 000006 扩展 + mysql-init/tidb-init 镜像同步 + dbcheck）。
+- push resync 客户端回源失败无重试：Team/Friend 模型加脏标记 + 有界重试
+  （3 次、2s、会话切换清理）；Match 依赖既有进度轮询，代码注释记录豁免理由。
+- cursor=0 首连跳过 LostSince：判定为**有前提的交付契约**而非漏洞——依赖客户端
+  「先订阅 push 再拉业务快照」时序（MyAccountModel 唯一订阅点，同步无事件泵）；
+  已在 push.proto、drainBuffer、回归测试注释三处写死该前提。
+- `mysqlx.CheckColumnSpecs` 新增：校验列类型/可空性/键形状（不止列名存在性），
+  login 启动期接入；Kafka migrate 发布失败补偿；tools/migrate 测试修绿；
+  push.proto resync 注释矛盾修正（每页发送前预检为主防线 + 拉空后终检兜底，
+  proto 重生成仅 Go 侧变化，C++ 生成物与 UE 内副本逐字节一致无需同步）。
+
+**诚实边界（R9 轮）：**
+
+- P0-7 未解决，是当前唯一 OPEN 的 P0；关闭需要实现 hub-allocator 继任协议。
+- UE 侧五个文件（MyTeamModel / MyFriendModel / MyMatchModel /
+  PandoraDSGameModeBase / PandoraHubGameMode）仅通过静态诊断，编译由用户执行，
+  本轮无编译证据。
+- 真实并发/混版矩阵/故障注入仍未跑；验收矩阵未跑项未变。事故**未关闭**，待 R10。
+
 ### 4.2 回归测试（已落地，全绿）
 
 - `internal/biz/replay_duplicate_test.go`：`TestAuthorizeSubscribe_SessionCurrency`（现行放行/旧 jti 拒/登出拒/require 档缺 jti 拒/权威故障 fail-closed/dev 档语义）、`TestRecheckSession_ExpiryClosesStream`（token 到期关流）、`TestRecheckSession_SupersededAndRetryable`（顶号关流含跨 Pod 语义/权威故障可重试）。

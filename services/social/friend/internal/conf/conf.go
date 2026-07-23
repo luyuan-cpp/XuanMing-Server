@@ -53,6 +53,12 @@ type FriendConf struct {
 
 	// SweepBatch 每轮清理行数上限(默认 500)。
 	SweepBatch int `yaml:"sweep_batch,omitempty" json:"sweep_batch,omitempty"`
+
+	// PairGuardRetentionDays 关系对守卫行(friend_pair_guards)保留天数(默认 30)。
+	// R9 复审 P1:pair 守卫每关系对 1 行,随社交图 O(n²) 累积无上界。守卫行仅是
+	// 锁载体无业务数据,任意时刻删除都安全(正被持有的行锁会阻塞 DELETE 到事务
+	// 提交;下次 acquire 重新 INSERT),保留期只为限制清理频率/表规模。
+	PairGuardRetentionDays int `yaml:"pair_guard_retention_days,omitempty" json:"pair_guard_retention_days,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -80,6 +86,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Friend.SweepBatch <= 0 {
 		c.Friend.SweepBatch = 500
+	}
+	if c.Friend.PairGuardRetentionDays <= 0 {
+		c.Friend.PairGuardRetentionDays = 30
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50004"

@@ -502,6 +502,14 @@ func main() {
 	// 旧 Hub DS/旧签发面残票混版可用);全 fleet DS 转发 sjti + 旧 DS 排空 + 等满票据
 	// 最大 TTL 后置 session_gate.require_ticket_sjti=true 收口。
 	uc.SetSessionGateRequireSJTI(cfg.SessionGate.RequireTicketSJTI)
+	// R9 复审 P1(开关依赖门禁):require_ticket_sjti=true 依赖 session gate 存在
+	// (sjti 现行性对照会话权威)。gate 未装配(Redis 未配置)时开关只会静默变形为
+	// "永不复核",安全开关必须 fail-fast 而不是装饰性存在。
+	if cfg.SessionGate.RequireTicketSJTI && sessGate == nil {
+		helper.Errorw("msg", "require_ticket_sjti_needs_session_gate",
+			"hint", "配置 node.redis_client(会话权威)或按 rollout 文档显式关闭 session_gate.require_ticket_sjti")
+		os.Exit(1)
+	}
 	if sessGate != nil {
 		if cfg.SessionGate.RequireTicketSJTI {
 			helper.Infow("msg", "hub_admission_sjti_require_active",
