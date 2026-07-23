@@ -53,6 +53,13 @@ type FrameRouter interface {
 	FrameBroadcaster
 }
 
+// WakePublisher 跨 Pod 唤醒信号发布端(R5 复审 P2-10:本地无连接时广播 player_id,
+// 持有该玩家连接的 Pod 立即拉取投递,消除跨 Pod 场景对 30s 兜底轮询的依赖)。
+// best-effort:失败只记日志,交付正确性由缓冲 + 轮询保证。nil = 未装配(单测/联调)。
+type WakePublisher interface {
+	PublishWake(ctx context.Context, playerID uint64) error
+}
+
 // KafkaConsumer 包装一个 topic 的消费循环。
 type KafkaConsumer struct {
 	topic     string
@@ -67,7 +74,13 @@ type KafkaConsumer struct {
 	router     *cellroute.Router
 	selfRegion uint32
 	selfCell   uint32
+
+	// wake 跨 Pod 唤醒信号发布端(R5 复审 P2-10);nil = 未装配,跨 Pod 只剩兜底轮询。
+	wake WakePublisher
 }
+
+// SetWakePublisher 注入跨 Pod 唤醒信号发布端(main 装配;nil-safe)。
+func (k *KafkaConsumer) SetWakePublisher(w WakePublisher) { k.wake = w }
 
 // NewKafkaConsumer 构造但不启动;调用 Start() 才开始消费。
 //
@@ -155,6 +168,13 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 	// (每 Pod 独立 consumer group,全 Pod 都消费同一条,见 NewKafkaConsumer)。
 	// 不写投递缓冲(广播无 per-player 归属;离线玩家重连后不补推全服广播)。
 	if k.broadcast {
+		// event_type 存在但非法 → 毒丸(R5 复审 P2-3,见 parseEventTypeHeader 契约)。
+		eventType, eterr := parseEventTypeHeader(msg.Headers)
+		if eterr != nil {
+			h.Warnw("msg", "kafka_push_invalid_event_type",
+				"topic", msg.Topic, "partition", msg.Partition, "offset", msg.Offset, "err", eterr)
+			return kafkax.Poison(eterr)
+		}
 		// ts_ms 置 0(审计 P1:客户端用所有帧的最大 ts_ms 推进恢复游标,广播若携带
 		// kafka 时间戳会永久越过较小的玩家专属游标,导致定向帧被补推跳过。广播不参与
 		// 游标体系;客户端 max(cursor, 0) 恒 no-op)。
@@ -163,7 +183,7 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 			Payload:   msg.Value,
 			TsMs:      0,
 			TraceId:   headerStr(msg.Headers, "trace_id"),
-			EventType: headerUint32(msg.Headers, kafkax.HeaderEventType),
+			EventType: eventType,
 		}
 		sent, failed := k.cm.Broadcast(frame)
 		if failed > 0 {
@@ -186,6 +206,14 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 		)
 		return kafkax.Poison(err)
 	}
+	// player_id=0 不是合法业务 ID(Snowflake 恒非 0,§9.11):key="0" 可过 ParseUint,
+	// 旧实现会写进 player 0 的缓冲并 ACK = 静默吞掉一条定向消息(R5 复审 P2-2)。
+	// 毒丸进 DLQ 留证——producer 用零值 key 是 bug,必须暴露。
+	if playerID == 0 {
+		h.Warnw("msg", "kafka_push_zero_player_key",
+			"topic", msg.Topic, "partition", msg.Partition, "offset", msg.Offset)
+		return kafkax.Poison(fmt.Errorf("kafka key resolves to player_id=0 (topic=%s)", msg.Topic))
+	}
 
 	// 2. Cell 归属:非本 cell 玩家的消息**毒丸投 DLQ,不本地处理**(审计 P1:本 cell
 	// Redis 对连接所在 cell 不可见,"照常交付"实为写错缓存 + ACK = 静默丢;DLQ 留证
@@ -205,12 +233,20 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 
 	// 3. 构 PushFrame(payload 直接是业务 Event proto bytes;ts_ms 初值为 kafka 消息
 	// 时间,AssignAndBuffer 会重铸为该玩家的投递游标——原始事件时间由业务 payload 自带)。
+	// event_type 存在但非法 → 毒丸(R5 复审 P2-3,见 parseEventTypeHeader 契约)。
+	eventType, eterr := parseEventTypeHeader(msg.Headers)
+	if eterr != nil {
+		h.Warnw("msg", "kafka_push_invalid_event_type",
+			"topic", msg.Topic, "partition", msg.Partition, "offset", msg.Offset,
+			"player_id", playerID, "err", eterr)
+		return kafkax.Poison(eterr)
+	}
 	frame := &pushv1.PushFrame{
 		Topic:     msg.Topic,
 		Payload:   msg.Value,
 		TsMs:      msg.Timestamp.UnixMilli(),
 		TraceId:   headerStr(msg.Headers, "trace_id"),
-		EventType: headerUint32(msg.Headers, kafkax.HeaderEventType),
+		EventType: eventType,
 	}
 
 	// 4. 交付(审计 v2):① 单 Lua 原子「分配游标 + 入投递缓冲」(Redis 单点定序,
@@ -229,7 +265,14 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 		)
 		return errcode.New(errcode.ErrPushOfflineCorrupted, "delivery buffer failed: %v", err)
 	}
-	k.cm.SendTo(playerID)
+	// 本地无该玩家连接 → 跨 Pod 唤醒信号(R5 复审 P2-10):持有连接的 Pod 立即拉取,
+	// 不再等 30s 兜底轮询(该轮询保留为信号丢失/未装配时的正确性兜底)。
+	// best-effort:publish 失败不影响 ack(帧已入缓冲,轮询必达)。
+	if !k.cm.SendTo(playerID) && k.wake != nil {
+		if werr := k.wake.PublishWake(ctx, playerID); werr != nil {
+			h.Warnw("msg", "push_wake_publish_failed", "player_id", playerID, "err", werr)
+		}
+	}
 	return nil
 }
 
@@ -243,25 +286,23 @@ func headerStr(headers []*sarama.RecordHeader, key string) string {
 	return ""
 }
 
-// headerUint32 在 sarama.RecordHeader 列表里找指定 key 并解析为 uint32
-// (找不到 / 解析失败 → 返 0,即该 topic 的旧事件类型,向后兼容)。
-// 用于把业务 producer 塞的 event_type header 透传进 PushFrame.EventType。
-// headers 是 Kafka 原始 header 列表,key 是待查 header 名;本函数不区分缺失与畸形值,
-// 两者都必须收敛为兼容值 0,避免坏 header 让整条业务推送进入 poison/DLQ。
-func headerUint32(headers []*sarama.RecordHeader, key string) uint32 {
-	// s 是目标 header 的十进制文本;空值同时覆盖 header 缺失和值为空。
-	s := headerStr(headers, key)
+// parseEventTypeHeader 解析 event_type header(R5 复审 P2-3,收紧原 headerUint32 语义):
+//   - 缺失 / 空值 → (0, nil):旧 producer 不填 event_type,legacy 0 是显式兼容契约;
+//   - 存在但非法(非十进制 / 负数 / 越界)→ error:**不得降级为 legacy 0**——把新事件
+//     按旧 message 路由,客户端会用错误的 proto 解析 payload(可能凑巧对上字段,
+//     误弹提示 / 污染缓存)。producer 写坏 header 是 bug,毒丸进 DLQ 暴露并留证。
+func parseEventTypeHeader(headers []*sarama.RecordHeader) (uint32, error) {
+	// s 是目标 header 的十进制文本;空值同时覆盖 header 缺失和值为空(legacy 兼容)。
+	s := headerStr(headers, kafkax.HeaderEventType)
 	if s == "" {
-		return 0
+		return 0, nil
 	}
-	// v 是限定到 32 位后的无符号事件类型,err 表示非十进制、负数或越界。
 	v, err := strconv.ParseUint(s, 10, 32)
-	// 解析失败不能阻断旧客户端兼容路径,按未声明 event_type 处理。
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("malformed %s header %q: %w", kafkax.HeaderEventType, s, err)
 	}
 	// ParseUint 已完成 32 位范围校验,此处转换不会截断。
-	return uint32(v)
+	return uint32(v), nil
 }
 
 // 让 *ConnectionManager 自动满足 FrameSender / FrameRouter(编译期检查)。

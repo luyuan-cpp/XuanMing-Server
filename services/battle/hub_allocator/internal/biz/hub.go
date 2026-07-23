@@ -79,6 +79,10 @@ type HubTicketBinding struct {
 	// SourceMatchID:Battle→Hub 回流 fence(pkg/auth DSTicketClaims*.SourceMatchID)。
 	// 仅 AssignHub 回流路径 >0;Transfer/迁移重签为 0。
 	SourceMatchID uint64
+	// SessionJTI:请求方登录会话 jti(R6 复审 P0-3,盖进 v2 票据 sjti claim;
+	// login VerifyDSTicket 在线核销时复核会话现行性)。仅 AssignHub(login 透传)非空;
+	// Transfer/迁移重签无请求方会话上下文,为空 = 兼容窗,票据不参与 sjti 判定。
+	SessionJTI string
 }
 
 // HubMigratePusher 抽象强制整合迁移通知推送(走 Kafka topic pandora.hub.migrate,key=player_id)。
@@ -252,7 +256,10 @@ type AssignResult struct {
 // source_match_id claim,Hub DS 准入后用它写 SetLocation(HUB, fence) 通过 locator 的
 // BATTLE→HUB guard。0 = 普通登录/非回流。仅影响票据 claim,不进归属镜像
 // (fence 是一次性回流凭证,Transfer/迁移重签不携带)。
-func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64) (*AssignResult, error) {
+// sessionJTI(R6 复审 P0-3):login 透传的请求方会话 jti,盖进本次 hub 票据 sjti claim
+// (VerifyDSTicket 在线核销时复核现行性,响应窗口交付的旧票在兑换点作废)。
+// 空 = 旧调用方/dev 直连,票据不带 sjti(兼容窗)。
+func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64, sessionJTI string) (*AssignResult, error) {
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
@@ -315,7 +322,7 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 						continue
 					}
 					u.addShardMember(ctx, next.HubPodName, playerID)
-					return u.signResult(ctx, playerID, effectiveRole, next, sourceMatchID)
+					return u.signResult(ctx, playerID, effectiveRole, next, sourceMatchID, sessionJTI)
 				}
 				if errcode.As(ensureErr) != errcode.ErrHubNoAvailable {
 					return nil, ensureErr
@@ -361,7 +368,7 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 		bindAssignmentAuth(assignment, seat)
 		// 先签票、再发布 assignment:签名器失败时可以用 reservation identity
 		// 精确补偿,既不暴露拿不到票的归属,也不泄漏容量。
-		signedResult, signErr := u.signResult(ctx, playerID, effectiveRole, assignment, sourceMatchID)
+		signedResult, signErr := u.signResult(ctx, playerID, effectiveRole, assignment, sourceMatchID, sessionJTI)
 		if signErr != nil {
 			u.compensateReservedSeat(ctx, target.HubPodName, playerID, assignmentID, seat)
 			return nil, signErr
@@ -2187,7 +2194,7 @@ func ticketBindingFromAssignment(a *hubv1.HubAssignmentStorageRecord) HubTicketB
 }
 
 func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID uint32,
-	assignment *hubv1.HubAssignmentStorageRecord, sourceMatchID uint64,
+	assignment *hubv1.HubAssignmentStorageRecord, sourceMatchID uint64, sessionJTI string,
 ) (string, int64, error) {
 	if assignment == nil || u.signer == nil {
 		return "", 0, errcode.New(errcode.ErrUnavailable, "Hub ticket signer unavailable")
@@ -2198,6 +2205,7 @@ func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID 
 	}
 	binding := ticketBindingFromAssignment(assignment)
 	binding.SourceMatchID = sourceMatchID
+	binding.SessionJTI = sessionJTI
 	token, expMs, err := u.signer.SignHubTicket(playerID, roleID, binding)
 	if err != nil {
 		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
@@ -2216,8 +2224,8 @@ func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID 
 	return token, expMs, nil
 }
 
-func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord, sourceMatchID uint64) (*AssignResult, error) {
-	token, expMs, err := u.signHubTicket(ctx, playerID, roleID, assignment, sourceMatchID)
+func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord, sourceMatchID uint64, sessionJTI string) (*AssignResult, error) {
+	token, expMs, err := u.signHubTicket(ctx, playerID, roleID, assignment, sourceMatchID, sessionJTI)
 	if err != nil {
 		return nil, err
 	}
@@ -2232,7 +2240,7 @@ func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uin
 
 func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord) (*TransferResult, error) {
 	// Hub→Hub 切换/重签:玩家已在大厅,无 Battle 回流 fence。
-	token, expMs, err := u.signHubTicket(ctx, playerID, roleID, assignment, 0)
+	token, expMs, err := u.signHubTicket(ctx, playerID, roleID, assignment, 0, "" /* Transfer 重签:无请求方会话上下文(兼容窗) */)
 	if err != nil {
 		return nil, err
 	}
@@ -2623,7 +2631,7 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 			if swapErr != nil || !swapped {
 				return false
 			}
-			token, _, signErr := u.signHubTicket(ctx, playerID, next.GetRoleId(), next, 0)
+			token, _, signErr := u.signHubTicket(ctx, playerID, next.GetRoleId(), next, 0, "" /* 迁移重签:无请求方会话上下文(兼容窗) */)
 			if signErr != nil {
 				return false
 			}
@@ -2670,7 +2678,7 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		}
 		cleanupRegistered = true
 	}
-	token, _, terr := u.signHubTicket(ctx, playerID, assign.RoleId, newAssign, 0)
+	token, _, terr := u.signHubTicket(ctx, playerID, assign.RoleId, newAssign, 0, "" /* 迁移重签:无请求方会话上下文(兼容窗) */)
 	if terr != nil {
 		plog.With(ctx).Warnw("msg", "migrate_sign_ticket_failed", "player_id", playerID, "err", terr)
 		u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)

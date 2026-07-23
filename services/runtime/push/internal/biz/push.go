@@ -23,6 +23,15 @@
 //     返回错误、游标不推进(首轮 = 断流,稳态 = 退避),不允许把「查不了」当「无丢失」。
 //   - 拉取失败退避重试(审计 P1:Redis 故障时每连接每秒报错 = 日志风暴):失败后按
 //     指数退避(1s..60s)暂停拉取,只记首错与每 10 次;游标不动,恢复后续传不漏。
+//   - v5 R5 复审(2026-07-22):①投递前会话 fencing(sessionFenceDelivery,P0-4),
+//     借 Redis session key 单点串行保证「轮换后产生的私有帧旧流一帧不发」,跨 Pod 成立
+//     (authRegMu 只覆盖单 Pod);②流内复查先判代际后判到期(P0-2):「已过期且已被顶」
+//     必须回 ErrSessionSuperseded(→ABORTED)而非 UNAUTHENTICATED,否则被顶设备自动
+//     重登反顶新设备。
+//   - v6 R6 复审(2026-07-23):投递 fence 从每批收紧为**逐帧**——按批 fence 通过后轮换,
+//     旧流仍会发完整批(≤maxFrames);逐帧后每条交付帧都产生于该帧自己的 fence 通过
+//     之前,在途暴露 ≤1 帧(检查与 Send 无法跨存储原子,零瞬时窗口不可达,契约按此
+//     诚实表述)。
 package biz
 
 import (
@@ -170,27 +179,78 @@ func (u *PushUsecase) AuthorizeSubscribe(ctx context.Context, playerID uint64, s
 	return nil
 }
 
-// recheckSession 流内会话复查:到期/被顶号/登出 → 返回不可恢复错误(关流);
+// recheckSession 流内会话复查:被顶号/登出/到期 → 返回不可恢复错误(关流);
 // 权威查询失败 → 返回 (retryable=true) 由调用方计连败。
+//
+// 裁决顺序(R5 复审 P0-2):**先判会话代际,后判到期**。旧顺序先判 ExpMs,
+// 「A 已过期且已被 B 顶号」只得到 ErrUnauthorized(→UNAUTHENTICATED),UE 把它当
+// 自然过期用缓存凭据自动完整 Login,轮换 jti 反顶 B——错误码 14 的互踢防护被
+// 到期分支短路。代际不匹配必须无条件优先返回 ErrSessionSuperseded(→ABORTED);
+// 只有确认 jti 仍是当前一代(自己就是唯一会话,重登无反顶对象)才按到期关流。
 func (u *PushUsecase) recheckSession(ctx context.Context, playerID uint64, sess SessionInfo) (retryable bool, err error) {
+	if u.sessionGate != nil && playerID != 0 && sess.JTI != "" {
+		cur, found, gerr := u.sessionGate.CurrentJTI(ctx, playerID)
+		if gerr != nil {
+			return true, gerr
+		}
+		if !found {
+			return false, errcode.New(errcode.ErrUnauthorized, "session logged out; stream closed")
+		}
+		if cur != sess.JTI {
+			// 顶号专属码,客户端据 ABORTED 转交互登录而非自动重登(R4 P0 互踢循环)。
+			return false, errcode.New(errcode.ErrSessionSuperseded, "session superseded; stream closed")
+		}
+	}
+	// 至此 jti 仍是当前一代(或 dev 无 gate/无 jti,建流时已按 require 档裁决):
+	// 到期按普通未授权关流,客户端自动换新会话不构成反顶。
 	if sess.ExpMs > 0 && time.Now().UnixMilli() >= sess.ExpMs {
 		return false, errcode.New(errcode.ErrUnauthorized, "session token expired; stream closed")
 	}
+	return false, nil
+}
+
+// sessionFenceDelivery 投递前会话 fencing(R5 复审 P0-4,跨 Pod TOCTOU 收口):
+// 进程内 authRegMu 只能串行化**同一 Pod** 的「校验+注册」;滚动/多副本时,Pod A 可在
+// 读到旧 jti 后暂停,B 于 Pod B 登录轮换并建流,A 恢复注册并开始投递——旧流在看门狗
+// 复查周期(≤30s)内持续读取私有帧。
+//
+// 收口依据 Redis 单点(单 key)串行:会话轮换 = 对 pandora:sess:<pid> 的一次写。
+// 任何「轮换后产生」的私有帧,其入缓冲写必然发生在轮换之后;能读到该帧的 Range
+// 必然完成于该写之后;本 fence 在该帧 Send 前发起(R6 起逐帧),对同一 session key
+// 的读必然排在轮换写之后 → 必然观察到新 jti 而拒绝。因此**轮换后产生的帧零交付**,
+// 单 Pod、多 Pod、Redis Cluster(fence 与轮换同 key,per-key 串行)下均成立;
+// 轮换前已产生、且本帧 fence 已通过的帧仍可能由在途 Send 交付(≤1 帧,被顶前会话
+// 自己的合法数据)——「轮换瞬间起零帧」跨存储不可达,不作此宣称。
+//
+// 返回错误语义与 recheckSession 对齐:顶号 ErrSessionSuperseded / 登出 ErrUnauthorized
+// (不可恢复,调用方关流);权威不可达返回原 ErrUnavailable(fail-closed 不投递,
+// 调用方按拉取失败退避,游标不动不漏帧)。
+func (u *PushUsecase) sessionFenceDelivery(ctx context.Context, playerID uint64, sess SessionInfo) error {
 	if u.sessionGate == nil || playerID == 0 || sess.JTI == "" {
-		return false, nil // 建流时已按 require 档裁决;无 jti 的 dev 流不做现行性复查
+		return nil // dev 裸跑/无 jti:建流时已按 require 档裁决
 	}
-	cur, found, gerr := u.sessionGate.CurrentJTI(ctx, playerID)
-	if gerr != nil {
-		return true, gerr
+	cur, found, err := u.sessionGate.CurrentJTI(ctx, playerID)
+	if err != nil {
+		return err // ErrUnavailable:查不了 ≠ 可投递(§9.22 fail-closed)
 	}
 	if !found {
-		return false, errcode.New(errcode.ErrUnauthorized, "session logged out; stream closed")
+		return errcode.New(errcode.ErrUnauthorized, "session logged out; delivery fenced")
 	}
 	if cur != sess.JTI {
-		// 同上:顶号专属码,客户端据 ABORTED 转交互登录而非自动重登(R4 P0 互踢循环)。
-		return false, errcode.New(errcode.ErrSessionSuperseded, "session superseded; stream closed")
+		plog.With(ctx).Warnw("msg", "push_delivery_fenced_superseded", "player_id", playerID)
+		return errcode.New(errcode.ErrSessionSuperseded, "session superseded; delivery fenced")
 	}
-	return false, nil
+	return nil
+}
+
+// isSessionFenceClose 判定 drainBuffer 返回的错误是否为「会话已失效」类(不可恢复,
+// 必须关流),与「拉取/权威瞬时失败」类(退避重试)区分。
+func isSessionFenceClose(err error) bool {
+	switch errcode.As(err) {
+	case errcode.ErrSessionSuperseded, errcode.ErrUnauthorized:
+		return true
+	}
+	return false
 }
 
 // drainBuffer 把投递缓冲中游标 > cursor 的帧全部投递,随后做 gap 终检,返回推进后的游标。
@@ -204,7 +264,19 @@ func (u *PushUsecase) recheckSession(ctx context.Context, playerID uint64, sess 
 // 检出丢失:发一帧 resync 信号(ts_ms=0,不推进客户端游标),本地游标跳到丢失上界,
 // 同一段丢失只信号一次;此后 fl 再次越过游标(新的丢失)会再次触发。
 // cursor=0(首连拉空且缓冲无帧)不检:新客户端无增量历史,交付契约从当下开始。
-func (u *PushUsecase) drainBuffer(ctx context.Context, slot *StreamSlot, playerID uint64, cursor int64) (int64, error) {
+//
+// 会话 fencing(R5 复审 P0-4;R6 复审收紧为**逐帧**):每帧 Send 之前复核会话现行性
+// (sessionFenceDelivery)。R6 复审确认按批 fence 存在批内竞态——fence 通过后轮换,
+// 旧流仍会把整批(最多 maxFrames)帧发完。逐帧复核后的诚实上界:**每一条交付帧都
+// 产生于该帧自己的 fence 通过之前**(帧写入 → Range 读到 → fence 排在轮换后必失败,
+// Redis session key 单点串行),轮换后产生的帧零交付;检查与 Send 之间的固有在途
+// 暴露收敛到 ≤1 帧(跨存储无事务性 Send,零瞬时窗口不可达,契约按此表述,不夸大)。
+// 空批不查(闲置轮询零额外权威读);查询失败按拉取失败语义返回(fail-closed 不投递,
+// 游标不动);顶号/登出错误由调用方判别关流。逐帧一次 HGET 的代价只在有帧可投时发生,
+// 稳态推送低频(每玩家每秒 0~几条),重连补推最坏 512 帧一次性多 512 次点查,可承受。
+func (u *PushUsecase) drainBuffer(ctx context.Context, slot *StreamSlot, playerID uint64, cursor int64, sess SessionInfo) (int64, error) {
+	// entry 是本轮进入时的游标:gap 终检的比较基线(R5 复审 P1-1,见拉空后注释)。
+	entry := cursor
 	for {
 		if err := ctx.Err(); err != nil {
 			return cursor, nil
@@ -220,26 +292,43 @@ func (u *PushUsecase) drainBuffer(ctx context.Context, slot *StreamSlot, playerI
 			if err := ctx.Err(); err != nil {
 				return cursor, nil
 			}
+			// 逐帧 fence(R6):轮换发生在批内任意点,后续帧一律不发;已发帧均产生于
+			// 各自 fence 通过之前。失败时游标停在最后一条已交付帧,不漏不重。
+			if ferr := u.sessionFenceDelivery(ctx, playerID, sess); ferr != nil {
+				return cursor, ferr
+			}
 			if serr := slot.stream.Send(f.Frame); serr != nil {
 				return cursor, serr
 			}
 			cursor = f.ScoreMs
 		}
 	}
-	if cursor <= 0 || ctx.Err() != nil {
+	// gap 终检基线用**进入时游标**而非拉空后的游标(R5 复审 P1-1):丢失帧与幸存帧
+	// 交错时(如丢 1001、幸存 1002),拉空后游标已被幸存帧推进到 1002,fl=1001 不再
+	// 大于游标——丢失被幸存帧"掩护"成永久漏报。entry 基线下 fl > entry 即报;
+	// 信号后游标跳到 max(当前, lost),下一轮 entry ≥ 丢失上界,同一段丢失仍只信号一次。
+	// entry<=0(首连)沿用拉空后游标当基线:首连无增量历史,契约从当下开始,只报
+	// "刚交付窗口内"发生的确定丢失;首连且缓冲无帧(基线仍 0)连检测都不做。
+	baseline := entry
+	if baseline <= 0 {
+		baseline = cursor
+	}
+	if baseline <= 0 || ctx.Err() != nil {
 		return cursor, nil
 	}
-	lost, lerr := u.offline.LostSince(ctx, playerID, cursor)
+	lost, lerr := u.offline.LostSince(ctx, playerID, baseline)
 	if lerr != nil {
 		return cursor, lerr
 	}
-	if lost > cursor {
+	if lost > baseline {
 		plog.With(ctx).Warnw("msg", "push_gap_resync_signaled",
-			"player_id", playerID, "cursor", cursor, "lost_up_to", lost)
+			"player_id", playerID, "baseline", baseline, "cursor", cursor, "lost_up_to", lost)
 		if serr := slot.stream.Send(&pushv1.PushFrame{Topic: ResyncTopic}); serr != nil {
 			return cursor, serr
 		}
-		cursor = lost
+		if lost > cursor {
+			cursor = lost
+		}
 	}
 	return cursor, nil
 }
@@ -329,7 +418,7 @@ func (u *PushUsecase) RunSubscribeStream(
 
 	// 首轮拉取(重连补推/首连拉缓冲现存帧;gap 终检在 drainBuffer 拉空后执行)。
 	if playerID > 0 {
-		next, err := u.drainBuffer(ctx, slot, playerID, cursor)
+		next, err := u.drainBuffer(ctx, slot, playerID, cursor, sess)
 		if err != nil {
 			h.Warnw("msg", "push_replay_failed_stream_closed", "player_id", playerID, "cursor", cursor, "err", err)
 			return exit(err) // 首轮失败断流:客户端重连重试(游标没动,不漏)
@@ -366,10 +455,17 @@ func (u *PushUsecase) RunSubscribeStream(
 			}
 		}
 		if pull && playerID > 0 && time.Now().After(drainRetryAt) {
-			next, err := u.drainBuffer(ctx, slot, playerID, cursor)
+			next, err := u.drainBuffer(ctx, slot, playerID, cursor, sess)
 			if err != nil {
-				// 拉取/gap 终检失败不断流:游标未动,退避后重试(实时降级为轮询迟延;
-				// 只记首错与每 10 次,防 Redis 故障日志风暴)。
+				// 会话已失效(顶号/登出,R5 复审 P0-4 投递 fence 检出):立即关流,
+				// 不得退避重试——旧流不允许保留任何后续投递机会,关流原因保留
+				// 可判别码(ABORTED/UNAUTHENTICATED)交给客户端裁决。
+				if isSessionFenceClose(err) {
+					h.Warnw("msg", "push_stream_closed_by_delivery_fence", "player_id", playerID, "err", err)
+					return exit(err)
+				}
+				// 拉取/gap 终检/权威瞬时失败不断流:游标未动,退避后重试(实时降级为
+				// 轮询迟延;只记首错与每 10 次,防 Redis 故障日志风暴)。
 				drainFailStreak++
 				drainRetryAt = time.Now().Add(drainBackoff(drainFailStreak))
 				if drainFailStreak == 1 || drainFailStreak%10 == 0 {

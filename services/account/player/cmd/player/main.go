@@ -33,6 +33,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/sessiongate"
 
 	"github.com/luyuancpp/pandora/services/account/player/internal/biz"
 	"github.com/luyuancpp/pandora/services/account/player/internal/conf"
@@ -158,7 +159,13 @@ func main() {
 	svc := service.NewPlayerService(uc)
 	ctAdmin := configtable.NewAdminService(ctStore, cfg.ConfigTable.Dir)
 
-	grpcSrv := server.NewGRPCServer(&cfg, svc, ctAdmin)
+	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):客户端面请求 jti 必须是 login
+	// 会话权威(pandora:sess,node.redis_client 指向的共享 Redis)当前一代;
+	// prod 生成器机械置 session_gate.require=true(漏配端点拒启)。
+	sessGate, sgClose := sessiongate.MustBuild(cfg.Node.RedisClient, cfg.SessionGate.Require)
+	defer sgClose()
+
+	grpcSrv := server.NewGRPCServer(&cfg, svc, ctAdmin, sessGate)
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	// 6. 经验推送出箱发布器(实时成长):producer 可用才注入,失败只警告(出箱积压不丢,

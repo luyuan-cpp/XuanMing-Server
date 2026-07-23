@@ -1,6 +1,6 @@
 # [INC-20260722-004][P0] 旧/被顶号会话 token 仍能订阅私有推送流
 
-> **状态**：修复实施中（会话现行性门 + 流内复查 + 生成器强制档已落码测试绿，2026-07-22；R4 复审发现两处仍可达窗口——建流校验/注册 TOCTOU、写者 Send 阻塞时复查饿死——已于同日修复并补确定性回归；真实 Envoy/Redis 环境验收未跑，未关闭）
+> **状态**：修复实施中（会话现行性门 + 流内复查 + 生成器强制档已落码测试绿，2026-07-22；R4 复审两处窗口同日补修；R5 复审再确认四条 P0 级窗口——旧 JTI 未全局吊销、过期旧设备自动反顶、跨 Pod 建流/投递 TOCTOU、login 副作用无终检——已同日全部落码测试绿（见 §4.1.3），UE 侧会话代次绑定待用户编译；真实 Envoy/共享 Redis/多 Pod/双设备/race 验收未跑，未关闭）
 > **类型**：`security` / `session-fencing` / `near-miss`
 > **环境**：本机源码与单测审计（未确认在线上发生）
 > **首次发生时间（UTC）**：未在线上确认；受影响行为自 push Subscribe 上线（W3 ④）即存在
@@ -78,7 +78,9 @@ deploy/envoy/envoy.yaml push 路由(修复前)
    64 条带锁内串行执行「校验 → 注册」；任一交错都收敛到新会话持有连接（旧会话校验排
    在新会话注册后必读到已轮换 jti 被拒；排在前则旧流短暂注册后立即被新注册顶掉）。
    回归：`TestAuthorizeAndRegister_StaleSessionCannotDisplaceNewer`（用可阻塞 gate 确定
-   性复现原交错）。
+   性复现原交错）。**边界修正（R5 复审）**：条带锁是进程内互斥，只消除**单 Pod 内**的
+   交错；跨 Pod 场景（旧流注册在 A Pod、新登录轮换经 B Pod）此锁不可达，由 4.1.3 第 3
+   条的投递前 fencing 收口（旧流零轮换后私有帧），不依赖跨 Pod 共享连接槽。
 2. **“30 秒内关闭旧流”无时限保证**：流内复查与写者共用同一 select，写者阻塞在
    `stream.Send`（慢客户端流控）或首轮 replay 期间，复查永远轮不到；实际最坏收敛由
    gRPC `max_connection_age`(15m)+grace 决定。补修：会话复查改为**独立看门狗 goroutine**
@@ -112,6 +114,42 @@ deploy/envoy/envoy.yaml push 路由(修复前)
   凭据、回登录关卡走**交互登录**，绝不自动完整 Login；UNAUTHENTICATED(16)/码 8 才保留
   自动换新。由此顶号收敛为：最后登录的设备是唯一稳定赢家。
 
+### 4.1.3 R5 复审补修：全服务吊销 + 跨 Pod 投递 fencing + 交付终检（2026-07-22，同日）
+
+R5 只读复审(基线 d5b2d2b7c4 / 客户端 r1306)确认 4.1.1「同玩家条带锁」只在**单进程**成立
+(原文档措辞已按此纠正),并发现四条新的 P0 级窗口,同日全部落码:
+
+1. **旧 JTI 未全局吊销(R5 P0-1)**：会话门只封了 login/push 入口,顶号后旧 JWT 在 exp 前
+   (默认 24h)仍能执行 friend/trade/inventory 等全部按 player_id 定向的 unary RPC。修复:
+   push 的 RedisSessionGate 提升为共享 `pkg/sessiongate`,新增 `pkg/middleware.SessionCurrent`
+   按请求校验 payload jti == 会话权威当前一代(顶号 ABORTED/14、登出过期 UNAUTHENTICATED、
+   权威不可达 fail-closed UNAVAILABLE;无 payload 头 = 内部面放行),接线全部 12 个客户端面
+   服务(friend/chat/mail/guild+group/trade/team/matchmaker×2/player/inventory/leaderboard/
+   hub-allocator 玩家 method + push unary 面);`gen_cluster_config.ps1` `-Prod` 机械置
+   `session_gate.require: true` + 产物断言 + 契约测试(`gen_cluster_session_gate_contract_test.ps1` PASS)。
+2. **过期旧设备自动反顶(R5 P0-2)**：`recheckSession` 先判 `exp` 后查 jti——「已过期且已被
+   顶号」得到 UNAUTHENTICATED,UE 按自然过期自动完整 Login 反顶新设备,判别契约被到期分支
+   短路。修复:先判会话代际(mismatch 无条件 ABORTED/14)后判到期;回归
+   `TestRecheckSession_SupersededTakesPrecedenceOverExpiry`。
+3. **跨 Pod 建流/投递 TOCTOU(R5 P0-4)**：`authRegMu` 是进程内锁,滚动/多副本下旧会话可在
+   Pod A 读到旧 jti 后暂停、新会话在 Pod B 轮换并建流、Pod A 恢复注册并立即补推私有缓存
+   (最长 30s)。修复:`drainBuffer` 每批 Range 非空后、Send 前复核会话现行性
+   (`sessionFenceDelivery`)——依据 Redis session key 单点串行,任何「轮换后产生」的帧只能
+   被轮换后的 Range 读到,其后的复核必失败 → **旧流零轮换后私有帧**,单/多 Pod、Cluster 均
+   成立;权威不可达 fail-closed 不投递(退避,游标不动不漏)。回归:
+   `TestCrossPodStaleStream_ZeroFramesAfterRotation`(双 usecase 模拟双 Pod)、
+   `TestSteadyStreamRotationWakeup_FencedBeforeSend`、`TestDeliveryFence_AuthorityDownFailClosedThenRecover`。
+4. **login 副作用无终检(R5 P0-5)**：完整 Login 在写入 jti 后继续分配/locator/签票直至返回,
+   期间不复核;SelectRole/IssueDSTicket 为「检查→稍后写/签」。修复:`fenceLoginDelivery`
+   在交付前复核本流程写入的 jti 仍是当前一代(battle 重连与最终返回两处),失败扣留全部
+   凭据;SelectRole/IssueDSTicket 三分支在副作用后、返回前二次过门(票据从未离开服务端 =
+   未取得)。诚实边界:跨 Redis/MySQL 无原子事务,角色行等业务写在复核后仍有 ms 级窗口,
+   残余为可被新会话覆盖的一次写,不构成进场能力。回归:`login_delivery_fence_test.go` 四例。
+5. **UE 侧会话代次绑定(R5 P0-3)**：推送流建立时快照 Backend SessionGeneration;登录成功在
+   会话提交点**无条件换代重订阅**(旧流迟到 ABORTED/帧按 generation 丢弃,S1 迟到回调对
+   S2 零副作用);Coordinator 关流处置前校验关闭归属代次,登出态不再安排重订阅;
+   `HandleSessionSupersededByOtherLogin` 补幂等 guard。待用户 UE 编译验证。
+
 ### 4.2 回归测试（已落地，全绿）
 
 - `internal/biz/replay_duplicate_test.go`：`TestAuthorizeSubscribe_SessionCurrency`（现行放行/旧 jti 拒/登出拒/require 档缺 jti 拒/权威故障 fail-closed/dev 档语义）、`TestRecheckSession_ExpiryClosesStream`（token 到期关流）、`TestRecheckSession_SupersededAndRetryable`（顶号关流含跨 Pod 语义/权威故障可重试）。
@@ -133,10 +171,15 @@ deploy/envoy/envoy.yaml push 路由(修复前)
 | token 到期 | ≤30s 停止投递并发起关流；Envoy 1h 流寿命兜底 | 单测绿；Envoy max_stream_duration 未实测 |
 | Redis 故障 | 建流 fail-closed 拒；在流连续 3 次失败关流 | 单测绿；真实故障注入未跑 |
 | dev 直连联调 | 缺省档行为不变（无 jti 放行，有 jti 仍校验） | 单测绿 |
+| **旧 JTI 全服务吊销（R5 P0-1）**：顶号后旧 JWT 调 friend/trade/inventory 等玩家 RPC | 一律 ABORTED/14（顶号可判别），登出过期 UNAUTHENTICATED，权威不可达 UNAVAILABLE | 中间件单测 + 生成器契约测试绿；真实 Envoy 全链路未验 |
+| **过期且被顶（R5 P0-2）** | 恒 ABORTED/14，不落 UNAUTHENTICATED（防自动反顶） | 单测绿 |
+| **跨 Pod 轮换后旧流私有帧（R5 P0-4）** | 零轮换后帧（每批投递前 fencing） | 双 usecase 确定性回归绿；真实多 Pod 未跑 |
+| **会话轮换后的旧在途 Login/SelectRole/IssueDSTicket（R5 P0-5）** | 不返回 token/票据（交付终检扣留） | 交错单测绿；真实并发双登录 E2E 未跑 |
+| **S1 迟到关闭对 S2 零副作用（R5 P0-3，UE）** | 登录换代重订阅 + 关闭按会话代次归属判定 | 代码完成，待用户 UE 编译 + 双设备实测 |
 
 ## 6. 剩余风险与关闭条件
 
-- **未关闭原因**：真实 Envoy(:8443 jwt_authn + payload 头) + 共享 Redis + 多 Pod 环境的验收矩阵未执行；建流并发交错与阻塞写者两条 R4 复审场景目前只有确定性单测，缺真实并发/流控实测；`go test -race` 需 CGO/Linux CI。
+- **未关闭原因**：真实 Envoy(:8443 jwt_authn + payload 头) + 共享 Redis + 多 Pod 环境的验收矩阵未执行；建流并发交错与阻塞写者两条 R4 复审场景目前只有确定性单测，缺真实并发/流控实测；`go test -race` 需 CGO/Linux CI；R5 新增项中 UE 会话代次绑定待用户编译验证，friend TiDB 并发回归为 env-gated（`PANDORA_TEST_TIDB_DSN`）本轮未跑；R5 会话中间件使 12 个客户端面服务新增「会话权威 Redis 可达」依赖（`node.redis_client` 指向 pandora:sess 所在实例），多 Redis 拆分时是部署契约 review 项。
 - 会话权威与 push 必须指向**同一** Redis（infra 单实例部署契约）；分库部署会让门失效——部署清单 review 项。
 - 30s 复查窗口内旧 token 仍可短暂收推送（有界暴露，契约已注释）；缩窗需以 Redis QPS 为代价，当前取 30s。**表述修正（R4 复审）**：30s 界定的是「停止投递 + 发起关流」，不是流句柄消亡；句柄物理回收由 gRPC keepalive/max_connection_age(15m)+grace 与 Envoy max_stream_duration(1h) 有界收敛。修复前的准确表述是「已建立的流不能随会话失效及时关闭」（修复前另有 Envoy 1h 流寿命上界，非字面「无限期」）。
 - 关闭条件：验收矩阵全绿 + 生产产物 dbcheck/发布门禁通过 + 观察窗口无复发。

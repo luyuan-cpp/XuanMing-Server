@@ -116,6 +116,14 @@ func (s *LoginService) SelectRole(ctx context.Context, req *loginv1.SelectRoleRe
 	if err != nil {
 		return &loginv1.SelectRoleResponse{Code: toProtoCode(err)}, nil
 	}
+	// R5 复审 P0-5 终检:预检通过后、角色落库+签票期间会话可能已被新登录轮换
+	// (检查与副作用之间的 TOCTOU)。交付前复核,失败则扣留票据(票据从未离开服务端
+	// = 未取得)。诚实边界:角色行已落库(跨 Redis/MySQL 无法原子回卷),新设备下次
+	// 读角色即以库内权威为准,残余仅为一次可被覆盖的选角写,不构成进场能力。
+	if err := s.loginUC.RequireCurrentSessionJTI(ctx, playerID, middleware.SessionJTIFromContext(ctx)); err != nil {
+		plog.With(ctx).Warnw("msg", "select_role_delivery_fenced", "player_id", playerID)
+		return &loginv1.SelectRoleResponse{Code: toProtoCode(err)}, nil
+	}
 	return &loginv1.SelectRoleResponse{
 		Code:      commonv1.ErrCode_OK,
 		HubDsAddr: addr,
@@ -155,11 +163,22 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 	// ds_type=hub:复用登录的 hub 分配链路(hub_allocator.AssignHub),返回"当前有效"的大厅地址
 	// + 全新一次性票据。结算返回大厅必须走这条路,以应对 Hub DS 被 Agones 重建/换端口/换分片
 	// (客户端登录时缓存的旧地址会失效)。battle 票据仍由 ticketUC 仅签发(地址来自 matchmaker)。
+	// R5 复审 P0-5 终检(闭包供三条分支复用):预检通过后、分配/签票期间会话可能已被
+	// 新登录轮换(检查与副作用之间的 TOCTOU)。交付前复核当前 token 仍是当前一代,
+	// 失败则扣留票据——票据已签但从未离开服务端 = 旧在途请求未取得可用票据。
+	fenceTicketDelivery := func() error {
+		return s.loginUC.RequireCurrentSessionToken(ctx, playerID, req.GetSessionToken())
+	}
+
 	if req.GetDsType() == "hub" {
 		// target_id 历史上携带来源 match;现在仅作日志参考,路由权威是
 		// locator 租约 + match 三态门(biz.ResolveHubEndpointFromMatch)。
 		addr, ticket, _, err := s.loginUC.ResolveHubEndpointFromMatch(ctx, playerID, req.GetTargetId())
 		if err != nil {
+			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
+		}
+		if err := fenceTicketDelivery(); err != nil {
+			plog.With(ctx).Warnw("msg", "ds_ticket_delivery_fenced", "player_id", playerID, "ds_type", "hub")
 			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
 		}
 		return &loginv1.IssueDSTicketResponse{
@@ -174,11 +193,19 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 		if err != nil {
 			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
 		}
+		if err := fenceTicketDelivery(); err != nil {
+			plog.With(ctx).Warnw("msg", "ds_ticket_delivery_fenced", "player_id", playerID, "ds_type", "battle")
+			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
+		}
 		return &loginv1.IssueDSTicketResponse{Code: commonv1.ErrCode_OK, Ticket: ticket}, nil
 	}
 
 	res, err := s.ticketUC.IssueDSTicket(ctx, playerID, req.GetDsType(), req.GetTargetId())
 	if err != nil {
+		return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
+	}
+	if err := fenceTicketDelivery(); err != nil {
+		plog.With(ctx).Warnw("msg", "ds_ticket_delivery_fenced", "player_id", playerID, "ds_type", req.GetDsType())
 		return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
 	}
 	return &loginv1.IssueDSTicketResponse{

@@ -31,6 +31,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/redisx"
+	"github.com/luyuancpp/pandora/pkg/sessiongate"
 
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/biz"
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/conf"
@@ -93,11 +94,22 @@ func main() {
 	uc := biz.NewPushUsecase(conns, offline)
 	// 会话现行性门(P0,INC-20260722-004):login 的 pandora:sess 权威在同一 Redis;
 	// require 档由配置控制(prod 生成器机械置 true,dev 直连联调保持宽松)。
-	uc.SetSessionGate(data.NewRedisSessionGate(rdb), cfg.Push.RequireSessionGate)
+	// R5 复审 P0-1:实现收敛到共享 pkg/sessiongate(Subscribe 建流门 + unary 中间件共用)。
+	sessGate := sessiongate.NewRedisGate(rdb)
+	uc.SetSessionGate(sessGate, cfg.Push.RequireSessionGate)
 	svc := service.NewPushService(uc)
 
 	// 5. KafkaConsumer:每 topic 一个,共享 GroupID
 	consumers := mustBuildConsumers(&cfg, conns, offline, helper)
+	// 跨 Pod 唤醒信号(R5 复审 P2-10):写缓冲的 Pod 本地无连接时 PUBLISH player_id,
+	// 持有连接的 Pod 订阅后立即拉取投递;30s 兜底轮询保留为信号丢失时的正确性兜底。
+	wakeCtx, wakeCancel := context.WithCancel(context.Background())
+	defer wakeCancel()
+	wakeSignal := data.NewRedisWakeSignal(rdb)
+	for _, kc := range consumers {
+		kc.SetWakePublisher(wakeSignal)
+	}
+	go data.RunWakeSubscriber(wakeCtx, rdb, func(playerID uint64) { conns.SendTo(playerID) })
 	// 蜂窝扩容:多 Cell 时注入归属守卫(本 cell 消费者只应交付 owner==本 cell 的玩家,
 	// 否则告警暴露漂移;单 Cell mode 空 → router=nil,行为不变)。
 	if router, closeCell, e := etcdtable.BuildRouter(context.Background(), cfg.CellRoute); e != nil {
@@ -123,8 +135,8 @@ func main() {
 		}
 	}()
 
-	// 6. gRPC + HTTP server
-	grpcSrv := server.NewGRPCServer(&cfg, svc)
+	// 6. gRPC + HTTP server(unary 链挂 SessionCurrent,与 Subscribe 建流门同一 gate)
+	grpcSrv := server.NewGRPCServer(&cfg, svc, sessGate)
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	helper.Infow(

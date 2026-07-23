@@ -6,6 +6,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/grpcserver"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	bagv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/bag/v1"
 	inventoryv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/inventory/v1"
 
@@ -23,8 +24,13 @@ import (
 //
 // bagSvc 非 nil 时注册背包域(pandora.bag.v1,bag-domain.md phase 1 由本进程承载;
 // 全部内部系统接口,service 层拒客户端 JWT,Envoy 侧另有 /pandora.bag.v1/ 403 拦截)。
-func NewGRPCServer(cfg *conf.Config, svc *service.InventoryService, bagSvc *service.BagService) *kgrpc.Server {
-	srv := grpcserver.MustNewServer(cfg.Server, pmw.AuthOptional())
+//
+// pmw.SessionCurrent 校验客户端面请求 jti == login 会话权威当前一代(R5 复审 P0-1:
+// 顶号后旧 JWT 在 exp 前不得继续按 player_id 定向操作——UseItem/SellItem 属被审计点,
+// INC-20260722-004;内部直连不带 x-pandora-jwt-payload,GrantItems 等系统 RPC 天然放行)。
+func NewGRPCServer(cfg *conf.Config, svc *service.InventoryService, bagSvc *service.BagService, sessGate sessiongate.Gate) *kgrpc.Server {
+	srv := grpcserver.MustNewServer(cfg.Server, pmw.AuthOptional(),
+		pmw.SessionCurrent(sessGate, cfg.SessionGate.Require))
 	inventoryv1.RegisterInventoryServiceServer(srv, svc)
 	if bagSvc != nil {
 		bagv1.RegisterBagServiceServer(srv, bagSvc)

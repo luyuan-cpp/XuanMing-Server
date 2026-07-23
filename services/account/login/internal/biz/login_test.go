@@ -9,6 +9,7 @@ package biz
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,18 +53,40 @@ func (f *fakeAccountRepo) CheckBanned(_ context.Context, _ uint64, _ string) (bo
 }
 func (f *fakeAccountRepo) TouchDevice(_ context.Context, _ uint64, _ string) error { return nil }
 
-type fakeSessionRepo struct{}
+// fakeSessionRepo 记住 Set 写入的 jti 并在 GetJTI 返回真实值:R5 复审 P0-5 起 Login
+// 在交付前复核本次写入的 jti 仍是当前一代,无状态假件会被终检误判为"会话已消失"。
+type fakeSessionRepo struct {
+	mu  sync.Mutex
+	jti map[uint64]string
+}
 
-func (fakeSessionRepo) Set(_ context.Context, _ uint64, _, _, _ string, _ time.Duration) error {
+func newFakeSessionRepo() *fakeSessionRepo { return &fakeSessionRepo{jti: map[uint64]string{}} }
+
+func (f *fakeSessionRepo) Set(_ context.Context, playerID uint64, _, jti, _ string, _ time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.jti == nil { // 零值可用:嵌入方(rotatingSessionRepo 等)不经构造函数
+		f.jti = map[uint64]string{}
+	}
+	f.jti[playerID] = jti
 	return nil
 }
-func (fakeSessionRepo) Delete(_ context.Context, _ uint64) error { return nil }
 
-func (fakeSessionRepo) GetJTI(_ context.Context, _ uint64) (string, bool, error) {
-	return "", false, nil
+func (f *fakeSessionRepo) Delete(_ context.Context, playerID uint64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.jti, playerID)
+	return nil
 }
 
-func (fakeSessionRepo) DeleteIfJTI(_ context.Context, _ uint64, _ string) (bool, error) {
+func (f *fakeSessionRepo) GetJTI(_ context.Context, playerID uint64) (string, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	j, ok := f.jti[playerID]
+	return j, ok && j != "", nil
+}
+
+func (f *fakeSessionRepo) DeleteIfJTI(_ context.Context, _ uint64, _ string) (bool, error) {
 	return true, nil
 }
 
@@ -196,7 +219,7 @@ func newTestUsecaseWithNotifier(t *testing.T, hub data.HubAssigner, notifier dat
 	hash := mustBcrypt(t, "pw")
 	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash}
 	sf := snowflake.NewNode(1)
-	uc := NewLoginUsecase(repo, fakeSessionRepo{}, notifier, hub, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, nil, false)
+	uc := NewLoginUsecase(repo, newFakeSessionRepo(), notifier, hub, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, nil, false)
 	ticketUC := NewTicketUsecase(signer, verifier, nil)
 	ticketUC.SetBattleTicketAuthorizer(&loginBattleAuthorizerFake{})
 	uc.SetBattleTicketIssuer(ticketUC)
@@ -456,7 +479,7 @@ func newDevSkipUsecase(t *testing.T, repo data.AccountRepo) *LoginUsecase {
 	}
 	sf := snowflake.NewNode(1)
 	// hubAssigner=nil 走自签回退;devSkipPassword=true。
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, true, false, nil, false)
+	return NewLoginUsecase(repo, newFakeSessionRepo(), nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, true, false, nil, false)
 }
 
 // newDevAutoRegUsecase 构造 devAutoRegister=true 、 devSkipPassword=false 的用例。
@@ -472,7 +495,7 @@ func newDevAutoRegUsecase(t *testing.T, repo data.AccountRepo) *LoginUsecase {
 		t.Fatalf("NewVerifier: %v", err)
 	}
 	sf := snowflake.NewNode(1)
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, true, nil, false)
+	return NewLoginUsecase(repo, newFakeSessionRepo(), nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, true, nil, false)
 }
 
 // newSelectRoleUsecase 构造选角测试用例(hubAssigner=nil 走自签回退;roleRepo=nil 跳过落库)。
@@ -489,7 +512,7 @@ func newSelectRoleUsecase(t *testing.T, allowedRoleIDs []uint32, devAllowAnyRole
 	}
 	sf := snowflake.NewNode(1)
 	repo := &fakeAccountRepo{playerID: 42, passwordHash: mustBcrypt(t, "pw")}
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, allowedRoleIDs, devAllowAnyRole)
+	return NewLoginUsecase(repo, newFakeSessionRepo(), nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, allowedRoleIDs, devAllowAnyRole)
 }
 
 // TestSelectRole_EmptyWhitelistFailClosed 验证:白名单为空且未开 dev_allow_any_role 时,

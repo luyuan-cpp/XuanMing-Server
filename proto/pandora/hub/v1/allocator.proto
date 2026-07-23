@@ -60,6 +60,11 @@ message AssignHubRequest {
   uint64 placement_version = 5;
   string placement_operation_id = 6;
   uint64 source_match_id = 7;
+  // session_jti: 请求方登录会话 jti(R6 复审 P0-3,§9.23 会话 fencing)。
+  // hub_allocator 把它盖进所签 hub DSTicket 的 sjti claim;login VerifyDSTicket 在线
+  // 核销时对非空 sjti 复核会话权威当前一代——签发与响应写出之间被新登录轮换的旧票
+  // 在兑换点被拒。空 = 兼容窗(旧调用方/Transfer 重签),票据不带 sjti,不参与该判定。
+  string session_jti = 8;
 }
 
 message AssignHubResponse {

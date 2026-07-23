@@ -173,3 +173,10 @@ local_hub:
     PANDORA_PLAYER_LOCATOR_ADDR: "127.0.0.1:8444"
     # 本地 dev 的 Envoy DS 面 :8444 是明文 grpc-web(见 deploy/envoy/envoy.yaml pandora_ds_listener)。
     PANDORA_DS_ALLOCATOR_TLS: "0"
+
+# 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威
+# (pandora:sess,node.redis_client 指向的共享 Redis)当前一代,顶号后旧 JWT 立即失效。
+# dev 宽松档 require=false(gate 已装配时顶号/登出照常拒;仅漏配端点时跳过判定);
+# -Prod 产物由 gen_cluster_config.ps1 机械置 true(漏配端点拒启)。
+session_gate:
+  require: false

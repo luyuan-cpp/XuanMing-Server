@@ -71,6 +71,27 @@ CREATE TABLE IF NOT EXISTS `blocks` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
   COMMENT='Pandora 黑名单(TiDB)';
 
+-- 好友域并发守卫行(R5 复审 P1-2/3/4,2026-07-22)。
+-- TiDB 悲观事务无 gap/next-key 锁(§3.5),`COUNT(*) ... FOR UPDATE` 挡不住并发插入穿透
+-- 上限(好友数/黑名单数/申请收件箱),Accept/Block/AddFriend 之间也缺少 pair 级串行化
+-- (可并发形成「既好友又拉黑」「已拉黑+pending」)。guild 域用父行(guilds)/计数表锁;
+-- friend 域无天然父行,引入显式守卫行:限额校验与关系变更先锁守卫行(存在行的悲观
+-- 点锁在 MySQL/TiDB 语义一致),再在串行化临界区内做一致性 COUNT 与写入。
+-- 行数有界:player 守卫每玩家至多 1 行、pair 守卫每关系对至多 1 行(§9.24 登记豁免,
+-- 与 auction_owner_guards 同类;守卫行无业务语义,不参与展示,不清理)。
+CREATE TABLE IF NOT EXISTS `friend_player_guards` (
+    `player_id` BIGINT UNSIGNED NOT NULL COMMENT '守卫行归属玩家(锁粒度=单玩家限额域)',
+    PRIMARY KEY (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Pandora 好友域每玩家写守卫行(TiDB 无 gap 锁,上限校验串行化;§9.24 豁免)';
+
+CREATE TABLE IF NOT EXISTS `friend_pair_guards` (
+    `lo_id` BIGINT UNSIGNED NOT NULL COMMENT '关系对较小 player_id',
+    `hi_id` BIGINT UNSIGNED NOT NULL COMMENT '关系对较大 player_id',
+    PRIMARY KEY (`lo_id`, `hi_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Pandora 好友域关系对写守卫行(Accept/Block/AddFriend 同对串行化;§9.24 豁免)';
+
 -- chat 私聊历史。主键是显式雪花 message_id,同 friend_requests 处理(NONCLUSTERED + 分片)。
 -- 与好友图同库 pandora_social,迁 TiDB 时一并迁,避免拆库。
 CREATE TABLE IF NOT EXISTS `chat_private_messages` (

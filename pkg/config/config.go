@@ -69,6 +69,21 @@ type Base struct {
 	// (fail-closed);热更经 ConfigTableAdminService.ReloadConfigTable 重读同一目录,
 	// 失败保留旧表。dir 为空 = 不启用,行为与未接配置表前完全一致。
 	ConfigTable ConfigTableConf `yaml:"config_table,omitempty" json:"config_table,omitempty"`
+
+	// SessionGate 客户端面会话现行性门(R5 复审 P0-1,INC-20260722-004):
+	// 所有经 Envoy :8443 jwt_authn 的玩家 RPC 必须校验 payload jti == login 会话权威
+	// (pandora:sess)当前一代,顶号后旧 JWT 立即失去全部按 player_id 定向能力。
+	// 权威端点复用 node.redis_client;require 由 prod 生成器机械置 true。
+	// 各服务 main 用 sessiongate.MustBuild + pmw.SessionCurrent 装配。
+	SessionGate SessionGateConf `yaml:"session_gate,omitempty" json:"session_gate,omitempty"`
+}
+
+// SessionGateConf 会话现行性门参数(pkg/sessiongate + pkg/middleware.SessionCurrent)。
+type SessionGateConf struct {
+	// Require true = 强制档(prod):权威端点漏配拒启;gate 未装配时携带会话证据的请求
+	// 一律 fail-closed 拒绝。false = dev 宽松档(无 Redis 时直连联调可跳过现行性判定;
+	// 但 gate 已装配时无论档位,权威查询失败/顶号/登出都照常拒绝)。
+	Require bool `yaml:"require,omitempty" json:"require,omitempty"`
 }
 
 // ConfigTableConf 配置表加载参数。

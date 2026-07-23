@@ -46,6 +46,22 @@ function Read-Manifest([string]$dir) {
     return Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
+# 严格非负整数校验(R5 复审 P1-9):ConvertFrom-Json 把 JSON 整数解析成 [long]、小数解析
+# 成 [double];PowerShell 的 [uint64] 强转会把 1.5 四舍五入成 2、"2"(字符串)也能转过。
+# Go 运行时 json.Unmarshal 到 uint64 对 1.5 / 2.0 / "2" 一律拒载 —— 发布器接受运行时必拒
+# 的 manifest 就是"发布成功、重启拒载"。此处按运行时同等严格度把关:只认整数字面量。
+function Assert-UInt64Field($value, [string]$field) {
+    if ($value -isnot [long] -and $value -isnot [int] -and $value -isnot [int64] -and $value -isnot [uint64]) {
+        Write-Host "[ERR] manifest $field='$value'(类型 $($null -ne $value ? $value.GetType().Name : 'null'))非法:必须是 JSON 非负整数字面量(不得带小数/引号),Go 运行时会拒载该形态。" -ForegroundColor Red
+        exit 1
+    }
+    if ([int64]$value -lt 0) {
+        Write-Host "[ERR] manifest $field=$value 非法:必须 >= 0。" -ForegroundColor Red
+        exit 1
+    }
+    return [uint64]$value
+}
+
 # 比较两份 manifest 表清单的**运行语义字段**(name/file/checksum/proto/rows),返回差异
 # 描述列表(空 = 语义一致)。R4 复审 P1-8:同版本门禁只比表文件 hash 时,同字节文件、
 # 不同 proto/rows 的 manifest 也能冒充同批次——proto 决定服务端解析容器,rows 参与
@@ -54,16 +70,18 @@ function Compare-ManifestTables($aTables, $bTables) {
     $diff = @()
     if ($null -eq $aTables) { $aTables = @() }
     if ($null -eq $bTables) { $bTables = @() }
+    # 语义字段一律**大小写敏感**比对(R5 复审 P1-9):PowerShell -ne 默认大小写不敏感,
+    # 大写 checksum/proto 名会被当成相同;Go 运行时是精确比较,发布器必须同等严格。
     $byName = @{}
     foreach ($t in $aTables) { $byName[[string]$t.name] = $t }
     foreach ($t in $bTables) {
         $name = [string]$t.name
         if (-not $byName.ContainsKey($name)) { $diff += "$name(对侧缺失)"; continue }
         $p = $byName[$name]
-        if ([string]$p.file -ne [string]$t.file) { $diff += "$name(file)" }
-        elseif ([string]$p.checksum -ne [string]$t.checksum) { $diff += "$name(checksum)" }
-        elseif ([string]$p.proto -ne [string]$t.proto) { $diff += "$name(proto)" }
-        elseif ([uint64]$p.rows -ne [uint64]$t.rows) { $diff += "$name(rows)" }
+        if ([string]$p.file -cne [string]$t.file) { $diff += "$name(file)" }
+        elseif ([string]$p.checksum -cne [string]$t.checksum) { $diff += "$name(checksum)" }
+        elseif ([string]$p.proto -cne [string]$t.proto) { $diff += "$name(proto)" }
+        elseif ([string]$p.rows -cne [string]$t.rows) { $diff += "$name(rows)" }
         $byName.Remove($name)
     }
     foreach ($name in $byName.Keys) { $diff += "$name(本侧独有)" }
@@ -84,7 +102,7 @@ if ($ReloadAddr -ne "") {
 # 产物可能带着坏值,发布链必须自己把关——不可追溯批次不得进入 active)。
 $distManifest = Read-Manifest $DistDir
 if ($null -eq $distManifest) { Write-Host "[ERR] $DistDir 缺少 manifest.json(先跑 go run ./tools/configtable-gen)" -ForegroundColor Red; exit 1 }
-$newVersion = [uint64]$distManifest.version
+$newVersion = Assert-UInt64Field $distManifest.version 'version'
 $srcRev = ([string]$distManifest.source_rev).Trim()
 if ($srcRev -eq "" -or $srcRev -ieq "unknown") {
     Write-Host "[ERR] dist manifest source_rev='$srcRev' 不可追溯:用真实 -source-rev(如 svn-r123)重跑 configtable-gen 后再发布(同内容重跑会原地纠正 manifest,版本不变)。" -ForegroundColor Red
@@ -97,10 +115,27 @@ New-Item -ItemType Directory -Force $ctRoot | Out-Null
 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
 Copy-Item -Recurse $DistDir $staging
 
-# 3. staging 结构 + 逐表 sha256 校验(审计 P1:只验 checksum 不验结构,
-# version=42/tables=[] 的非法 manifest 也能落 active,服务重启才 fail-fast)。
+# 2.1 快照边界校验(R5 复审 P1-10):generator 是「逐表写入 → 最后换 manifest」,与本脚本
+# 无共享锁;第 1 步读 manifest 与第 2 步递归复制之间 generator 可能正在重写 dist。
+# 复制完成后把 staging manifest 与第 1 步读到的快照比对(version/source_rev/表语义),
+# 不一致 = 撞上并发生成,发布决策($newVersion 日志、版本单调判断、reload expect_version)
+# 已失去一致基准,fail-fast 拒绝,等 generator 结束后重跑。撕裂拷贝(manifest 与部分表
+# 文件来自不同批次)则由下方第 3 步逐表 sha256 拦截。
 $stagingManifest = Read-Manifest $staging
 if ($null -eq $stagingManifest) { Write-Host "[ERR] staging 缺 manifest.json" -ForegroundColor Red; exit 1 }
+$stagingVersion = Assert-UInt64Field $stagingManifest.version 'version(staging)'
+$stagingSrcRev = ([string]$stagingManifest.source_rev).Trim()
+$snapshotDiff = @(Compare-ManifestTables $distManifest.tables $stagingManifest.tables)
+if ($stagingVersion -ne $newVersion -or $stagingSrcRev -cne $srcRev -or $snapshotDiff.Count -gt 0) {
+    Write-Host "[ERR] dist 在读取与复制之间被并发改写(version $newVersion→$stagingVersion, source_rev '$srcRev'→'$stagingSrcRev', 表差异: $($snapshotDiff -join ', ')):configtable-gen 可能正在运行。等生成结束后重跑发布;同一 dist 目录不要与生成器并发使用。" -ForegroundColor Red
+    Remove-Item -Recurse -Force $staging
+    exit 1
+}
+
+# 3. staging 结构 + 逐表 sha256 校验(审计 P1:只验 checksum 不验结构,
+# version=42/tables=[] 的非法 manifest 也能落 active,服务重启才 fail-fast)。
+# 校验一律大小写敏感(R5 复审 P1-9):-ne/-notmatch 默认大小写不敏感,大写 checksum /
+# 大写表名会被放行,而 Go 运行时精确比较 + 只认小写表名,重启即拒载。
 if ($newVersion -le 0) { Write-Host "[ERR] manifest version=$newVersion 非法(必须 > 0)" -ForegroundColor Red; exit 1 }
 if ($null -eq $stagingManifest.tables -or $stagingManifest.tables.Count -eq 0) {
     Write-Host "[ERR] manifest 表清单为空:空批次不可发布" -ForegroundColor Red
@@ -109,8 +144,8 @@ if ($null -eq $stagingManifest.tables -or $stagingManifest.tables.Count -eq 0) {
 $seenNames = @{}
 foreach ($t in $stagingManifest.tables) {
     $name = [string]$t.name
-    if ($name -notmatch '^[a-z0-9_]+$') {
-        Write-Host "[ERR] 非法表名 '$name'(只允许 [a-z0-9_])" -ForegroundColor Red
+    if ($name -cnotmatch '^[a-z0-9_]+$') {
+        Write-Host "[ERR] 非法表名 '$name'(只允许小写 [a-z0-9_])" -ForegroundColor Red
         exit 1
     }
     if ($seenNames.ContainsKey($name)) {
@@ -118,15 +153,16 @@ foreach ($t in $stagingManifest.tables) {
         exit 1
     }
     $seenNames[$name] = $true
-    if ([string]$t.file -ne "$name.json") {
+    if ([string]$t.file -cne "$name.json") {
         Write-Host "[ERR] 表 '$name' 的 file='$($t.file)' 非法(必须为 <name>.json,防路径逃逸)" -ForegroundColor Red
         exit 1
     }
+    $null = Assert-UInt64Field $t.rows "tables[$name].rows"
     $f = Join-Path $staging $t.file
     if (-not (Test-Path $f)) { Write-Host "[ERR] staging 缺文件 $($t.file)" -ForegroundColor Red; exit 1 }
     $got = "sha256:" + (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
-    if ($got -ne $t.checksum) {
-        Write-Host "[ERR] $($t.file) checksum 不匹配`n  声明 $($t.checksum)`n  实际 $got" -ForegroundColor Red
+    if ($got -cne [string]$t.checksum) {
+        Write-Host "[ERR] $($t.file) checksum 不匹配(大小写敏感,Go 运行时同标准)`n  声明 $($t.checksum)`n  实际 $got" -ForegroundColor Red
         exit 1
     }
 }
@@ -147,7 +183,7 @@ if ((Test-Path $active) -and ($null -eq $activeManifest)) {
     exit 1
 }
 if ($null -ne $activeManifest) {
-    $activeVersion = [uint64]$activeManifest.version
+    $activeVersion = Assert-UInt64Field $activeManifest.version 'version(active)'
     if ($newVersion -eq $activeVersion) {
         # 同版本必须先证明**同批次**(审计 P1:版本相同但表 checksum 不同 = 生成纪律
         # 破坏或 active 被篡改,此前会静默"成功"而 active 内容与 dist 不一致)。
@@ -160,7 +196,7 @@ if ($null -ne $activeManifest) {
             $af = Join-Path $active ([string]$t.file)
             if (-not (Test-Path $af)) { $mismatch += $name; continue }
             $got = "sha256:" + (Get-FileHash $af -Algorithm SHA256).Hash.ToLower()
-            if ($got -ne [string]$t.checksum) { $mismatch += $name }
+            if ($got -cne [string]$t.checksum) { $mismatch += $name }
         }
         # manifest 运行语义比对(R4 复审 P1-8):文件字节相同但 active manifest 声明的
         # proto/rows 与 dist 不同,同样不是同批次(no-op 路径会保留 active 旧 manifest,
@@ -177,7 +213,7 @@ if ($null -ne $activeManifest) {
         # 同版本同批次但 source_rev 不同(生成器同内容原地纠正过溯源):把纠正后的
         # manifest 同步进 active(表内容 checksum 相同,只换 manifest)。
         $activeSrcRev = ([string]$activeManifest.source_rev).Trim()
-        if ($activeSrcRev -ne $srcRev) {
+        if ($activeSrcRev -cne $srcRev) {
             Copy-Item (Join-Path $staging "manifest.json") (Join-Path $active "manifest.json") -Force
             Write-Host "active manifest source_rev 已纠正:'$activeSrcRev' → '$srcRev'(版本与表内容不变)" -ForegroundColor Yellow
         }
@@ -225,7 +261,7 @@ if ($null -ne $activeManifest) {
             $hf = Join-Path $slotDir ([string]$t.file)
             if (-not (Test-Path $hf)) { $mismatch += [string]$t.name; continue }
             $got = "sha256:" + (Get-FileHash $hf -Algorithm SHA256).Hash.ToLower()
-            if ($got -ne [string]$t.checksum) { $mismatch += [string]$t.name }
+            if ($got -cne [string]$t.checksum) { $mismatch += [string]$t.name }
         }
         # manifest 运行语义比对(R4 复审 P1-8):槽位 manifest 与 dist 的 proto/rows 声明
         # 必须一致,同字节文件不同语义同样拒绝借"active 缺失"窗口装载。
@@ -295,8 +331,33 @@ function Restore-PreviousActive([string]$Reason, [uint64]$ServiceActiveVersion =
         }
     }
     if ($null -ne $restoreSlot -and (Test-Path $restoreSlot)) {
-        Copy-Item -Recurse $restoreSlot $active
-        Write-Host "[ERR] $Reason;磁盘 active 已回滚到旧批次($(Split-Path -Leaf $restoreSlot)),坏批次留证 → $failedSlot" -ForegroundColor Red
+        # 回滚安装(R5 复审 P2-9):不直接递归复制进 active——槽位可能已损坏(manifest 缺失/
+        # 表被篡改),复制中崩溃也会留下残缺 active(下次发布按"残缺 active"fail-fast,
+        # 服务重启拒载)。改为:复制到临时目录 → 按槽位 manifest 逐表 sha256 复验 → 原子
+        # 改名补位;复验失败不安装,active 保持缺失并明示人工恢复路径。
+        $restoreStaging = Join-Path $ctRoot "restore-staging"
+        if (Test-Path $restoreStaging) { Remove-Item -Recurse -Force $restoreStaging }
+        Copy-Item -Recurse $restoreSlot $restoreStaging
+        $slotName = Split-Path -Leaf $restoreSlot
+        $restoreManifest = Read-Manifest $restoreStaging
+        $badTables = @()
+        if ($null -eq $restoreManifest -or $null -eq $restoreManifest.tables -or $restoreManifest.tables.Count -eq 0) {
+            $badTables += 'manifest(缺失/空表清单)'
+        } else {
+            foreach ($t in $restoreManifest.tables) {
+                $rf = Join-Path $restoreStaging ([string]$t.file)
+                if (-not (Test-Path $rf)) { $badTables += [string]$t.name; continue }
+                $got = "sha256:" + (Get-FileHash $rf -Algorithm SHA256).Hash.ToLower()
+                if ($got -cne [string]$t.checksum) { $badTables += [string]$t.name }
+            }
+        }
+        if ($badTables.Count -gt 0) {
+            Remove-Item -Recurse -Force $restoreStaging
+            Write-Host "[ERR] $Reason;回滚槽位 $slotName 复验失败(差异: $($badTables -join ', ')),拒绝把损坏批次装成 active。active 保持缺失,坏批次留证 → $failedSlot;请人工用完好槽位恢复或重新生成发布。" -ForegroundColor Red
+            return
+        }
+        Move-Item $restoreStaging $active
+        Write-Host "[ERR] $Reason;磁盘 active 已回滚到旧批次($slotName,已逐表复验),坏批次留证 → $failedSlot" -ForegroundColor Red
     } else {
         Write-Host "[ERR] $Reason;history 无可用旧批次,active 已移除,坏批次留证 → $failedSlot" -ForegroundColor Red
     }
@@ -338,7 +399,7 @@ if ($ReloadAddr -ne "") {
     # proto3 JSON:code=OK(0)/reloaded=false 等零值字段会被省略。code 缺省 = OK。
     $codeText = if ($null -ne $resp.code) { [string]$resp.code } else { 'OK' }
     $gotVersion = if ($null -ne $resp.activeVersion) { [uint64]$resp.activeVersion } else { [uint64]0 }
-    if ($codeText -ne 'OK' -or $gotVersion -ne $newVersion) {
+    if ($codeText -cne 'OK' -or $gotVersion -ne $newVersion) {
         # 回滚分类(审计 P1:所有非 OK 一律回滚会把磁盘错误回退——服务端已领先候选
         # 版本时回滚是真实降级;鉴权/协议错误也不是"坏批次"):
         #   a) 服务端已领先(gotVersion > newVersion):别的发布已上更高版本,磁盘不动,
@@ -348,7 +409,7 @@ if ($ReloadAddr -ne "") {
         #   c) 其它(gotVersion=0 = 鉴权/协议/未知形态):磁盘不动,人工排查后重试 reload。
         if ($gotVersion -gt $newVersion) {
             Write-Host "[ERR] 服务端已在更高版本 v$gotVersion(候选 v$newVersion 过旧):磁盘不回滚;请基于最新源表生成更高版本重新发布。" -ForegroundColor Red
-        } elseif ($codeText -ne 'OK' -and $gotVersion -gt 0 -and $gotVersion -lt $newVersion) {
+        } elseif ($codeText -cne 'OK' -and $gotVersion -gt 0 -and $gotVersion -lt $newVersion) {
             Restore-PreviousActive -Reason "服务端拒绝批次 v$newVersion(code=$codeText activeVersion=$gotVersion detail=$($resp.detail);sameVersion=$sameVersion);服务端内存保留旧表" -ServiceActiveVersion $gotVersion
         } else {
             Write-Host "[ERR] reload 未确认(code=$codeText activeVersion=$gotVersion detail=$($resp.detail)):形态不像'坏批次被拒'(可能鉴权/协议问题),磁盘保持 v$newVersion 不回滚;排查后手动重试:" -ForegroundColor Red

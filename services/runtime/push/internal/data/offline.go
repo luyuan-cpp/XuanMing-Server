@@ -48,6 +48,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	pushv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/push/v1"
 )
 
@@ -234,13 +235,14 @@ func (r *RedisOfflineCacheRepo) AssignAndBuffer(ctx context.Context, playerID ui
 // 它们当"新消息"整批補推,契约声明的 5min 窗口就形同虚设。窗口外帧一律不投递,
 // 交付契约收敛为确定性的「(now-ttl, now] 内不漏」。
 func (r *RedisOfflineCacheRepo) Range(ctx context.Context, playerID uint64, afterCursor int64) ([]OfflineFrame, error) {
+	key := offlineKey(playerID)
 	windowFloor := time.Now().UnixMilli() - r.ttl.Milliseconds()
 	min := strconv.FormatInt(windowFloor, 10) // 与写侧修剪线一致:score ≥ now-ttl 保留
 	if afterCursor >= windowFloor {
 		min = "(" + strconv.FormatInt(afterCursor, 10)
 	}
 
-	zs, err := r.rdb.ZRangeByScoreWithScores(ctx, offlineKey(playerID), &redis.ZRangeBy{
+	zs, err := r.rdb.ZRangeByScoreWithScores(ctx, key, &redis.ZRangeBy{
 		Min:   min,
 		Max:   "+inf",
 		Count: r.maxFrames + 1, // +1:结果里可能混着哨兵 member
@@ -253,6 +255,13 @@ func (r *RedisOfflineCacheRepo) Range(ctx context.Context, playerID uint64, afte
 	}
 
 	out := make([]OfflineFrame, 0, len(zs))
+	// 坏 member 处置(R5 复审 P2-1):旧实现静默 continue,后续好帧推进游标越过坏帧,
+	// 既无日志也不触发 resync = 静默丢帧。现在:记日志 + 把坏帧折进 fl 修剪哨兵
+	// (「已分配但不可交付」与被修剪帧同语义),下一轮 drainBuffer 拉空终检
+	// LostSince(baseline) 即检出并向客户端发 resync;坏 member 同时物理删除(自愈,
+	// 防每轮重复扫到)。删除+记哨兵走单 key Lua,跨 Pod 并发不回退 fl。
+	var corruptTop int64
+	var corruptMembers []interface{}
 	for _, z := range zs {
 		raw, ok := z.Member.(string)
 		if !ok || raw == watermarkMember || raw == trimFloorMember {
@@ -260,19 +269,53 @@ func (r *RedisOfflineCacheRepo) Range(ctx context.Context, playerID uint64, afte
 		}
 		payload := decodeMember([]byte(raw))
 		if payload == nil {
+			// 格式不识别(dev 旧格式残留/外部脏写):按坏帧记账。
+			if s := int64(z.Score); s > corruptTop {
+				corruptTop = s
+			}
+			corruptMembers = append(corruptMembers, raw)
 			continue
 		}
 		var frame pushv1.PushFrame
 		if err := proto.Unmarshal(payload, &frame); err != nil {
-			// 单帧坏不阻断其它(避免一条脏数据拖死整个补推)
+			// 单帧坏不阻断其它(避免一条脏数据拖死整个补推),但必须留痕并触发 resync。
+			if s := int64(z.Score); s > corruptTop {
+				corruptTop = s
+			}
+			corruptMembers = append(corruptMembers, raw)
 			continue
 		}
 		cursor := int64(z.Score)
 		frame.TsMs = cursor // 投递游标权威在 score,交付前统一重铸
 		out = append(out, OfflineFrame{Frame: &frame, ScoreMs: cursor})
 	}
+	if len(corruptMembers) > 0 {
+		plog.With(ctx).Errorw("msg", "push_offline_corrupt_members",
+			"player_id", playerID, "count", len(corruptMembers), "top_cursor", corruptTop)
+		// best-effort 自愈:失败只记日志(下一轮还会扫到,不影响本轮好帧交付)。
+		if _, cerr := markCorruptScript.Run(ctx, r.rdb, []string{key},
+			append([]interface{}{corruptTop}, corruptMembers...)...).Result(); cerr != nil {
+			plog.With(ctx).Warnw("msg", "push_offline_corrupt_cleanup_failed",
+				"player_id", playerID, "err", cerr)
+		}
+	}
 	return out, nil
 }
+
+// markCorruptScript:单 key 原子「删坏 member + fl 哨兵单调抬升到坏帧最高游标」
+// (R5 复审 P2-1)。ARGV[1]=坏帧最高游标,ARGV[2..]=坏 member 原文。
+// fl 只增不减:并发 Pod 各自写入时取 max,不会把更高的丢失上界回退。
+var markCorruptScript = redis.NewScript(`
+local top = tonumber(ARGV[1])
+for i = 2, #ARGV do
+  redis.call('ZREM', KEYS[1], ARGV[i])
+end
+local fl = 0
+local flScore = redis.call('ZSCORE', KEYS[1], 'fl')
+if flScore then fl = tonumber(flScore) end
+if top > fl then redis.call('ZADD', KEYS[1], top, 'fl') end
+return top
+`)
 
 // LostSince 实现 OfflineCacheRepo.LostSince:返回从 afterCursor 续传时已确定不可
 // 交付的最高游标(0 = 无丢失)。两个精确来源(均无误报):

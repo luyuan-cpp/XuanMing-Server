@@ -30,6 +30,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	"github.com/luyuancpp/pandora/pkg/redisx"
+	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	"github.com/luyuancpp/pandora/services/matchmaking/team/internal/biz"
 	"github.com/luyuancpp/pandora/services/matchmaking/team/internal/conf"
@@ -142,7 +143,13 @@ func main() {
 	svc := service.NewTeamService(uc, sf)
 
 	// 7. gRPC + HTTP
-	grpcSrv := server.NewGRPCServer(&cfg, svc)
+	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):客户端面请求 jti 必须是 login
+	// 会话权威(pandora:sess,node.redis_client 指向的共享 Redis)当前一代;
+	// prod 生成器机械置 session_gate.require=true(漏配端点拒启)。
+	sessGate, sgClose := sessiongate.MustBuild(cfg.Node.RedisClient, cfg.SessionGate.Require)
+	defer sgClose()
+
+	grpcSrv := server.NewGRPCServer(&cfg, svc, sessGate)
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	helper.Infow(

@@ -305,6 +305,11 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 			return nil, reconnectErr
 		}
 		if res != nil {
+			// R5 复审 P0-5:battle 重连路径同样先做交付终检(见 fenceLoginDelivery 注释),
+			// 并发新登录轮换 jti 后,旧流程不得把 battle 直连凭据交给旧设备。
+			if ferr := u.fenceLoginDelivery(ctx, playerID, sessJTI); ferr != nil {
+				return nil, ferr
+			}
 			return res, nil
 		}
 		hubFenceMatchID = terminalFence
@@ -349,6 +354,16 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		if err := u.notifier.NotifyLoginPending(ctx, playerID, deviceID); err != nil {
 			h.Warnw("msg", "locator_notify_failed", "err", err, "player_id", playerID)
 		}
+	}
+
+	// R5 复审 P0-5:副作用交付终检——本流程写入的 sessJTI 必须仍是当前一代才允许把
+	// session token / hub 票据交给调用方。sessions.Set 之后的分配、locator、签票各步
+	// 都不复核现行性,并发新登录 B 在其间再次轮换 jti 时,旧流程 A 若继续交付,旧设备
+	// 将取得"看似有效"的完整登录态。复核失败 → 不返回任何凭据(票据已签但从未离开
+	// 服务端 = 未取得);已写的 LOGIN_PENDING 等 locator 投影由 B 自己的写覆盖
+	// (locator 是 presence 投影,非权威,§9.22)。
+	if ferr := u.fenceLoginDelivery(ctx, playerID, sessJTI); ferr != nil {
+		return nil, ferr
 	}
 
 	// 确定性 region/cell 路由已在上方一次算好(regionID/cellID),这里直接复用。
@@ -788,11 +803,13 @@ func (u *LoginUsecase) ensureAccount(ctx context.Context, account, passwordHash 
 // Battle match_id;两条路径都盖进 hub 票据 source_match_id claim,Hub DS 准入后用它写
 // SetLocation(HUB, fence) 通过 locator 的 BATTLE→HUB guard,消除终局 TTL 残留导致的
 // 「4007 玩家正在战斗中」。0 = 普通登录/非回流。
-func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID, cellID, roleID uint32, sourceMatchID uint64) (addr, ticket string, expMs int64, err error) {
+// sessJTI(R6 复审 P0-3):请求方登录会话 jti;AssignHub 路径透传给 allocator 签进
+// hub 票据 sjti claim(VerifyDSTicket 在线核销时复核现行性)。空 = dev 无证据(兼容窗)。
+func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID, cellID, roleID uint32, sourceMatchID uint64, sessJTI string) (addr, ticket string, expMs int64, err error) {
 	h := plog.With(ctx)
 
 	if u.hubAssigner != nil {
-		assign, aerr := u.hubAssigner.AssignHub(ctx, playerID, u.hubRegion, 0, roleID, sourceMatchID)
+		assign, aerr := u.hubAssigner.AssignHub(ctx, playerID, u.hubRegion, 0, roleID, sourceMatchID, sessJTI)
 		if aerr == nil && assign == nil {
 			aerr = errcode.New(errcode.ErrUnavailable, "hub allocator returned an empty assignment")
 		}
@@ -1138,6 +1155,34 @@ func (u *LoginUsecase) Logout(ctx context.Context, sessionToken string) error {
 		}
 	}
 	h.Infow("msg", "logout_ok", "player_id", playerID)
+	return nil
+}
+
+// fenceLoginDelivery 登录副作用交付终检(R5 复审 P0-5,INC-20260722-004):
+// Login 在 sessions.Set 写入 sessJTI 后仍有分配/locator/签票等多步副作用,期间并发
+// 新登录可再次轮换 jti;交付凭据前必须复核本流程写入的 jti 仍是当前一代。
+//
+//   - sessions 未配(dev 裸跑)→ 跳过(与其余现行性门同语义);
+//   - 权威不可达 → ErrUnavailable(fail-closed 扣留凭据,客户端重试);
+//   - 已被轮换/会话消失 → ErrSessionSuperseded(旧设备转交互登录,不得自动反顶)。
+//
+// 诚实边界:这是"检查后交付",非跨存储原子事务——复核通过与响应写出之间仍有
+// 进程内窗口,但该窗口内旧流程只是交付了"已再次被轮换的 token",后续任何按
+// §9.23/P0-1 过门的请求都会被拒,不构成持续能力。
+func (u *LoginUsecase) fenceLoginDelivery(ctx context.Context, playerID uint64, sessJTI string) error {
+	if u.sessions == nil {
+		return nil
+	}
+	cur, found, err := u.sessions.GetJTI(ctx, playerID)
+	if err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"session authority unavailable; login credentials withheld")
+	}
+	if !found || cur != sessJTI {
+		plog.With(ctx).Warnw("msg", "login_delivery_fenced_superseded", "player_id", playerID)
+		return errcode.New(errcode.ErrSessionSuperseded,
+			"session superseded during login; credentials withheld")
+	}
 	return nil
 }
 

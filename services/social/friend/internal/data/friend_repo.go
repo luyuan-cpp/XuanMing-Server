@@ -75,21 +75,24 @@ type FriendRepo interface {
 	IsBlocked(ctx context.Context, a, b uint64) (bool, error)
 	// CountFriends 统计玩家当前好友数(AddFriend 提前失败用,非权威)。
 	CountFriends(ctx context.Context, playerID uint64) (int, error)
-	// CreateRequest 创建 / 复用好友请求。
+	// CreateRequest 创建 / 复用好友请求(R5 复审 P1-3:事务内先取 pair 守卫锁并权威复核
+	// 拉黑/已好友——biz 预检只是 fail-fast;守卫机制见实现处注释)。
 	//   - 无历史 → 用 newRequestID 插入 pending,返回 (newRequestID, false)
 	//   - 已有 pending → 复用,返回 (已存在 request_id, true)
-	//   - 已有 rejected/expired → 重置为 pending,返回 (已存在 request_id, false)
-	// maxIncoming>0 时:在事务内校验 target 的 pending 收件箱数量,新增一条 pending 会超限则
-	// 回 ErrFriendRequestLimit(不变量 §9.18,防好友申请收件箱被刷爆)。
+	//   - 已有 rejected/expired → 换新 ID 重置为 pending 并刷新 created_at,返回 (newRequestID, false)
+	// maxIncoming>0 时:在 target 守卫锁内校验 pending 收件箱数量,新增一条 pending 会超限则
+	// 回 ErrFriendRequestLimit(不变量 §9.18;TiDB 无 gap 锁,守卫行替代 COUNT..FOR UPDATE)。
 	CreateRequest(ctx context.Context, newRequestID, requesterID, targetID uint64, maxIncoming int) (requestID uint64, reused bool, err error)
 	// GetRequest 读好友请求;not found → (nil, false, nil)。
 	GetRequest(ctx context.Context, requestID uint64) (*FriendRequestRow, bool, error)
-	// AcceptRequest 在一个事务里完成「接受好友请求」的全部权威校验与写入:
-	//   1. 锁请求行(FOR UPDATE),确认仍是 pending;
+	// AcceptRequest 在一个事务里完成「接受好友请求」的全部权威校验与写入
+	// (R5 复审 P1-2/4:锁序 = pair 守卫 → player 守卫升序 → 请求行,与同对 Block/
+	// AddFriend 全序;上限 COUNT 在守卫锁内成为权威,TiDB 无 gap 锁也不可穿透):
+	//   1. pair/player 守卫锁 → 锁请求行复核仍是 pending;
 	//   2. R5 校验:只有请求的 target 本人(accepterID)能接受;
 	//   3. block 校验:双方任一方向已拉黑则拒绝;
 	//   4. maxFriends > 0 时对 requester / target 双方做好友上限校验;
-	//   5. 标记 accepted + 写双向好友边(幂等 INSERT IGNORE)。
+	//   5. 标记 accepted + 写双向好友边(幂等 INSERT IGNORE)+ 反向 pending 收敛 accepted(P2-8)。
 	// 返回 accepted 表示本次调用是否真正把 pending→accepted 并建边:
 	//   - accepted=true:本次完成,biz 应推送 REQUEST_ACCEPTED;
 	//   - accepted=false, err=nil:请求已被并发处理(Block 改 rejected / 另一次 accept),
@@ -106,8 +109,10 @@ type FriendRepo interface {
 	ListFriends(ctx context.Context, playerID uint64) ([]FriendRow, error)
 	// RemoveFriend 删双向好友边(幂等:不存在也不报错)。不动黑名单 / 请求。
 	RemoveFriend(ctx context.Context, playerID, targetID uint64) error
-	// Block 在一个事务里:写黑名单 + 删双向好友边 + 取消两人之间的 pending 请求。
-	// maxBlocks>0 时:事务内校验 playerID 当前黑名单数量,新增会超限则回 ErrFriendBlockLimit(不变量 §9.18)。
+	// Block 在一个事务里:取 pair 守卫锁(与 Accept/AddFriend 同对串行化,R5 复审 P1-4)
+	// → 写黑名单 + 删双向好友边 + 取消两人之间的 pending 请求。
+	// maxBlocks>0 时:playerID 守卫锁内校验黑名单数量,新增会超限则回 ErrFriendBlockLimit
+	// (不变量 §9.18;TiDB 无 gap 锁,守卫行替代 COUNT..FOR UPDATE)。
 	Block(ctx context.Context, playerID, targetID uint64, maxBlocks int) error
 	// Unblock 从黑名单移除(幂等:不存在也不报错)。不自动恢复好友关系。
 	Unblock(ctx context.Context, playerID, targetID uint64) error
@@ -178,6 +183,36 @@ func (r *MySQLFriendRepo) CreateRequest(ctx context.Context, newRequestID, reque
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// pair 守卫(R5 复审 P1-3):与同对的 Block/Accept 串行化。biz 层的拉黑/已好友预检
+	// 在事务外只是 fail-fast,并发 Block/Accept 可在预检后落库;守卫锁内的复核才是权威,
+	// 消除「已拉黑+pending」「已好友+pending」交错。
+	if gerr := acquirePairGuard(ctx, tx, requesterID, targetID); gerr != nil {
+		return 0, false, gerr
+	}
+	var probeX int
+	berr := tx.QueryRowContext(ctx,
+		`SELECT 1 FROM blocks
+WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) LIMIT 1`,
+		requesterID, targetID, targetID, requesterID).Scan(&probeX)
+	if berr == nil {
+		return 0, false, errcode.New(errcode.ErrFriendBlocked, "blocked between %d and %d", requesterID, targetID)
+	}
+	if !errors.Is(berr, sql.ErrNoRows) {
+		return 0, false, errcode.New(errcode.ErrInternal, "check block %d-%d: %v", requesterID, targetID, berr)
+	}
+	ferr := tx.QueryRowContext(ctx,
+		`SELECT 1 FROM friendships WHERE player_id = ? AND friend_id = ? LIMIT 1`,
+		requesterID, targetID).Scan(&probeX)
+	if ferr == nil {
+		return 0, false, errcode.New(errcode.ErrFriendAlreadyAdded, "already friends: %d-%d", requesterID, targetID)
+	}
+	if !errors.Is(ferr, sql.ErrNoRows) {
+		return 0, false, errcode.New(errcode.ErrInternal, "check friendship %d-%d: %v", requesterID, targetID, ferr)
+	}
+
+	// 请求行锁在 pair 守卫之后、player 守卫(checkIncomingLimit)之前:本事务持有的
+	// 行锁只属于本 pair,与只共享单个玩家的其它事务无共同行 → 与「player 守卫恒升序」
+	// 组合不构成环,锁序安全(详见守卫段注释)。
 	var existingID uint64
 	var status int32
 	err = tx.QueryRowContext(ctx,
@@ -220,8 +255,10 @@ VALUES (?, ?, ?, ?)`, newRequestID, requesterID, targetID, requestStatusPending)
 		if ierr := checkIncomingLimit(ctx, tx, targetID, maxIncoming); ierr != nil {
 			return 0, false, ierr
 		}
+		// created_at 一并刷新(R5 复审 P2-7):这是**新一次申请**(新 request_id/新事件),
+		// 列表按 created_at 展示与排序,沿用首次申请时间会把重新申请排到陈旧位置。
 		if _, uerr := tx.ExecContext(ctx,
-			`UPDATE friend_requests SET request_id = ?, status = ?, updated_at = NOW() WHERE request_id = ?`,
+			`UPDATE friend_requests SET request_id = ?, status = ?, created_at = NOW(), updated_at = NOW() WHERE request_id = ?`,
 			newRequestID, requestStatusPending, existingID); uerr != nil {
 			return 0, false, errcode.New(errcode.ErrInternal, "reset request %d: %v", existingID, uerr)
 		}
@@ -254,29 +291,63 @@ func (r *MySQLFriendRepo) AcceptRequest(ctx context.Context, requestID, accepter
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// 锁请求行,确认仍是 pending(防并发重复 accept / Block 在预检后改状态)
+	// 0. 预读请求行(不加锁)只为得到 pair 身份 —— 守卫锁必须先于业务行锁(锁序纪律),
+	//    而 pair 守卫的 key 需要 requester/target。行内容随后在守卫锁内重读复核。
 	var requesterID, targetID uint64
 	var status int32
 	err = tx.QueryRowContext(ctx,
 		`SELECT requester_id, target_id, status FROM friend_requests
-WHERE request_id = ? FOR UPDATE`, requestID).Scan(&requesterID, &targetID, &status)
+WHERE request_id = ?`, requestID).Scan(&requesterID, &targetID, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, errcode.New(errcode.ErrFriendNotFound, "request not found: %d", requestID)
 	}
 	if err != nil {
-		return false, errcode.New(errcode.ErrInternal, "lock request %d: %v", requestID, err)
+		return false, errcode.New(errcode.ErrInternal, "probe request %d: %v", requestID, err)
 	}
-	// R5 权威校验:只有请求的 target 本人能接受(放进事务,杜绝 biz 预检后的 TOCTOU)
 	if targetID != accepterID {
 		return false, errcode.New(errcode.ErrFriendNotFound, "request %d not for %d", requestID, accepterID)
 	}
-	// 并发下请求已被处理(Block 改 rejected / 另一次 accept 改 accepted)→ 本次未真正完成
-	// pending→accepted,返回 accepted=false,由 biz 决定不推送、不报"成功"。
+
+	// 1. pair 守卫(R5 复审 P1-4):与同对 Block/AddFriend 串行化。旧实现 Accept 只锁
+	//    请求行,Block 的「插黑名单+删好友边」可与 Accept 的「查无 block → 插好友边」
+	//    交错(Block 的删边跑在 Accept 插边之前、其 pending 更新在请求行锁上等待),
+	//    两笔都提交后形成「既好友又拉黑」。pair 守卫下两者全序,任一先行另一必见其果。
+	if gerr := acquirePairGuard(ctx, tx, requesterID, targetID); gerr != nil {
+		return false, gerr
+	}
+	// 2. player 守卫升序(R5 复审 P1-2):TiDB 无 gap 锁,原 COUNT ... FOR UPDATE 挡不住
+	//    并发 accept 对同一玩家的建边插入;守卫锁内的 COUNT 才是权威上限判定。
+	if maxFriends > 0 {
+		loID, hiID := requesterID, targetID
+		if hiID < loID {
+			loID, hiID = hiID, loID
+		}
+		for _, pid := range [...]uint64{loID, hiID} {
+			if gerr := acquirePlayerGuard(ctx, tx, pid); gerr != nil {
+				return false, gerr
+			}
+		}
+	}
+
+	// 3. 守卫锁内锁请求行并复核:预读与取锁之间行可能已被并发处理
+	//    (Block 置 rejected / 另一次 accept / 重新申请轮换 request_id → 查无此行)。
+	err = tx.QueryRowContext(ctx,
+		`SELECT requester_id, target_id, status FROM friend_requests
+WHERE request_id = ? FOR UPDATE`, requestID).Scan(&requesterID, &targetID, &status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil // request_id 已被重新申请轮换:本次未完成 pending→accepted
+	}
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "lock request %d: %v", requestID, err)
+	}
+	if targetID != accepterID {
+		return false, errcode.New(errcode.ErrFriendNotFound, "request %d not for %d", requestID, accepterID)
+	}
 	if status != requestStatusPending {
 		return false, nil
 	}
 
-	// block 权威校验(放进事务):请求发出后任一方可能拉黑,事务内 SELECT 防 TOCTOU
+	// 4. block 权威校验(pair 守卫串行化后,此判定与并发 Block 全序,无交错窗口)
 	var blockedX int
 	berr := tx.QueryRowContext(ctx,
 		`SELECT 1 FROM blocks
@@ -289,20 +360,12 @@ WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) L
 		return false, errcode.New(errcode.ErrInternal, "query block %d-%d: %v", accepterID, requesterID, berr)
 	}
 
-	// 好友上限原子校验:在 accept 事务内对双方分别统计已建立的好友边。
-	// 用锁定读(FOR UPDATE):InnoDB 对 player_id 索引区间加 next-key 锁,
-	// 阻塞其他并发 accept 对同一玩家的建边插入 → 消除「两个不同请求同时被接受,
-	// 都读到 cnt=max-1 都通过、实际超上限」的幻读竞态。
-	// 锁序按 player_id 升序,避免 A→B 与 B→A 两笔并发 accept 交叉加锁成环死锁。
+	// 5. 好友上限权威校验(player 守卫已锁,普通 COUNT 即串行化一致读)。
 	if maxFriends > 0 {
-		loID, hiID := requesterID, targetID
-		if hiID < loID {
-			loID, hiID = hiID, loID
-		}
-		for _, pid := range [...]uint64{loID, hiID} {
+		for _, pid := range [...]uint64{requesterID, targetID} {
 			var cnt int
 			if cerr := tx.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM friendships WHERE player_id = ? FOR UPDATE`, pid).Scan(&cnt); cerr != nil {
+				`SELECT COUNT(*) FROM friendships WHERE player_id = ?`, pid).Scan(&cnt); cerr != nil {
 				return false, errcode.New(errcode.ErrInternal, "count friends %d: %v", pid, cerr)
 			}
 			if cnt >= maxFriends {
@@ -325,6 +388,16 @@ WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) L
 	}
 	if _, ferr := tx.ExecContext(ctx, insFriend, targetID, requesterID); ferr != nil {
 		return false, errcode.New(errcode.ErrInternal, "insert friendship %d->%d: %v", targetID, requesterID, ferr)
+	}
+
+	// 6. 反向 pending 一并终结(R5 复审 P2-8):A→B 与 B→A 可各自 pending;本次接受已让
+	//    双方成为好友,反向申请的结果同样是"好友已建立",按 accepted 收敛(同一 pair
+	//    守卫内原子)。否则残留的反向 pending 被接受时会对已好友重复走建边流程。
+	if _, uerr := tx.ExecContext(ctx,
+		`UPDATE friend_requests SET status = ?, updated_at = NOW()
+WHERE requester_id = ? AND target_id = ? AND status = ?`,
+		requestStatusAccepted, targetID, requesterID, requestStatusPending); uerr != nil {
+		return false, errcode.New(errcode.ErrInternal, "resolve reverse pending %d->%d: %v", targetID, requesterID, uerr)
 	}
 
 	if cerr := tx.Commit(); cerr != nil {
@@ -425,6 +498,12 @@ func (r *MySQLFriendRepo) Block(ctx context.Context, playerID, targetID uint64, 
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// pair 守卫(R5 复审 P1-4):与同对 Accept/AddFriend 串行化 —— 消除「Accept 查无
+	// block 后、本事务插 block/删空边、Accept 再插边」交错出的「既好友又拉黑」。
+	if gerr := acquirePairGuard(ctx, tx, playerID, targetID); gerr != nil {
+		return gerr
+	}
+
 	// 0. 黑名单上限校验(不变量 §9.18):先确认未重复拉黑(幂等命中不占新名额)再校量。
 	if maxBlocks > 0 {
 		var existsX int
@@ -434,10 +513,14 @@ func (r *MySQLFriendRepo) Block(ctx context.Context, playerID, targetID uint64, 
 			return errcode.New(errcode.ErrInternal, "check block %d->%d: %v", playerID, targetID, eerr)
 		}
 		if errors.Is(eerr, sql.ErrNoRows) {
-			// 新拉黑 → 事务内锁定读本玩家黑名单行数,防并发超限。
+			// 新拉黑 → 先锁本玩家守卫行(R5 复审 P1-2:TiDB 无 gap 锁,原 COUNT ...
+			// FOR UPDATE 挡不住并发插入),守卫锁内 COUNT 即权威,防并发超限。
+			if gerr := acquirePlayerGuard(ctx, tx, playerID); gerr != nil {
+				return gerr
+			}
 			var cnt int
 			if cerr := tx.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM blocks WHERE player_id = ? FOR UPDATE`, playerID).Scan(&cnt); cerr != nil {
+				`SELECT COUNT(*) FROM blocks WHERE player_id = ?`, playerID).Scan(&cnt); cerr != nil {
 				return errcode.New(errcode.ErrInternal, "count blocks %d: %v", playerID, cerr)
 			}
 			if cnt >= maxBlocks {
@@ -516,17 +599,59 @@ FROM blocks WHERE player_id = ? ORDER BY created_at DESC LIMIT ?`
 	return out, nil
 }
 
+// ── 守卫行(R5 复审 P1-2/3/4,2026-07-22)────────────────────────────────────────
+//
+// TiDB 悲观事务没有 gap/next-key 锁(deploy/tidb-init/01-social-tidb.sql §3.5):
+// 原 `COUNT(*) ... FOR UPDATE` 只锁存在的行,挡不住并发 INSERT 幻读,好友数/黑名单数/
+// 申请收件箱三类上限都可被并发穿透;Accept/Block/AddFriend 之间也缺 pair 级串行化
+// (可并发形成「既好友又拉黑」「已拉黑+pending」「已好友+pending」)。
+//
+// 修复:所有限额校验与关系变更先取守卫行悲观锁,再在串行化临界区内做一致性 COUNT
+// 与检查/写入。`INSERT ... ON DUPLICATE KEY UPDATE <pk>=<pk>` 一条语句完成「不存在则
+// 建行、存在则锁行」,锁持有到事务结束;对已存在行的点锁在 MySQL InnoDB 与 TiDB 悲观
+// 事务下语义一致(TiDB 缺的是范围锁,点锁不缺)。
+//
+// 锁序纪律(防死锁):pair 守卫 → player 守卫(升序) → 业务行(请求行等)。
+// 单事务至多持有一个 pair 守卫;player 守卫恒按 player_id 升序获取。
+
+// acquirePairGuard 取关系对守卫行锁(lo/hi 规范化,双向同一把锁)。
+func acquirePairGuard(ctx context.Context, tx *sql.Tx, a, b uint64) error {
+	lo, hi := a, b
+	if hi < lo {
+		lo, hi = hi, lo
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO friend_pair_guards (lo_id, hi_id) VALUES (?, ?)
+ON DUPLICATE KEY UPDATE lo_id = lo_id`, lo, hi); err != nil {
+		return errcode.New(errcode.ErrInternal, "acquire pair guard %d-%d: %v", lo, hi, err)
+	}
+	return nil
+}
+
+// acquirePlayerGuard 取单玩家守卫行锁(该玩家限额域的写串行化)。
+func acquirePlayerGuard(ctx context.Context, tx *sql.Tx, playerID uint64) error {
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO friend_player_guards (player_id) VALUES (?)
+ON DUPLICATE KEY UPDATE player_id = player_id`, playerID); err != nil {
+		return errcode.New(errcode.ErrInternal, "acquire player guard %d: %v", playerID, err)
+	}
+	return nil
+}
+
 // checkIncomingLimit 在 CreateRequest 事务内校验 target 的「收到的待处理好友申请」数量上限
-// (不变量 §9.18)。maxIncoming<=0 关闭校验;否则锁定读 target 的 pending 计数,达到上限回
-// ErrFriendRequestLimit。FOR UPDATE 对 target_id 索引区间加 next-key 锁,阻塞并发新增 pending,
-// 消除「多个 requester 同时通过校验致收件箱超限」的幻读竞态。
+// (不变量 §9.18)。maxIncoming<=0 关闭校验;否则先锁 target 守卫行(R5 复审 P1-2:
+// TiDB 无 gap 锁,原 COUNT ... FOR UPDATE 挡不住并发插入),守卫锁内的 COUNT 即权威,
+// 达到上限回 ErrFriendRequestLimit。
 func checkIncomingLimit(ctx context.Context, tx *sql.Tx, targetID uint64, maxIncoming int) error {
 	if maxIncoming <= 0 {
 		return nil
 	}
+	if err := acquirePlayerGuard(ctx, tx, targetID); err != nil {
+		return err
+	}
 	var cnt int
 	if err := tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM friend_requests WHERE target_id = ? AND status = ? FOR UPDATE`,
+		`SELECT COUNT(*) FROM friend_requests WHERE target_id = ? AND status = ?`,
 		targetID, requestStatusPending).Scan(&cnt); err != nil {
 		return errcode.New(errcode.ErrInternal, "count incoming requests %d: %v", targetID, err)
 	}

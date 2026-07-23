@@ -56,6 +56,23 @@ CREATE TABLE IF NOT EXISTS `blocks` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 黑名单';
 
+-- 好友域并发守卫行(R5 复审 P1-2/3/4,2026-07-22):TiDB 无 gap/next-key 锁,
+-- 限额校验与关系变更先锁守卫行(存在行的悲观点锁两库语义一致)再进入临界区;
+-- 单 MySQL 下同样生效(与 TiDB DDL deploy/tidb-init/01-social-tidb.sql 同步维护)。
+-- 行数有界:每玩家/每关系对至多 1 行(§9.24 登记豁免,同 auction_owner_guards)。
+CREATE TABLE IF NOT EXISTS `friend_player_guards` (
+    `player_id` BIGINT UNSIGNED NOT NULL COMMENT '守卫行归属玩家(锁粒度=单玩家限额域)',
+    PRIMARY KEY (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 好友域每玩家写守卫行(上限校验串行化;§9.24 豁免)';
+
+CREATE TABLE IF NOT EXISTS `friend_pair_guards` (
+    `lo_id` BIGINT UNSIGNED NOT NULL COMMENT '关系对较小 player_id',
+    `hi_id` BIGINT UNSIGNED NOT NULL COMMENT '关系对较大 player_id',
+    PRIMARY KEY (`lo_id`, `hi_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 好友域关系对写守卫行(Accept/Block/AddFriend 同对串行化;§9.24 豁免)';
+
 -- chat 服务私聊历史(2026-06-16)。
 --   只有私聊(PRIVATE)落库支持离线 PullHistory;世界 / 队伍是即时频道,不持久化。
 --   message_id PK = snowflake(uint64);按收发双方 + 时间倒序查历史。

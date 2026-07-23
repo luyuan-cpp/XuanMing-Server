@@ -91,6 +91,13 @@ type DSTicketClaimsV2 struct {
 	// BATTLE→HUB guard(不变量 §1),消除终局 TTL 残留导致的 4007「玩家正在战斗中」。
 	// battle 票必须 0(battle 绑定走 match_id);普通登录 hub 票为 0(claim 不序列化)。
 	SourceMatchID uint64 `json:"source_match_id,omitempty"`
+	// SessJTI:签发本票的**请求方登录会话 jti**(R6 复审 P0-3,§9.23 会话 fencing:
+	// 旧 session 不能再签 DS 票——签出的票也必须钉死到签它的那一代会话)。
+	// login 侧 VerifyDSTicket 在线核销(DsAuthorityMode=redis 生产档)对非空 sjti 复核
+	// 会话权威当前一代:签发与响应写出之间被新登录轮换的旧票,在兑换点被拒。
+	// 空值 = 兼容窗(matchmaker READY 批签/allocator Transfer 重签/滚动升级旧票):
+	// 这些路径经会话 fencing 的推送流或既有权威门交付,不经本判定;不得把空值当"已验"。
+	SessJTI string `json:"sjti,omitempty"`
 }
 
 // PlayerID 把 sub 字符串解成 uint64。失败返回 0。
@@ -123,6 +130,8 @@ type DSTicketTarget struct {
 	// SourceMatchID:Battle→Hub 回流 fence(见 DSTicketClaimsV2.SourceMatchID)。
 	// 仅 hub 票可带(>0 表示终局回流);battle 票必须 0。
 	SourceMatchID uint64
+	// SessionJTI:请求方登录会话 jti(见 DSTicketClaimsV2.SessJTI)。可空(兼容窗)。
+	SessionJTI string
 }
 
 func (t DSTicketTarget) validate(dsType DSType) error {
@@ -274,6 +283,7 @@ func (s *DSTicketSigner) sign(playerID uint64, dsType DSType, regionID, cellID, 
 		AllocationID:    target.AllocationID,
 		HubAssignmentID: target.HubAssignmentID,
 		SourceMatchID:   target.SourceMatchID,
+		SessJTI:         target.SessionJTI,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	t.Header["kid"] = s.kid

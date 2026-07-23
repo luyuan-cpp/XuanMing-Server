@@ -53,12 +53,18 @@ type PushServiceClient interface {
 	// 语义:**已受理 + 长连**(不是立即完成型 RPC)。
 	// 客户端拿到 stream 后,等待 server 推 PushFrame;直到 client 主动关闭或 server 断开。
 	//
-	// server 端流程:
-	//  1. 从 ctx 拿 JWT(Envoy 已校验,这里冗余检查 player_id)
-	//  2. 注册 stream 到内存索引:player_id → stream
-	//  3. 补推离线消息(redis ZSET pandora:push:offline:<player_id>,score in [last_seen_ms, now])
-	//  4. 阻塞等 ctx.Done(client 断开 / server 关闭)
-	//  5. 另一 goroutine 消费 kafka,按 player_id 找 stream.Send(PushFrame)
+	// server 端流程(2026-07-22 审计 v2 拉取式投递 + 会话门,R5 注释同步实现):
+	//  1. 会话现行性门:请求 jti 必须是 login 会话权威(pandora:sess)当前一代,校验与
+	//     连接注册在同玩家锁内原子完成;顶号 → gRPC ABORTED(错误码 14),客户端只能转
+	//     交互登录,不得自动重登反顶。
+	//  2. 补推:从投递缓冲(redis ZSET pandora:push:offline:<player_id>,score = 每玩家
+	//     严格递增的投递游标)拉取游标 > last_seen_ms 的帧;拉空后做 gap 终检,确证丢失
+	//     则发 resync 信号帧。
+	//  3. 稳态:连接写者循环「本地唤醒信号 / 跨 Pod pub/sub 唤醒 / 30s 兜底轮询 → 拉缓冲
+	//     投递」;kafka 消费侧先把帧原子写入缓冲(单 key Lua 分配游标)再唤醒,最后 ack
+	//     ——缓冲是唯一定序与交付权威,不存在「内存索引直发」路径。
+	//  4. 每批投递前复核会话现行性(跨 Pod 顶号 fencing):轮换后产生的帧旧流零交付;
+	//     流内另有独立看门狗周期复查,失效后取消流上下文并以可判别错误码关流。
 	//
 	// 客户端流程(UE FHttpModule + 自研 grpc-web):
 	//   - HTTP POST /pandora.push.v1.PushService/Subscribe
@@ -109,12 +115,18 @@ type PushServiceServer interface {
 	// 语义:**已受理 + 长连**(不是立即完成型 RPC)。
 	// 客户端拿到 stream 后,等待 server 推 PushFrame;直到 client 主动关闭或 server 断开。
 	//
-	// server 端流程:
-	//  1. 从 ctx 拿 JWT(Envoy 已校验,这里冗余检查 player_id)
-	//  2. 注册 stream 到内存索引:player_id → stream
-	//  3. 补推离线消息(redis ZSET pandora:push:offline:<player_id>,score in [last_seen_ms, now])
-	//  4. 阻塞等 ctx.Done(client 断开 / server 关闭)
-	//  5. 另一 goroutine 消费 kafka,按 player_id 找 stream.Send(PushFrame)
+	// server 端流程(2026-07-22 审计 v2 拉取式投递 + 会话门,R5 注释同步实现):
+	//  1. 会话现行性门:请求 jti 必须是 login 会话权威(pandora:sess)当前一代,校验与
+	//     连接注册在同玩家锁内原子完成;顶号 → gRPC ABORTED(错误码 14),客户端只能转
+	//     交互登录,不得自动重登反顶。
+	//  2. 补推:从投递缓冲(redis ZSET pandora:push:offline:<player_id>,score = 每玩家
+	//     严格递增的投递游标)拉取游标 > last_seen_ms 的帧;拉空后做 gap 终检,确证丢失
+	//     则发 resync 信号帧。
+	//  3. 稳态:连接写者循环「本地唤醒信号 / 跨 Pod pub/sub 唤醒 / 30s 兜底轮询 → 拉缓冲
+	//     投递」;kafka 消费侧先把帧原子写入缓冲(单 key Lua 分配游标)再唤醒,最后 ack
+	//     ——缓冲是唯一定序与交付权威,不存在「内存索引直发」路径。
+	//  4. 每批投递前复核会话现行性(跨 Pod 顶号 fencing):轮换后产生的帧旧流零交付;
+	//     流内另有独立看门狗周期复查,失效后取消流上下文并以可判别错误码关流。
 	//
 	// 客户端流程(UE FHttpModule + 自研 grpc-web):
 	//   - HTTP POST /pandora.push.v1.PushService/Subscribe

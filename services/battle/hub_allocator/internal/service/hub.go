@@ -54,7 +54,8 @@ func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest)
 	}
 	// source_match_id:login 三态门证明原对局终局后透传的 Battle→Hub 回流 fence,
 	// 盖进 hub 票据 claim(内部控制面调用,信任链与 role_id 同源)。
-	res, err := s.uc.AssignHub(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId(), req.GetSourceMatchId())
+	// session_jti(R6 复审 P0-3):login 透传的请求方会话 jti,盖进本次 hub 票据 sjti claim。
+	res, err := s.uc.AssignHub(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId(), req.GetSourceMatchId(), req.GetSessionJti())
 	if err != nil {
 		return &hubv1.AssignHubResponse{Code: toProtoCode(err)}, nil
 	}

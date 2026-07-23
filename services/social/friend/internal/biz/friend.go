@@ -94,7 +94,8 @@ func (u *FriendUsecase) AddFriend(ctx context.Context, requesterID, targetID, ne
 		return 0, errcode.New(errcode.ErrInvalidArg, "cannot add self as friend")
 	}
 
-	// 互相拉黑则不能加好友
+	// 互相拉黑则不能加好友(fail-fast 预检,非权威:权威复核在 CreateRequest 事务内的
+	// pair 守卫锁下再做一次,R5 复审 P1-3——预检后并发 Block/Accept 落库的交错由守卫拦截)
 	blocked, err := u.repo.IsBlocked(ctx, requesterID, targetID)
 	if err != nil {
 		return 0, err
@@ -103,7 +104,7 @@ func (u *FriendUsecase) AddFriend(ctx context.Context, requesterID, targetID, ne
 		return 0, errcode.New(errcode.ErrFriendBlocked, "blocked between %d and %d", requesterID, targetID)
 	}
 
-	// 已是好友
+	// 已是好友(同上:fail-fast 预检,权威复核在 CreateRequest 事务内)
 	already, err := u.repo.AreFriends(ctx, requesterID, targetID)
 	if err != nil {
 		return 0, err

@@ -97,6 +97,8 @@ var registry = map[string]map[string]tableEntry{
 	"pandora_social": {
 		"friendships":           {Class: classBounded},
 		"blocks":                {Class: classBounded},
+		"friend_player_guards":  {Class: classExempt}, // 每玩家一行写守卫(R5 P1-2,TiDB 无 gap 锁;§9.24 豁免)
+		"friend_pair_guards":    {Class: classExempt}, // 每关系对一行写守卫(R5 P1-4;§9.24 豁免)
 		"friend_requests":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, SweepSQL: "DELETE FROM friend_requests WHERE status <> 1 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
 		"chat_private_messages": {Class: classSwept, SweepSQL: "DELETE FROM chat_private_messages WHERE message_id < 18446744073709551615 LIMIT ?"}, // 雪花 PK 范围删,无需时间索引
 		"guilds":                {Class: classBounded},

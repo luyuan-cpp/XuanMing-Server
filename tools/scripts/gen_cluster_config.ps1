@@ -1273,6 +1273,24 @@ function Set-ProdPushSessionGateOn([string]$text) {
     return [regex]::Replace($text, $pattern, '${1}require_session_gate: true', 1)
 }
 
+# -Prod 机械强制全部客户端面服务的 unary 会话现行性门(R5 复审 P0-1,INC-20260722-004,
+# 2026-07-22):push 建流门只封了长连接入口,顶号后旧 JWT 在 exp 前仍能对 friend/trade/
+# inventory 等所有玩家 RPC 保留按 player_id 定向能力。pkg/middleware.SessionCurrent 已在
+# 各客户端面服务 unary 链接线;dev 模板 session_gate.require: false 只服务无 Redis 直连
+# 联调,生产必须 true(gate 漏配/权威不可达一律 fail-closed),不允许产物继承 dev 宽松档。
+$UnarySessionGateServiceNames = @(
+    'friend', 'chat', 'mail', 'guild', 'trade', 'team',
+    'matchmaker', 'matchmaker-pve', 'player', 'inventory', 'leaderboard', 'hub-allocator'
+)
+function Set-ProdUnarySessionGateOn([string]$svcName, [string]$text) {
+    $pattern = '(?m)^(session_gate:[ \t]*\r?\n[ \t]{2})require:[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
+    $anchorCount = [regex]::Matches($text, $pattern).Count
+    if ($anchorCount -ne 1) {
+        throw "[FATAL] $svcName 模板 session_gate.require 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text, $pattern, '${1}require: true', 1)
+}
+
 # -Prod 机械关断幂等历史清理(审核 P1,2026-07-21):dev 开启 exp_history_cleanup_enabled /
 # history_cleanup_enabled 只为覆盖清理代码路径(本地数据可弃)。上游 progress 出箱与
 # kafka 重放目前没有小于留存期的有界重试,生产删收据后迟到重放会重复入账经验/MMR/点数
@@ -1466,6 +1484,14 @@ function Assert-GeneratedSet {
                 Assert-BattleResultConsumeTopics $yaml @('pandora.ds.lifecycle')
             } else {
                 Assert-BattleResultConsumeTopics $yaml @('pandora.battle.result', 'pandora.ds.lifecycle')
+            }
+        }
+        # -Prod 产物合约(R5 复审 P0-1):客户端面服务 unary 会话现行性门必须为强制档,
+        # 任何模板漂移/替换 0 次都在发布前失败,不允许静默放行。
+        if ($Prod -and ($UnarySessionGateServiceNames -contains $svc.Name)) {
+            if (([regex]::Matches($yaml, '(?m)^session_gate:[ \t]*\r?\n[ \t]{2}require:[ \t]*true[ \t]*$')).Count -ne 1 -or
+                [regex]::IsMatch($yaml, '(?m)^session_gate:[ \t]*\r?\n[ \t]{2}require:[ \t]*false')) {
+                throw "[FATAL] -Prod 产物 $($svc.Name) session_gate.require 必须且只能为 true(旧 JWT 全服务吊销门,INC-20260722-004)。"
             }
         }
         # -Prod 产物合约(审核 P0):实时成长通道必须被机械关断,
@@ -1680,6 +1706,9 @@ try {
         if ($s.Name -eq 'auction') { $out = Set-AuctionClusterSafety $out }
         if ($Prod -and $s.Name -eq 'battle-result') { $out = Set-ProdBattleResultProgressOff $out }
         if ($Prod -and $s.Name -eq 'push') { $out = Set-ProdPushSessionGateOn $out }
+        if ($Prod -and ($UnarySessionGateServiceNames -contains $s.Name)) {
+            $out = Set-ProdUnarySessionGateOn $s.Name $out
+        }
         if ($Prod -and $s.Name -eq 'player') {
             $out = Set-ProdPlayerExperienceOff $out
             $out = Set-ProdPlayerHistoryCleanupOff $out

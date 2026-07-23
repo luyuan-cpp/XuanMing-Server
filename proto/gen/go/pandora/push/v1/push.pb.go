@@ -159,9 +159,12 @@ type PushFrame struct {
 	//     客户端走兜底(如重拉快照),无害。
 	//   - 新 client:switch(event_type),0/未知 → 旧路径,已知新值 → 对应新 message。
 	//
-	// ⚠️ push 服务对本字段**透明转发**:它只按 topic 路由,不解 payload、不读 event_type。
+	// ⚠️ push 服务对本字段**不解释语义但会做形态校验**(R5 注释纠偏):consumer 从 kafka
 	//
-	//	event_type 由 producer 填、client 读,push 服务原样透传(与 topic/trace_id 一致)。
+	//	header 解析 event_type 填入本字段——header 缺失/空 = legacy 0(兼容);header
+	//	存在但非法(非十进制/越界)= producer bug,毒丸进 DLQ,不降级为 0(防新事件被
+	//	按旧 message 错误路由)。合法值原样透传,payload 仍不解、语义仍由 client 按
+	//	(topic, event_type) 解释。
 	EventType     uint32 `protobuf:"varint,5,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

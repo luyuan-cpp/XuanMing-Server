@@ -116,3 +116,10 @@ jwt:
   secret: "pandora-dev-jwt-secret-change-me-32!"
   session_ttl: "24h"
   ds_ticket_ttl: "5m"
+
+# 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威
+# (pandora:sess,node.redis_client 指向的共享 Redis)当前一代,顶号后旧 JWT 立即失效。
+# dev 宽松档 require=false(gate 已装配时顶号/登出照常拒;仅漏配端点时跳过判定);
+# -Prod 产物由 gen_cluster_config.ps1 机械置 true(漏配端点拒启)。
+session_gate:
+  require: false

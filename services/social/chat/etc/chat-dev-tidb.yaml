@@ -25,6 +25,11 @@ server:
 
 node:
   node_id: 1
+  # Redis:会话现行性门只读 login 会话权威 pandora:sess(R5 复审 P0-1,共享实例)。
+  redis_client:
+    host: "127.0.0.1:6380"
+    db: 0
+    dial_timeout: "2s"
   # TiDB:MySQL 协议兼容,DSN 形态与 MySQL 一致,仅 host:port 指向 TiDB Server。
   mysql_client:
     dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:4000)/pandora_social?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_bin"
@@ -49,3 +54,10 @@ chat:
   guild_addr: "127.0.0.1:50008"
   # sensitive_words: 敏感词列表(命中整词替换为等长 *);空 → 不过滤
   sensitive_words: []
+
+# 会话现行性门(R5 复审 P0-1,INC-20260722-004):校验客户端面请求 jti == login 会话权威
+# (pandora:sess,node.redis_client 指向的共享 Redis)当前一代,顶号后旧 JWT 立即失效。
+# dev 宽松档 require=false(gate 已装配时顶号/登出照常拒;仅漏配端点时跳过判定);
+# -Prod 产物由 gen_cluster_config.ps1 机械置 true(漏配端点拒启)。
+session_gate:
+  require: false

@@ -84,3 +84,8 @@ jwt:
   secret: "__JWT_SHARED_SECRET_32B_CHANGE_ME__"
   session_ttl: "24h"
   ds_ticket_ttl: "5m"
+
+# 会话现行性门(R5 复审 P0-1,INC-20260722-004):生产强制档,顶号后旧 JWT 立即失效;
+# 权威端点漏配拒启,权威不可达 fail-closed。与 gen_cluster_config.ps1 -Prod 产物一致。
+session_gate:
+  require: true

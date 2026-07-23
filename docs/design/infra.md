@@ -132,6 +132,8 @@ pandora:<domain>:<entity>:<id>[:<field>]
 | `pandora:sess:<player_id>` | hash | 24h | 玩家 session |
 | `pandora:ticket:<jti>` | string | 5min | DS 票据(防重放) |
 | `pandora:locator:<player_id>` | hash | 30s heartbeat | 玩家位置 |
+| `pandora:push:offline:<player_id>` | zset | 7d(帧 5min 窗口修剪) | push 投递缓冲(游标定序权威,含 wm/fl 哨兵) |
+| `pandora:push:wake` | pub/sub channel | — | push 跨 Pod 投递唤醒信号(best-effort 加速器,R5 P2-10;丢失由 30s 兜底轮询收敛) |
 
 #### Team
 | Key | 类型 | TTL | 用途 |

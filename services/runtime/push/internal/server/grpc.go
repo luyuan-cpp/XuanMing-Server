@@ -6,6 +6,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/grpcserver"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/sessiongate"
 	pushv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/push/v1"
 
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/conf"
@@ -27,8 +28,13 @@ import (
 // 从 Kratos transport 的 x-pandora-player-id 头(Envoy jwt_authn 注入)读取。这里保留
 // AuthOptional 仅为将来 push 若新增 unary RPC 时的鉴权占位,不影响 Subscribe。
 // 网关侧鉴权强约束在 Envoy jwt_authn(prefix /pandora.push.v1.PushService/ requires JWT)。
-func NewGRPCServer(cfg *conf.Config, svc *service.PushService) *kgrpc.Server {
-	srv := grpcserver.MustNewServer(cfg.Server, pmw.AuthOptional())
+//
+// R5 复审 P0-1(2026-07-22):unary 链同时挂 pmw.SessionCurrent(会话现行性门,防旧 JWT
+// 在 exp 前继续按 player_id 定向操作)。Subscribe 的现行性门在 service 层
+// (AuthorizeAndRegister,stream 不跑 unary 链),两处共用同一 sessGate 与 require 档。
+func NewGRPCServer(cfg *conf.Config, svc *service.PushService, sessGate sessiongate.Gate) *kgrpc.Server {
+	srv := grpcserver.MustNewServer(cfg.Server, pmw.AuthOptional(),
+		pmw.SessionCurrent(sessGate, cfg.Push.RequireSessionGate))
 	pushv1.RegisterPushServiceServer(srv, svc)
 	return srv
 }

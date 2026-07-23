@@ -35,6 +35,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
+	"github.com/luyuancpp/pandora/pkg/sessiongate"
 
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/biz"
@@ -490,7 +491,12 @@ func main() {
 	svc.SetModelBAuthority(modelBAuthority) // Model B:心跳必须携带 Model B 凭据,legacy 令牌一律拒(CE1/CE2)
 
 	// 6. gRPC + HTTP
-	grpcSrv := server.NewGRPCServer(&cfg, svc)
+	// 会话现行性门(R5 复审 P0-1,INC-20260722-004):ListHubLines/TransferToLine 两个
+	// 客户端面 method 的 jti 必须是 login 会话权威当前一代;内部/DS RPC 无 payload 头放行。
+	sessGate, sgClose := sessiongate.MustBuild(cfg.Node.RedisClient, cfg.SessionGate.Require)
+	defer sgClose()
+
+	grpcSrv := server.NewGRPCServer(&cfg, svc, sessGate)
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	// 任何后台 reconcile/sweep 与 RPC server 启动前先取得 capability。失败进程零业务写。
@@ -589,6 +595,7 @@ func (h *hubTicketSigner) SignHubTicket(playerID uint64, roleID uint32, binding 
 			HubAssignmentID: binding.HubAssignmentID,
 			ReleaseTrack:    binding.ReleaseTrack,
 			SourceMatchID:   binding.SourceMatchID,
+			SessionJTI:      binding.SessionJTI, // R6 P0-3:会话绑定,VerifyDSTicket 核销时复核
 		})
 	}
 	if binding.PodName == "" {
