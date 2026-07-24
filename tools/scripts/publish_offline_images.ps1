@@ -26,7 +26,8 @@ param(
     [switch]$SkipBuild,     # 不重建,复用现有 tar(export_images.ps1 的过期守卫仍会核验新旧)
     [switch]$AllowDirty,    # git 工作区脏时仍发布(版本号带 -dirty-时间戳;仅本机联调用,CI 禁用)
     [switch]$SkipIfExists,  # 目标版本已发布时静默成功(CI 幂等重跑用)
-    [string]$ArtifactRoot   # 制品根目录覆盖
+    [string]$ArtifactRoot,  # 制品根目录覆盖
+    [string]$Version        # 发布版本号(如 v0.1.0):显式覆盖 git describe 注入镜像,免打 tag;记入 build-info.app_version
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,6 +52,12 @@ if ($dirty -and -not $AllowDirty) {
 $version = if ($dirty) { "g$sha-dirty-" + (Get-Date -Format 'yyyyMMdd-HHmmss') } else { "g$sha" }
 
 # ---- 2) 生成/校验离线 tar(复用既有脚本与其过期守卫,不另造构建逻辑) ----
+# 发布版本号覆盖:设 PANDORA_RELEASE_VERSION 后,start.ps1 的 Get-VersionInfo 用它注入 -ldflags,
+# 免打 git tag(标准 CI 做法:显式 VERSION 优先于 git describe)。Commit 字段仍记 git sha 作溯源。
+if ($Version) {
+    $env:PANDORA_RELEASE_VERSION = $Version
+    Write-Info "镜像版本注入为 $Version(覆盖 git describe;git sha $sha 仍作溯源)"
+}
 $exportArgs = @()
 if (-not $SkipBuild) { $exportArgs += @('-Build', '-BuildMode', 'host') }
 & (Join-Path $ScriptDir 'export_images.ps1') @exportArgs
@@ -87,6 +94,7 @@ try {
     $imagesManifest | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $staging 'images-manifest.json') -Encoding utf8NoBOM
     [pscustomobject]@{
         version      = $version
+        app_version  = $Version    # 注入镜像的发布版本号(v0.1.0);空=未指定,走 git describe 默认
         git_sha      = $sha
         git_dirty    = $dirty
         image_count  = $imagesManifest.Count

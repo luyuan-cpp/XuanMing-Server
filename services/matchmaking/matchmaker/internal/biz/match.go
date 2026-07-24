@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -165,12 +164,6 @@ type MatchUsecase struct {
 	lastLivenessSweep  time.Time
 	lastStartReconcile time.Time
 	lastMatchReconcile time.Time
-
-	// fallbackLogged 记录每个 effective map_id 上次已告警过的「一方人数走全局回退」原因,
-	// 供 teamSizeForMap 去重告警(见 logTeamSizeFallback)。teamSizeForMap 从 StartMatch RPC
-	// 与 RunMatchLoop 撮合循环两个 goroutine 并发调用,故不能复用上面「单 goroutine」的 time.Time
-	// 节流字段,须用 sync.Map。值类型为 string(reason)。
-	fallbackLogged sync.Map
 }
 
 func allocationOperationID() string {
@@ -230,50 +223,37 @@ func (u *MatchUsecase) validateMapID(mapID uint32) error {
 }
 
 // teamSizeForMap 取某副本(map_id)的一方人数:关卡表 team_size>0 时按表(「策划填表即用」,
-// 每个副本各自 1v1 / 5v5),否则回退服务端全局 cfg.TeamSize(配置表未启用 / 该行未填时的历史口径)。
+// 每个副本各自 1v1 / 5v5),否则回退服务端全局 cfg.TeamSize。回退是契约明确的合法路径,不是错误:
+// 未启用配置表(u.tables==nil,dev / 历史口径)、或表内该行 team_size==0(proto 契约:0=沿用全局兜底),
+// 均按预期走全局值,不告警;tb==nil / 行不存在 已由 StartMatch 的 validateMapID 上游 fail-closed。
 // 与 validateMapID 同一 effective 兜底:map_id==0 表示用本实例默认副本 cfg.MapId。
-// 走任一回退分支时按 (effective map_id, reason) 去重告警一次(见 logTeamSizeFallback),
-// 便于运维发现「撮合没吃关卡表、在用 yaml 全局 team_size」;命中表后清除去重,回退再现可再告警。
-func (u *MatchUsecase) teamSizeForMap(ctx context.Context, mapID uint32) int {
+func (u *MatchUsecase) teamSizeForMap(mapID uint32) int {
 	fallback := u.cfg.TeamSize
+	if u.tables == nil {
+		return fallback
+	}
 	effective := mapID
 	if effective == 0 {
 		effective = u.cfg.MapId
 	}
-	if u.tables == nil {
-		u.logTeamSizeFallback(ctx, mapID, effective, "config_table_disabled", fallback)
-		return fallback
-	}
 	tb := u.tables.Tables()
 	if tb == nil {
-		u.logTeamSizeFallback(ctx, mapID, effective, "config_table_not_loaded", fallback)
 		return fallback
 	}
 	row, ok := tb.Level.ByID(effective)
 	if !ok {
-		u.logTeamSizeFallback(ctx, mapID, effective, "map_not_in_level_table", fallback)
 		return fallback
 	}
 	if ts := int(row.GetTeamSize()); ts > 0 {
-		u.fallbackLogged.Delete(effective) // 命中表:清除去重,后续若再回退可重新告警
+		if ts > configtable.MaxLevelTeamSize {
+			// 防御性钳制(§16.5 容量/溢出边界):配置加载层已按 configtable.MaxLevelTeamSize
+			// 拒绝超大 team_size 并保留旧表(validateLevelRow),正常到不了这里;万一校验被
+			// 绕过(手改 dist / 生成器漏校验),也绝不让撮合按超大值 need=2*teamSize 预分配爆内存。
+			return configtable.MaxLevelTeamSize
+		}
 		return ts
 	}
-	u.logTeamSizeFallback(ctx, mapID, effective, "team_size_unset_in_row", fallback)
 	return fallback
-}
-
-// logTeamSizeFallback 对「撮合一方人数走 yaml 全局回退」按 effective map_id 去重打一条 WARN:
-// teamSizeForMap 从 StartMatch RPC 与 RunMatchLoop 撮合循环(每 match_interval 命中同一稳定配置态)
-// 并发调用,若无条件打日志会刷屏,故用 sync.Map 只在「该 map 首次回退 / 回退原因变化」时告警一次。
-// reason 区分回退来源:config_table_disabled(未启用配置表,dev / 历史口径)、config_table_not_loaded
-// (启用但快照未就绪)、map_not_in_level_table(表内无此副本)、team_size_unset_in_row(表内该行未填人数)。
-func (u *MatchUsecase) logTeamSizeFallback(ctx context.Context, mapID, effective uint32, reason string, teamSize int) {
-	if prev, ok := u.fallbackLogged.Load(effective); ok && prev.(string) == reason {
-		return
-	}
-	u.fallbackLogged.Store(effective, reason)
-	plog.With(ctx).Warnw("msg", "team_size_table_fallback",
-		"map_id", mapID, "effective_map_id", effective, "reason", reason, "team_size", teamSize)
 }
 
 // ticketRegion 解析一张票据的 owner region(以队长 captain_id 为 owner 锚点)。
@@ -465,7 +445,7 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 		return 0, err
 	}
 
-	plog.With(ctx).Infow("msg", "match_start_accepted", "ticket_id", ticketID, "operation_id", op.OperationId, "team_id", teamID,
+	plog.With(ctx).Debugw("msg", "match_start_accepted", "ticket_id", ticketID, "operation_id", op.OperationId, "team_id", teamID,
 		"captain_id", captainID, "members", len(members), "avg_mmr", avgMMR, "map_id", mapID)
 	return ticketID, nil
 }
@@ -783,7 +763,7 @@ func (u *MatchUsecase) advanceStartOperation(ctx context.Context, current *match
 		if err := u.repo.DeleteStartOperation(ctx, op.GetTicketId()); err != nil {
 			return err
 		}
-		plog.With(ctx).Infow("msg", "match_start_queued", "ticket_id", op.GetTicketId(), "operation_id", op.GetOperationId())
+		plog.With(ctx).Debugw("msg", "match_start_queued", "ticket_id", op.GetTicketId(), "operation_id", op.GetOperationId())
 	}
 	return nil
 }
@@ -809,7 +789,7 @@ func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uin
 	if team.CaptainId != captainID {
 		return nil, 0, errcode.New(errcode.ErrTeamNotCaptain, "player %d not captain of team %d", captainID, teamID)
 	}
-	if teamSize := u.teamSizeForMap(ctx, mapID); len(team.Members) == 0 || len(team.Members) > teamSize {
+	if teamSize := u.teamSizeForMap(mapID); len(team.Members) == 0 || len(team.Members) > teamSize {
 		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d invalid size %d (map %d team_size %d)",
 			teamID, len(team.Members), mapID, teamSize)
 	}
@@ -896,7 +876,7 @@ func (u *MatchUsecase) CancelMatch(ctx context.Context, playerID uint64) error {
 	// FAILED 补推给票据全体成员:取消可能不是本人发起(队长取消 / team 离队联动撤票),
 	// 其余队友的客户端仍停在 QUEUEING,不推会一直转圈直到 GetMatchProgress 兜底轮询。
 	u.pushProgress(ctx, ticket.TicketId, stageFailed, ticket.Members, "", ticket.MapId)
-	plog.With(ctx).Infow("msg", "match_cancel", "ticket_id", ticketID, "player_id", playerID)
+	plog.With(ctx).Debugw("msg", "match_cancel", "ticket_id", ticketID, "player_id", playerID)
 	return nil
 }
 
@@ -973,7 +953,7 @@ func (u *MatchUsecase) cancelStartingMatch(ctx context.Context, playerID uint64)
 		plog.With(ctx).Warnw("msg", "match_start_cancel_index_deferred",
 			"ticket_id", ticketID, "player_id", playerID, "err", err)
 	}
-	plog.With(ctx).Infow("msg", "match_start_cancel_accepted",
+	plog.With(ctx).Debugw("msg", "match_start_cancel_accepted",
 		"ticket_id", ticketID, "player_id", playerID)
 	return true, nil
 }
@@ -1275,7 +1255,7 @@ func (u *MatchUsecase) ConfirmMatch(ctx context.Context, playerID, matchID uint6
 	case outcomeAllReady:
 		// durable handoff：最后一名确认者只提交 ALLOCATING job。Allocate/placement/READY
 		// 由 RunMatchLoop 的服务生命周期 worker 推进，不再绑定玩家 RPC ctx。
-		plog.With(ctx).Infow("msg", "match_allocation_queued", "match_id", matchID,
+		plog.With(ctx).Debugw("msg", "match_allocation_queued", "match_id", matchID,
 			"operation_id", snapshot.GetAllocationOperationId())
 	default:
 		// 仍有人未确认:推 CONFIRM 进度给全体
@@ -1283,7 +1263,7 @@ func (u *MatchUsecase) ConfirmMatch(ctx context.Context, playerID, matchID uint6
 			u.pushProgress(ctx, matchID, stageConfirm, snapshot.Members, "", snapshot.MapId)
 		}
 	}
-	plog.With(ctx).Infow("msg", "match_confirm", "match_id", matchID, "player_id", playerID,
+	plog.With(ctx).Debugw("msg", "match_confirm", "match_id", matchID, "player_id", playerID,
 		"accept", accept, "outcome", outcome)
 	return nil
 }
@@ -1712,7 +1692,7 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	// 属 proto + 跨服务改动,留 Codex/人按 §11.1 跟进(见 PROGRESS 落地记录)。
 	// router 为 nil(单 Cell / dev)时 ok=false,不打印、行为不变。
 	if place, ok := u.battlePlacement(playerIDs); ok {
-		plog.With(ctx).Infow("msg", "battle_placement",
+		plog.With(ctx).Debugw("msg", "battle_placement",
 			"match_id", job.MatchId, "region_id", place.RegionID, "cell_id", place.CellID,
 			"players", len(playerIDs))
 	}
@@ -2600,7 +2580,7 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 // 多 Region 走两级(region 内优先 + 跨 region 溢出兜底)。从 matchOnce 抽出,便于按 map_id 分组复用。
 func (u *MatchUsecase) formMatchesInPool(ctx context.Context, tickets []*matchv1.MatchTicketStorageRecord, now int64) {
 	// 本池票据同属一个副本(partitionTicketsByMap),一方人数按该 map_id 读表(表未填回退全局)。
-	teamSize := u.teamSizeForMap(ctx, matchMapID(tickets))
+	teamSize := u.teamSizeForMap(matchMapID(tickets))
 	need := 2 * teamSize
 	used := make(map[uint64]bool)
 
@@ -2898,7 +2878,7 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 	plog.With(ctx).Infow("msg", "match_found", "match_id", matchID, "players", len(members),
 		"auto_confirm", u.cfg.AutoConfirmMatch)
 	if u.cfg.AutoConfirmMatch {
-		plog.With(ctx).Infow("msg", "match_allocation_queued", "match_id", matchID,
+		plog.With(ctx).Debugw("msg", "match_allocation_queued", "match_id", matchID,
 			"operation_id", queued.GetAllocationOperationId())
 	}
 	return nil

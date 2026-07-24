@@ -21,8 +21,29 @@ import (
 	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 )
+
+// inbandCoder 是所有携带统一 commonv1.ErrCode 的 gRPC 响应共同满足的接口
+// (生成的 proto 响应都带 GetCode() commonv1.ErrCode)。中间件用它读出 handler
+// 以 in-band 方式返回的错误码,而不需要感知具体服务类型。
+type inbandCoder interface {
+	GetCode() commonv1.ErrCode
+}
+
+// inbandServerFault 判定 handler 在 transport error 为 nil 时,是否通过响应 Code
+// 字段返回了服务端内部 / 基础设施故障(见 errcode.IsServerFault)。返回 true 时中间件
+// 升 ERROR,避免这类故障被记成 rpc_ok(DEBUG)在线上 info 级静默。
+func inbandServerFault(resp any) (commonv1.ErrCode, bool) {
+	c, ok := resp.(inbandCoder)
+	if !ok {
+		return commonv1.ErrCode_OK, false
+	}
+	code := c.GetCode()
+	return code, errcode.IsServerFault(errcode.Code(code))
+}
 
 // Logging 打印 access log。
 //
@@ -46,9 +67,11 @@ func Logging() middleware.Middleware {
 			// 避免 handler 内发起的下游调用被错标成外层 server op。
 			op := ""
 			kind := ""
+			isClient := false
 			if tr, ok := transport.FromClientContext(ctx); ok {
 				op = tr.Operation()
 				kind = string(tr.Kind()) + "_client"
+				isClient = true
 			} else if tr, ok := transport.FromServerContext(ctx); ok {
 				op = tr.Operation()
 				kind = string(tr.Kind())
@@ -58,7 +81,9 @@ func Logging() middleware.Middleware {
 			latency := time.Since(start)
 
 			h := plog.With(ctx)
-			if err != nil {
+			inbandCode, inbandFault := inbandServerFault(resp)
+			switch {
+			case err != nil:
 				h.Errorw(
 					"msg", "rpc_failed",
 					"transport", kind,
@@ -68,7 +93,20 @@ func Logging() middleware.Middleware {
 					"reason", errors.Reason(err),
 					"err", err.Error(),
 				)
-			} else if latency.Milliseconds() >= slowMs {
+			case !isClient && inbandFault:
+				// handler 以 in-band Code 返回了服务端内部 / 基础设施故障(transport err=nil),
+				// 否则会被下面的 rpc_ok 记成 DEBUG,在生产 info 级下静默(§16 禁止吞掉故障)。
+				// 只在本次是 server hop 时打:client hop 的 resp 是下游响应,其故障归下游服务记。
+				// 无 err 详情(已被转成 in-band Code),但 op + code + ctx 的 trace_id/player_id
+				// 足以定位是哪个 RPC 在出内部故障并顺链下钻。
+				h.Errorw(
+					"msg", "rpc_inband_error",
+					"transport", kind,
+					"op", op,
+					"latency_ms", latency.Milliseconds(),
+					"code", int32(inbandCode),
+				)
+			case latency.Milliseconds() >= slowMs:
 				// 慢请求升 WARN:生产 info 级下也能看到,直接指出慢在哪个 op
 				h.Warnw(
 					"msg", "rpc_slow",
@@ -77,8 +115,8 @@ func Logging() middleware.Middleware {
 					"latency_ms", latency.Milliseconds(),
 					"slow_threshold_ms", slowMs,
 				)
-			} else {
-				// 正常成功请求降为 DEBUG:高 QPS 下 rpc_ok 是最大噪音源,
+			default:
+				// 正常成功请求(或预期业务拒绝码)降为 DEBUG:高 QPS 下 rpc_ok 是最大噪音源,
 				// 排障需要全量 access log 时设 LOG_LEVEL=debug 即可打开
 				h.Debugw(
 					"msg", "rpc_ok",

@@ -79,6 +79,30 @@
 | DS 镜像构建取 Linux 包 | 同级仓库 Packages 自动发现 | 不变(本机构建输出仍在 Packages);跨机时 `-SourcePkg` 指到制品路径 |
 | 正式发布 | 无 manifest | `make_release.ps1` → 按 `releases/<name>.json` 交付/回滚 |
 
+## 6b. 版本化发布(语义版本 + 修复内容)
+
+制品的目录名是**来源戳**(svn rev / git sha,溯源用),不是人可读的**发布版本号**。
+正规发布另有一层语义版本:
+
+- **版本号来源**:
+  - 客户端 UE 包:`Pandora/Config/DefaultGame.ini` 的 `ProjectVersion`,cook 时烙进包内,运行时自报。发布前手动 bump。
+  - 后端镜像:git tag,`git describe --tags` 自动注入 `pkg/version.Version`(机制已在,只需打 tag)。
+- **修复内容来源**:仓库根 `CHANGELOG.md`(Keep a Changelog 格式),每次发布前在顶部新增版本段落。
+- **绑定**:`make_release.ps1 -Version <版本>` 读 CHANGELOG 对应段 → 写进 `releases/<版本>.json`(机器可读)
+  与 `releases/<版本>.md`(人可读),并记录每个制品的来源戳 / 镜像 digest。dirty 来源默认拒绝(`-AllowDirty` 放行内测)。
+
+标准发布流:
+
+```
+① 定版本 v0.1.0:CHANGELOG.md 加 [0.1.0] 段 + 客户端 DefaultGame.ini ProjectVersion=0.1.0
+② 后端:git tag v0.1.0 <clean commit> → publish_offline_images.ps1(镜像自报 v0.1.0)
+③ 客户端:PackageSet.ps1(包自报 0.1.0)→ PublishPackages 发布
+④ make_release.ps1 -Version v0.1.0 -ClientPackages <5 个包路径>
+   → release manifest + notes(含修复内容)
+```
+
+版本号三处必须一致:`DefaultGame.ini ProjectVersion` = 后端 `git tag` = `make_release -Version` = `CHANGELOG` 段落。
+
 ## 7. 剩余事项(诚实清单)
 
 - SVN 服务端钩子需仓库管理员部署(本仓只提供脚本);git 托管平台规则需人配置。

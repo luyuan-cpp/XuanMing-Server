@@ -461,7 +461,7 @@ func (u *PushUsecase) RunSubscribeStream(
 			return exit(err) // 首轮失败断流:客户端重连重试(游标没动,不漏)
 		}
 		if next > cursor {
-			h.Infow("msg", "push_replayed", "player_id", playerID, "after_cursor", afterCursor, "cursor", next)
+			h.Debugw("msg", "push_replayed", "player_id", playerID, "after_cursor", afterCursor, "cursor", next)
 		}
 		cursor = next
 	}

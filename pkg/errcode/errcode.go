@@ -319,3 +319,22 @@ func IsRetryable(code Code) bool {
 		return false
 	}
 }
+
+// IsServerFault 判断该错误码是否属于服务端内部 / 基础设施故障(而非预期业务拒绝)。
+//
+// 用途:各 service handler 普遍以 in-band 方式返回错误(`&Resp{Code: toProtoCode(err)}, nil`,
+// transport error 恒为 nil),access-log 中间件只按 transport error 判 rpc_failed,于是
+// MySQL / Redis / etcd 故障、CAS/事务失败、依赖超时等都被记成 rpc_ok(DEBUG),线上 info 级静默。
+// 中间件用本函数把 in-band 的服务端故障码识别出来并升 ERROR,恢复基础设施故障可见性。
+//
+// 归为服务端故障:ErrUnknown(非 *Error 的裸错误逃逸,属未分类缺陷)、ErrInternal、
+// ErrTimeout(依赖超时)、ErrUnavailable(依赖不可用)。其余(NotFound / InvalidArg /
+// PermissionDeny / 各业务状态机与 fencing 拒绝码)是预期业务结果,不算故障。
+func IsServerFault(code Code) bool {
+	switch code {
+	case ErrUnknown, ErrInternal, ErrTimeout, ErrUnavailable:
+		return true
+	default:
+		return false
+	}
+}

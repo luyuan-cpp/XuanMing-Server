@@ -79,12 +79,12 @@ func (u *PlayerUsecase) AddExperience(ctx context.Context, playerID uint64, delt
 		return data.ExpState{}, false, err
 	}
 	if already {
-		plog.With(ctx).Infow("msg", "add_experience_idempotent_hit",
+		plog.With(ctx).Debugw("msg", "add_experience_idempotent_hit",
 			"player_id", playerID, "idempotency_key", idempotencyKey,
 			"level", st.Level, "exp_in_level", st.ExpInLevel)
 		return st, true, nil
 	}
-	plog.With(ctx).Infow("msg", "add_experience_applied",
+	plog.With(ctx).Debugw("msg", "add_experience_applied",
 		"player_id", playerID, "delta", delta, "reason", reason,
 		"level", st.Level, "exp_in_level", st.ExpInLevel,
 		"levels_gained", st.LevelsGained, "is_max", st.IsMaxLevel)
@@ -272,7 +272,7 @@ func (u *PlayerUsecase) publishPushOutboxBatch(ctx context.Context) (int, error)
 		published++
 	}
 	if published > 0 {
-		plog.With(ctx).Infow("msg", "push_outbox_published", "count", published)
+		plog.With(ctx).Debugw("msg", "push_outbox_published", "count", published)
 	}
 	return published, nil
 }

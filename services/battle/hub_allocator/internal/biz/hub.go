@@ -1274,10 +1274,10 @@ func (u *HubUsecase) heartbeatModelB(ctx context.Context, pod string, playerCoun
 	}
 	// owner 迁移准入代提交(owner-authority.md migrate ③,近似:授权 census 即准入证据;
 	// contract 阶段移交 DS Admission 链)。弱依赖,失败/屏障未开都不影响心跳。
-	if len(playerIDs) > 0 {
-		ownerAdmitCensusWeak(ctx, u.ownerAuth, &u.ownerAdmitted, playerIDs,
-			ownerTypeHub, pod, res.InstanceUID, 2*time.Second, u.resolveOwnerTargetFromAssignment)
-	}
+	// 复审 P1-4:无条件调用(不再用 len(playerIDs)>0 守卫)——空 census(最后一名玩家离场)
+	// 也必须进函数按本实例剪枝 admitted 缓存,否则 stale 项残留、玩家回流同实例被误吞跳过 Admit。
+	ownerAdmitCensusWeak(ctx, u.ownerAuth, &u.ownerAdmitted, playerIDs,
+		ownerTypeHub, pod, res.InstanceUID, 2*time.Second, u.resolveOwnerTargetFromAssignment)
 	command, graceSeconds := commandNone, int32(0)
 	switch res.ShardState {
 	case stateDraining:
@@ -1596,6 +1596,10 @@ func (u *HubUsecase) RunHeartbeatSweep(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "hub_heartbeat_sweep_stopped")
 			return
 		case <-ticker.C:
+			// 复审 P1-5:census 准入缓存按 last-touch TTL 清死实例项。本地内存卫生,不经存储、
+			// 不依赖 writer 身份,故置于 writer 门控之前每 tick 无条件执行(否则热备副本自身
+			// 处理过的心跳留下的缓存项永不回收)。活实例项每心跳续期,仅已销毁实例项会被清。
+			sweepStaleOwnerAdmitted(&u.ownerAdmitted, time.Now().Add(-ownerAdmittedStaleTTL))
 			// R9 P0-7:非写者副本跳 tick,避免 RollingUpdate 重叠窗口内双写者并发
 			// reconcile/sweep(存储级 fence 是最终防线,这里是快路径 + 降噪)。
 			if u.writerFence != nil {

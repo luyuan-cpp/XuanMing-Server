@@ -3,8 +3,9 @@
 // 背景:投递缓冲写入(AssignAndBuffer)与连接写者可能不在同一 Pod(滚动重叠/多副本)。
 // 本 Pod 写入走进程内唤醒零等待;跨 Pod 此前只有 30s 兜底轮询——消息不丢,但可能延迟
 // 近 30s,与 push p99 <200ms 验收口径不符。本文件用 Redis pub/sub 把唤醒信号跨 Pod
-// 广播:消费侧写完缓冲、本地无该玩家连接时 PUBLISH 一条 player_id;各 Pod 订阅同一
-// channel,收到后对本地连接管理器做一次 SendTo(本地无此玩家 = 廉价 no-op)。
+// 广播:消费侧写完缓冲后**无条件** PUBLISH 一条 player_id(复审 P1-5:不以本地 slot 抑制,
+// 陈旧残留会误抑真持有者);各 Pod 订阅同一 channel,收到后对本地连接管理器做一次 SendTo
+// (本地无此玩家 = 廉价 no-op)。
 //
 // 契约:
 //   - 信号是 **best-effort 加速器**:publish 失败 / 订阅断连期间丢的信号由既有 30s

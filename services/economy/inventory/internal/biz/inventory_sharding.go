@@ -113,7 +113,7 @@ func (u *InventoryUsecase) logAuctionSettlementRouting(ctx context.Context, matc
 			"sample_leg_key", AuctionLegKey(matchID, sellerID, LegSellerDeliver))
 		return
 	}
-	plog.With(ctx).Infow("msg", "auction_settlement_routing",
+	plog.With(ctx).Debugw("msg", "auction_settlement_routing",
 		"match_id", matchID,
 		"cross_shard", parties.CrossShardSettlement(),
 		"cross_region", false)

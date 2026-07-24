@@ -64,7 +64,7 @@ func (u *PlayerUsecase) logProfilePlacement(ctx context.Context, playerID uint64
 	if !ok {
 		return
 	}
-	plog.With(ctx).Infow("msg", "profile_placement",
+	plog.With(ctx).Debugw("msg", "profile_placement",
 		"player_id", playerID,
 		"op", op,
 		"region", owner.RegionID,

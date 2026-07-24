@@ -94,7 +94,7 @@ func (u *TeamUsecase) logTeamComposition(ctx context.Context, team *teamv1.TeamS
 		return
 	}
 	distinct := DistinctTeamRegions(regions)
-	plog.With(ctx).Infow("msg", "team_composition_routing",
+	plog.With(ctx).Debugw("msg", "team_composition_routing",
 		"team_id", team.GetTeamId(),
 		"captain_id", team.GetCaptainId(),
 		"member_count", len(team.Members),

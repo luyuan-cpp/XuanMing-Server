@@ -317,7 +317,7 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 		return true, nil
 	}
 
-	plog.With(ctx).Infow("msg", "battle_result_recorded",
+	plog.With(ctx).Debugw("msg", "battle_result_recorded",
 		"match_id", result.GetMatchId(), "winner_team", result.GetWinnerTeam(),
 		"outcome", result.GetOutcome().String(), "players", len(result.GetStats()))
 
@@ -591,7 +591,7 @@ func (u *BattleResultUsecase) publishOutboxBatch(ctx context.Context) (int, erro
 		published++
 	}
 	if published > 0 {
-		plog.With(ctx).Infow("msg", "outbox_published", "count", published)
+		plog.With(ctx).Debugw("msg", "outbox_published", "count", published)
 	}
 	return published, nil
 }
@@ -761,7 +761,7 @@ func (u *BattleResultUsecase) publishTerminalReleaseBatch(ctx context.Context) (
 		finalized++
 	}
 	if finalized > 0 {
-		plog.With(ctx).Infow("msg", "terminal_release_outbox_finalized", "count", finalized)
+		plog.With(ctx).Debugw("msg", "terminal_release_outbox_finalized", "count", finalized)
 	}
 	return finalized, nil
 }
@@ -848,7 +848,7 @@ func (u *BattleResultUsecase) publishDropBatch(ctx context.Context) (int, error)
 		granted++
 	}
 	if granted > 0 {
-		plog.With(ctx).Infow("msg", "drop_outbox_granted", "count", granted)
+		plog.With(ctx).Debugw("msg", "drop_outbox_granted", "count", granted)
 	}
 	return granted, nil
 }
