@@ -45,11 +45,12 @@ if ($Version -notmatch '^[vV]?\d+(\.\d+){1,3}([.-][0-9A-Za-z][0-9A-Za-z.-]*)?$')
 if ($Version -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { throw "版本号含非法文件名字符:$Version" }
 $verNoV = $Version -replace '^[vV]', ''   # CHANGELOG 段落用不带 v 的号
 
-$root = Get-ArtifactRoot -Override $ArtifactRoot
-$releasesDir = Join-Path $root 'releases'
-if (-not (Test-Path -LiteralPath $releasesDir)) { New-Item -ItemType Directory -Path $releasesDir -Force | Out-Null }
-$manifestPath = Join-Path $releasesDir "$Version.json"
-$notesMdPath  = Join-Path $releasesDir "$Version.md"
+$root    = Get-ArtifactRoot -Override $ArtifactRoot
+$relRoot = Get-ChannelRoot -Override $ArtifactRoot -Channel 'release'   # <root>\releases
+$manifestsDir = Join-Path $relRoot 'manifests'
+if (-not (Test-Path -LiteralPath $manifestsDir)) { New-Item -ItemType Directory -Path $manifestsDir -Force | Out-Null }
+$manifestPath = Join-Path $manifestsDir "$Version.json"
+$notesMdPath  = Join-Path $manifestsDir "$Version.md"
 if (Test-Path -LiteralPath $manifestPath) { throw "release 已存在且不可变:$manifestPath(新发布用新版本号)" }
 
 # ---- 修复内容:-Notes > -NotesFile > CHANGELOG.md 段落 ----
@@ -86,16 +87,28 @@ if ($Notes) {
 
 # ---- 镜像离线包引用 ----
 if (-not $ImagesVersion) {
-    $latest = Join-Path $root 'images\latest.json'
-    if (-not (Test-Path -LiteralPath $latest)) { throw '没有已发布的镜像版本,先跑 publish_offline_images.ps1。' }
+    $latest = Join-Path $relRoot 'images\latest.json'
+    if (-not (Test-Path -LiteralPath $latest)) { throw '没有已发布的 release 镜像版本,先跑 publish_offline_images.ps1 -Version <版本>。' }
     $ImagesVersion = (Get-Content -LiteralPath $latest -Raw | ConvertFrom-Json).version
 }
-$imagesDir = Join-Path $root "images\$ImagesVersion"
-if (-not (Test-Path -LiteralPath $imagesDir)) { throw "镜像版本不存在:$imagesDir" }
+$imagesDir = Join-Path $relRoot "images\$ImagesVersion"
+if (-not (Test-Path -LiteralPath $imagesDir)) { throw "release 镜像版本不存在:$imagesDir(先 publish_offline_images.ps1 -Version)" }
 Write-Host "[INFO] 校验镜像制品:$imagesDir" -ForegroundColor Cyan
 Test-Sha256Sums -Dir $imagesDir
 $imagesManifest = Get-Content -LiteralPath (Join-Path $imagesDir 'images-manifest.json') -Raw | ConvertFrom-Json
 $imagesInfo     = Get-Content -LiteralPath (Join-Path $imagesDir 'build-info.json') -Raw | ConvertFrom-Json
+
+# ---- app_version 交叉校验(复审 P1)----
+# release 轨镜像必须自报与本次发布一致的版本,否则会出现"发布包名为 v0.1.0、镜像内自报
+# 别的版本(gSHA)"的错配。build-info.app_version 由 publish_offline_images.ps1 -Version 注入;
+# 为空(疑似用无 -Version 的快照发布)或与本次 $Version 不一致一律拒,不生成错配发布。
+$imgAppVer = $imagesInfo.app_version
+if (-not $imgAppVer) {
+    throw "release 镜像 build-info 缺 app_version(疑似无 -Version 的快照发布):$imagesDir;重跑 publish_offline_images.ps1 -Version $Version 后再发布。"
+}
+if ($imgAppVer -ne $Version) {
+    throw "release 版本号与镜像自报版本不一致:发布=$Version,镜像 app_version=$imgAppVer;对齐后重发(勿手工改名)。"
+}
 
 # ---- UE 包引用 ----
 $clientRefs = @(foreach ($rel in $ClientPackages) {
@@ -139,7 +152,7 @@ $release = [pscustomobject]@{
     publisher       = $env:USERNAME
     images          = [pscustomobject]@{
         version    = $ImagesVersion
-        path       = "images/$ImagesVersion"
+        path       = "releases/images/$ImagesVersion"
         git_sha    = $imagesInfo.git_sha
         git_dirty  = $imagesInfo.git_dirty
         image_list = $imagesManifest
@@ -147,9 +160,11 @@ $release = [pscustomobject]@{
     client_packages = $clientRefs
     configtable     = $cfg
 }
+# 复审 P2:JSON 是发布哨兵(第 54 行不可变守卫据其存在与否判定),必须**最后**落盘。先只写
+# 它的 tmp,等 Markdown 也写完后再 Move JSON,避免"JSON 已提交但 MD 写失败"留下半套 release
+# 且重跑被守卫拒的死局。任一步在 JSON Move 之前失败 → 无哨兵 → 可直接重跑。
 $tmp = "$manifestPath.tmp"
 $release | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
-Move-Item -LiteralPath $tmp -Destination $manifestPath
 
 # ---- 写人可读 release notes ----
 $md = @()
@@ -168,7 +183,10 @@ $md += ""
 $md += $resolvedNotes
 $mdTmp = "$notesMdPath.tmp"
 ($md -join "`n") | Set-Content -LiteralPath $mdTmp -Encoding utf8NoBOM
-Move-Item -LiteralPath $mdTmp -Destination $notesMdPath
+Move-Item -LiteralPath $mdTmp -Destination $notesMdPath -Force
+
+# 两个产物的 tmp 都已写好、MD 已就位,最后一步才提交 JSON 哨兵(复审 P2 原子性收口)。
+Move-Item -LiteralPath $tmp -Destination $manifestPath
 
 Write-Host "[ OK ] release $Version 已生成:" -ForegroundColor Green
 Write-Host "  manifest: $manifestPath"

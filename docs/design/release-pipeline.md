@@ -19,20 +19,32 @@
 
 ## 2. 制品目录布局与铁律
 
+**两轨分仓**(Snapshot 快照轨 / Release 发布版本轨,类比 Nexus SNAPSHOT/RELEASE 仓):
+
 ```
 <PANDORA_ARTIFACT_ROOT>\
-├── client\<branch>\<Target>_<Platform>_<Config>\r<svn版本>\   UE 包(目录原样 + build-info.json + sha256sums.txt)
-├── images\<g+git短sha>\pandora-images.tar                     业务镜像离线包(+ images-manifest.json + sha256sums.txt)
-├── images\latest.json                                         唯一可变指针(类比 registry latest tag)
-└── releases\<name>.json                                       release manifest(不可变)
+├── snapshots\                                    dev 快照轨(来源戳命名,激进清理)
+│   ├── client\<branch>\<flavor>\r<svn版本>\        UE 包
+│   ├── images\<g+git短sha>\pandora-images.tar      业务镜像离线包
+│   └── images\latest.json                          快照指针
+└── releases\                                     发布版本轨(语义版本,不可变,永久保留)
+    ├── client\<branch>\<flavor>\<版本>\             UE 包
+    ├── images\<版本>\pandora-images.tar             业务镜像离线包
+    ├── images\latest.json                          发布指针
+    └── manifests\<版本>.json / <版本>.md            release manifest + 人可读 notes
 ```
+
+轨道由**有没有版本号**决定:发布脚本带 `-Version` = release 轨(releases\,目录名=版本号);
+不带 = snapshot 轨(snapshots\,目录名=git sha / svn rev)。每个制品目录都带 `build-info.json`(含 channel)+ `sha256sums.txt`。
 
 三条铁律(脚本强制):
 
 1. **不可变**:版本目录已存在即拒绝覆盖(CI 幂等重跑用 `-SkipIfExists` 静默跳过);
 2. **原子发布**:内容先写 `.tmp-` staging,再整目录 rename 上线,不存在半截制品;
-3. **可追溯**:版本号 = 源码版本(SVN rev / git sha)。脏工作区默认拒绝发布,
-   `-AllowDirty` 仅限本机联调且版本号强制带 `-dirty-时间戳`,正式发布禁用。
+3. **可追溯**:snapshot 版本号=源码版本(SVN rev / git sha);release 版本号=语义版本。
+   脏工作区在 release 轨默认拒绝(`-AllowDirty` 仅限内测);snapshot 轨允许脏(带 `-dirty-时间戳`)。
+
+清理:`artifacts_retention.ps1` **只清 snapshots\**(每流留最近 N),`releases\` 永不触碰。
 
 ## 3. 脚本清单
 
@@ -57,14 +69,23 @@
 - **git**(后端仓):`git-pre-receive.sh`(自建裸仓库);托管平台改用 GitHub push ruleset / GitLab push rules
   (路径 `*.tar` 拒收 + 单文件 50MB 上限)。
 
-## 5. CI 流水线
+## 5. CI 流水线(两轨:dev 快照自动 / release 版本手动)
 
-- **客户端 `Tool/Build/Jenkinsfile`**(改造):打包链不变(改动检测 → Preflight → Package.bat/BuildGraph);
-  原 `Commit Packages`(svn commit 回库)替换为 `Publish Packages`(调 PublishPackages.ps1 `-SkipIfExists`),
-  参数 `COMMIT_PACKAGES`→`PUBLISH_PACKAGES`,新增 `ARTIFACT_ROOT_OVERRIDE`,删除 svn 提交凭据参数。
-  `Package.bat` 同步在 `BUILD_INFO.txt` 里落 `Revision=<svn rev>` 版本戳。
-- **后端 `Jenkinsfile`**(新增):pollSCM → `ci_backend.ps1`(全模块 build+test)→
-  `publish_offline_images.ps1 -SkipIfExists`(测试全绿才发布;脏树/失败即停)。
+每个仓库两条流水线,同分支双触发:
+
+| 轨 | 后端 | 客户端 | 触发 | 产出 |
+|---|---|---|---|---|
+| **dev 快照** | `Jenkinsfile` | `Tool/Build/Jenkinsfile` | pollSCM 自动 | snapshots\(git sha / r<rev>) |
+| **release 版本** | `Jenkinsfile.release` | `Tool/Build/Jenkinsfile.release` | 手动传 VERSION | releases\(vX.Y.Z) + manifest |
+
+- **dev 后端**:pollSCM → `ci_backend.ps1`(全模块 build+test)→ `publish_offline_images.ps1 -SkipIfExists`(无版本 → snapshot)。
+- **dev 客户端**:改动检测 → Preflight → Package.bat → `PublishPackages.ps1 -SkipIfExists`(无版本 → snapshot);
+  `Package.bat` 在 `BUILD_INFO.txt` 落 `Version=<ProjectVersion>` + `Revision=<svn rev>`。
+- **release 后端**:手动 VERSION → build+test → `publish_offline_images.ps1 -Version <V>`(镜像自报版本)→ `make_release.ps1 -Version <V>`。
+- **release 客户端**:手动 VERSION → `PackageSet.ps1 -Version <V>`(构建 + `PublishPackages -Version` 发 releases;DS 自动锁源码引擎)。
+- **UE DS 引擎坑**:Server(DS)目标必须用能编 Server 的**源码/自制引擎**;Epic 发行版(launcher)引擎会报
+  `Server targets are not currently supported from this engine distribution`。`PackageSet.ps1` 打 Server 时
+  自动从注册表挑源码引擎(或 `-EnginePath` 指定),避免默认解析翻到发行版。
   构建机要求:Go 1.26.5、Docker Desktop、pwsh、git、svn 命令行(客户端节点另需 UE 引擎)。
 
 镜像**在线发布**(推 registry)已有独立机制:`start.ps1 -BuildPush`(clean commit 强制 + 不可变 tag 门禁),

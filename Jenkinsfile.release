@@ -1,0 +1,71 @@
+// Pandora 后端【release 发布版本轨】流水线:手动触发,按语义版本出不可变发布制品 + release manifest。
+// 与 Jenkinsfile(dev 快照轨,自动)配对;两轨共用制品根,分仓 snapshots\ / releases\。
+// 前置:CHANGELOG.md 已写好该版本段落(make_release 读它作修复内容);正式发布应从干净树。
+// 客户端 UE 包由客户端 Tool/Build/Jenkinsfile.release 先发布,其 releases 路径经 CLIENT_PACKAGES 传入。
+pipeline {
+    agent { label 'windows' }   // 需 Go 1.26.5 + Docker + pwsh + git
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+    }
+
+    parameters {
+        string(name: 'VERSION', defaultValue: '', trim: true,
+               description: '语义版本,如 v0.1.0(必填)。须与 CHANGELOG.md 段落、客户端 ProjectVersion 一致。')
+        string(name: 'CLIENT_PACKAGES', defaultValue: '', trim: true,
+               description: '逗号分隔的 UE 包 releases 路径(releases/client/<branch>/<flavor>/<版本>);留空则本次只含镜像。')
+        booleanParam(name: 'ALLOW_DIRTY', defaultValue: false,
+               description: '允许脏工作树发布(仅内测;正式发布应干净树,可追溯到确定提交)。')
+        string(name: 'ARTIFACT_ROOT_OVERRIDE', defaultValue: '', trim: true,
+               description: 'Optional artifact root override（默认 PANDORA_ARTIFACT_ROOT / F:\\work\\artifacts）。')
+    }
+
+    stages {
+        stage('Checkout') { steps { checkout scm } }
+
+        stage('Validate') {
+            steps {
+                script {
+                    if (!params.VERSION?.trim()) { error 'VERSION 必填(如 v0.1.0)。' }
+                }
+            }
+        }
+
+        stage('Build & Test') {
+            steps { bat 'pwsh -NoProfile -ExecutionPolicy Bypass -File tools\\scripts\\ci_backend.ps1' }
+        }
+
+        stage('Publish Release Images') {
+            steps {
+                script {
+                    def envs = []
+                    def ov = params.ARTIFACT_ROOT_OVERRIDE?.trim()
+                    if (ov) { envs << "PANDORA_ARTIFACT_ROOT=${ov}" }
+                    def dirty = params.ALLOW_DIRTY ? ' -AllowDirty' : ''
+                    def cmd = "pwsh -NoProfile -ExecutionPolicy Bypass -File tools\\scripts\\publish_offline_images.ps1 -Version ${params.VERSION} -SkipIfExists${dirty}"
+                    if (envs) { withEnv(envs) { bat cmd } } else { bat cmd }
+                }
+            }
+        }
+
+        stage('Make Release Manifest') {
+            steps {
+                script {
+                    def envs = []
+                    def ov = params.ARTIFACT_ROOT_OVERRIDE?.trim()
+                    if (ov) { envs << "PANDORA_ARTIFACT_ROOT=${ov}" }
+                    def dirty = params.ALLOW_DIRTY ? ' -AllowDirty' : ''
+                    def cp = ''
+                    if (params.CLIENT_PACKAGES?.trim()) {
+                        def quoted = params.CLIENT_PACKAGES.split(',').collect { "'${it.trim()}'" }.join(',')
+                        cp = " -ClientPackages ${quoted}"
+                    }
+                    def cmd = "pwsh -NoProfile -ExecutionPolicy Bypass -File tools\\scripts\\make_release.ps1 -Version ${params.VERSION}${cp}${dirty}"
+                    if (envs) { withEnv(envs) { bat cmd } } else { bat cmd }
+                }
+            }
+        }
+    }
+}

@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-  制品目录保留策略:每条制品流保留最近 N 个版本,release 引用的版本永不删除。
+  制品保留策略:只清理 dev 快照(snapshots\),每条流保留最近 N 个;releases\ 永不触碰。
 
 .DESCRIPTION
-  扫描范围:
-    <制品根>\images\<版本>\
-    <制品根>\client\<branch>\<flavor>\r<rev>\
-  排除项:被 <制品根>\releases\*.json 引用的任何版本目录。
-  默认 dry-run 只打印将删除项;确认无误后加 -Force 真删。
-  建议在构建机上排期周跑(例如 Windows 计划任务每周一次)。
+  两轨分仓后,发布版本(releases\)是不可变永久制品,由本脚本**完全不碰**;
+  只对 dev 快照做滚动清理:
+    <制品根>\snapshots\images\<gitsha>\
+    <制品根>\snapshots\client\<branch>\<flavor>\r<rev>\
+  每条流按修改时间保留最近 -KeepLast 个,其余删除。默认 dry-run,加 -Force 真删。
+  建议构建机排期周跑(Windows 计划任务)。
 
 .EXAMPLE
   pwsh tools/scripts/artifacts_retention.ps1                # 预览
@@ -16,37 +16,24 @@
 #>
 [CmdletBinding()]
 param(
-    [int]$KeepLast = 10,     # 每条制品流(images / 每个 client flavor)保留的最近版本数
+    [int]$KeepLast = 10,     # 每条快照流保留的最近版本数
     [switch]$Force,          # 真删;缺省 dry-run
     [string]$ArtifactRoot
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'artifacts_lib.ps1')
-$root = Get-ArtifactRoot -Override $ArtifactRoot
-
 if ($KeepLast -lt 1) { throw '-KeepLast 至少为 1。' }
 
-# ---- 收集 release 引用(相对路径,'/'分隔) ----
-$referenced = New-Object 'System.Collections.Generic.HashSet[string]'
-$releasesDir = Join-Path $root 'releases'
-if (Test-Path -LiteralPath $releasesDir) {
-    foreach ($f in Get-ChildItem -LiteralPath $releasesDir -Filter '*.json' -File) {
-        $rel = Get-Content -LiteralPath $f.FullName -Raw | ConvertFrom-Json
-        if ($rel.images.path) { [void]$referenced.Add([string]$rel.images.path) }
-        foreach ($cp in @($rel.client_packages)) {
-            if ($cp.path) { [void]$referenced.Add([string]$cp.path) }
-        }
-    }
-}
+$snapRoot = Get-ChannelRoot -Override $ArtifactRoot -Channel 'snapshot'   # <root>\snapshots
 
-# ---- 组装各制品流的版本目录清单 ----
+# ---- 组装快照流(每条流各自保留最近 N) ----
 $streams = @()
-$imagesRoot = Join-Path $root 'images'
+$imagesRoot = Join-Path $snapRoot 'images'
 if (Test-Path -LiteralPath $imagesRoot) {
     $streams += ,@(Get-ChildItem -LiteralPath $imagesRoot -Directory | Where-Object { $_.Name -notmatch '^\.tmp-' })
 }
-$clientRoot = Join-Path $root 'client'
+$clientRoot = Join-Path $snapRoot 'client'
 if (Test-Path -LiteralPath $clientRoot) {
     foreach ($branch in Get-ChildItem -LiteralPath $clientRoot -Directory) {
         foreach ($flavor in Get-ChildItem -LiteralPath $branch.FullName -Directory) {
@@ -59,25 +46,18 @@ $toDelete = @()
 foreach ($vers in $streams) {
     if (-not $vers -or $vers.Count -le $KeepLast) { continue }
     $sorted = $vers | Sort-Object LastWriteTimeUtc -Descending
-    foreach ($old in ($sorted | Select-Object -Skip $KeepLast)) {
-        $relPath = ([System.IO.Path]::GetRelativePath($root, $old.FullName)) -replace '\\', '/'
-        if ($referenced.Contains($relPath)) {
-            Write-Host "[KEEP] $relPath(被 release 引用)" -ForegroundColor Yellow
-            continue
-        }
-        $toDelete += $old
-    }
+    $toDelete += ($sorted | Select-Object -Skip $KeepLast)
 }
 
-if ($toDelete.Count -eq 0) { Write-Host '[ OK ] 没有需要清理的版本。' -ForegroundColor Green; exit 0 }
+if ($toDelete.Count -eq 0) { Write-Host '[ OK ] 快照无需清理(releases\ 永不触碰)。' -ForegroundColor Green; exit 0 }
 
 foreach ($d in $toDelete) {
-    $relPath = ([System.IO.Path]::GetRelativePath($root, $d.FullName)) -replace '\\', '/'
+    $rel = ([System.IO.Path]::GetRelativePath((Split-Path $snapRoot -Parent), $d.FullName)) -replace '\\', '/'
     if ($Force) {
         Remove-Item -LiteralPath $d.FullName -Recurse -Force
-        Write-Host "[DEL ] $relPath" -ForegroundColor Red
+        Write-Host "[DEL ] $rel" -ForegroundColor Red
     } else {
-        Write-Host "[DRY ] 将删除:$relPath(加 -Force 执行)" -ForegroundColor Cyan
+        Write-Host "[DRY ] 将删除:$rel(加 -Force 执行)" -ForegroundColor Cyan
     }
 }
-Write-Host ("[ OK ] {0} 个过期版本{1}。" -f $toDelete.Count, ($(if ($Force) { '已删除' } else { '待删除(dry-run)' }))) -ForegroundColor Green
+Write-Host ("[ OK ] {0} 个过期快照{1};releases\ 未触碰。" -f $toDelete.Count, ($(if ($Force) { '已删除' } else { '待删除(dry-run)' }))) -ForegroundColor Green

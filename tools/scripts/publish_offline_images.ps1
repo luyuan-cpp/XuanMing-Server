@@ -49,7 +49,14 @@ try {
 if ($dirty -and -not $AllowDirty) {
     throw 'git 工作区有未提交改动,发布的镜像无法追溯到确定版本。先提交,或本机联调明确加 -AllowDirty。'
 }
-$version = if ($dirty) { "g$sha-dirty-" + (Get-Date -Format 'yyyyMMdd-HHmmss') } else { "g$sha" }
+# 注意:git 快照版本变量名不能用 $version —— PowerShell 变量名大小写不敏感,$version 与参数
+# $Version 是同一变量,会覆盖用户传入的发布版本号(v0.1.0 → g<sha>),连带污染下面的 channel /
+# folderVer / app_version 判定。用独立名 $snapshotVer 隔离。
+$snapshotVer = if ($dirty) { "g$sha-dirty-" + (Get-Date -Format 'yyyyMMdd-HHmmss') } else { "g$sha" }
+
+# 频道:有 -Version = 发布版本轨(releases\,目录名=版本号);否则 dev 快照轨(snapshots\,目录名=git sha)
+$channel   = if ($Version) { 'release' } else { 'snapshot' }
+$folderVer = if ($Version) { ($Version -replace '[^A-Za-z0-9._-]', '_') } else { $snapshotVer }
 
 # ---- 2) 生成/校验离线 tar(复用既有脚本与其过期守卫,不另造构建逻辑) ----
 # 发布版本号覆盖:设 PANDORA_RELEASE_VERSION 后,start.ps1 的 Get-VersionInfo 用它注入 -ldflags,
@@ -58,9 +65,9 @@ if ($Version) {
     $env:PANDORA_RELEASE_VERSION = $Version
     Write-Info "镜像版本注入为 $Version(覆盖 git describe;git sha $sha 仍作溯源)"
 }
-$exportArgs = @()
-if (-not $SkipBuild) { $exportArgs += @('-Build', '-BuildMode', 'host') }
-& (Join-Path $ScriptDir 'export_images.ps1') @exportArgs
+# 显式传参:数组 splat 传 switch 参数(-Build)会被 PowerShell 误绑成 -BuildMode 的值,必须显式写。
+$exportScript = Join-Path $ScriptDir 'export_images.ps1'
+if ($SkipBuild) { & $exportScript } else { & $exportScript -Build -BuildMode host }
 if ($LASTEXITCODE -ne 0) { throw "export_images.ps1 失败(exit=$LASTEXITCODE),不发布。" }
 
 $tar = Join-Path $ProjectRoot 'deploy/offline-images/pandora-images.tar'
@@ -79,21 +86,22 @@ $imagesManifest = @(foreach ($e in @($entries)) {
 })
 if ($imagesManifest.Count -eq 0) { throw '离线包 manifest 为空,拒绝发布。' }
 
-# ---- 4) 原子发布 ----
-$root = Get-ArtifactRoot -Override $ArtifactRoot
-$finalDir = Join-Path $root "images\$version"
+# ---- 4) 原子发布(按频道分仓) ----
+$channelRoot = Get-ChannelRoot -Override $ArtifactRoot -Channel $channel
+$finalDir = Join-Path $channelRoot "images\$folderVer"
 if (Test-Path -LiteralPath $finalDir) {
     if ($SkipIfExists) { Write-Ok "版本已发布,跳过(不可变):$finalDir"; exit 0 }
-    throw "版本已发布且不可覆盖:$finalDir(源码没变就无需重发;变了应产生新 sha)"
+    throw "版本已发布且不可覆盖:$finalDir($channel 轨制品不可变)"
 }
 
-Write-Info "发布 $version → $finalDir"
+Write-Info "发布 [$channel] $folderVer → $finalDir"
 $staging = New-AtomicStaging -FinalDir $finalDir
 try {
     Copy-Item -LiteralPath $tar -Destination (Join-Path $staging 'pandora-images.tar')
     $imagesManifest | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $staging 'images-manifest.json') -Encoding utf8NoBOM
     [pscustomobject]@{
-        version      = $version
+        version      = $folderVer
+        channel      = $channel     # snapshot(dev) / release(发布版本)
         app_version  = $Version    # 注入镜像的发布版本号(v0.1.0);空=未指定,走 git describe 默认
         git_sha      = $sha
         git_dirty    = $dirty
@@ -109,9 +117,9 @@ try {
     throw
 }
 
-# latest.json 是唯一可变文件(指针,类比 registry 的 latest tag);版本目录本身不可变
-[pscustomobject]@{ version = $version; published_at = (Get-Date -Format 'o') } |
-    ConvertTo-Json | Set-Content (Join-Path $root 'images\latest.json') -Encoding utf8NoBOM
+# latest.json 是唯一可变文件(指针,类比 registry 的 latest tag);版本目录本身不可变。每个频道各一份。
+[pscustomobject]@{ version = $folderVer; channel = $channel; published_at = (Get-Date -Format 'o') } |
+    ConvertTo-Json | Set-Content (Join-Path $channelRoot 'images\latest.json') -Encoding utf8NoBOM
 
-Write-Ok "镜像离线包已发布:$finalDir($($imagesManifest.Count) 个镜像)"
+Write-Ok "镜像离线包已发布[$channel]:$finalDir($($imagesManifest.Count) 个镜像)"
 Write-Info '目标机拉取:pwsh tools/scripts/fetch_offline_images.ps1(之后一键启动 cmd 照常)'

@@ -1,6 +1,7 @@
-// Pandora 后端流水线:git 提交 → 全模块 build/test → 业务镜像离线包发布到制品目录。
-// 与客户端 Tool/Build/Jenkinsfile(UE 打包 → PublishPackages)共用同一个制品根,
-// 布局与规则见 docs/design/release-pipeline.md。
+// Pandora 后端【dev 快照轨】流水线:每次提交自动 → 全模块 build/test → 快照镜像发布到 snapshots\。
+// 无版本号(git sha 命名),激进清理。发布正式版走 Jenkinsfile.release(手动 + 语义版本)。
+// 与客户端 Tool/Build/Jenkinsfile(dev 快照)共用制品根,分仓 snapshots\ / releases\;
+// 布局与两轨规则见 docs/design/release-pipeline.md。
 pipeline {
     // 构建机需具备:Go 1.26.5(宿主交叉编译)、Docker Desktop、pwsh、git。
     agent { label 'windows' }

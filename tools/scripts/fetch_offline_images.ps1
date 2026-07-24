@@ -19,7 +19,9 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Version,       # 缺省读 images\latest.json 指针
+    [string]$Version,       # 发布轨=版本号(如 v0.1.0,必填);快照轨=指定 git sha,缺省读 latest 指针
+    [ValidateSet('snapshot', 'release')]
+    [string]$Channel = 'snapshot',  # 默认拉 dev 快照;拉正式版用 -Channel release -Version v0.1.0
     [string]$ArtifactRoot
 )
 
@@ -28,19 +30,21 @@ $ScriptDir   = $PSScriptRoot
 $ProjectRoot = (Resolve-Path "$ScriptDir/../..").Path
 . (Join-Path $ScriptDir 'artifacts_lib.ps1')
 
-$root = Get-ArtifactRoot -Override $ArtifactRoot
+$channelRoot = Get-ChannelRoot -Override $ArtifactRoot -Channel $Channel
 
 if (-not $Version) {
-    $latest = Join-Path $root 'images\latest.json'
+    if ($Channel -eq 'release') { throw '发布轨必须指定 -Version(如 v0.1.0)。' }
+    $latest = Join-Path $channelRoot 'images\latest.json'
     if (-not (Test-Path -LiteralPath $latest)) {
-        throw "未指定 -Version 且找不到指针 $latest;先在构建机跑 publish_offline_images.ps1。"
+        throw "未指定 -Version 且找不到快照指针 $latest;先在构建机跑 publish_offline_images.ps1。"
     }
     $Version = (Get-Content -LiteralPath $latest -Raw | ConvertFrom-Json).version
     if (-not $Version) { throw "latest.json 内容非法:$latest" }
 }
+$folderVer = if ($Channel -eq 'release') { ($Version -replace '[^A-Za-z0-9._-]', '_') } else { $Version }
 
-$verDir = Join-Path $root "images\$Version"
-if (-not (Test-Path -LiteralPath $verDir)) { throw "制品版本不存在:$verDir" }
+$verDir = Join-Path $channelRoot "images\$folderVer"
+if (-not (Test-Path -LiteralPath $verDir)) { throw "制品不存在:$verDir(频道 $Channel)" }
 
 Write-Host "[INFO] 校验制品完整性:$verDir" -ForegroundColor Cyan
 Test-Sha256Sums -Dir $verDir

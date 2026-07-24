@@ -22,6 +22,21 @@ function Get-ArtifactRoot {
     return $root
 }
 
+# 两轨分仓:snapshot(dev 快照,激进清理)/ release(发布版本,不可变永久保留)。
+#   <root>\snapshots\images|client\...
+#   <root>\releases\images|client\...  + <root>\releases\manifests\<版本>.json
+function Get-ChannelRoot {
+    param(
+        [string]$Override,
+        [Parameter(Mandatory)][ValidateSet('snapshot', 'release')][string]$Channel
+    )
+    $root = Get-ArtifactRoot -Override $Override
+    $sub  = if ($Channel -eq 'release') { 'releases' } else { 'snapshots' }
+    $dir  = Join-Path $root $sub
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    return $dir
+}
+
 # 对目录内全部文件生成 sha256sums.txt(相对路径,'/'分隔,与 sha256sum -c 格式兼容)。
 function New-Sha256Sums {
     param([Parameter(Mandatory)][string]$Dir)
