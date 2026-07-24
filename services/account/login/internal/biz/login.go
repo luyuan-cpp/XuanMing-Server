@@ -345,7 +345,15 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 			// 其余为基础设施错误。两者都不得交付凭据。
 			h.Warnw("msg", "session_set_failed", "err", err, "player_id", playerID, "gen", sessGen)
 			if u.sessionGen != nil && errcode.As(err) != errcode.ErrSessionSuperseded {
-				if restored, rerr := u.sessionGen.RestoreSessionJTI(ctx, playerID, sessJTI, sessGenLease); rerr != nil {
+				// 复审 P0-3:「Redis 报错 ≠ Redis 未提交」——Lua 已执行、应答网络丢失时
+				// Redis 实际已持有本次新 jti。回补前先读回:Redis 已收敛到本次 jti 则
+				// 跳过 MySQL 回补(两存储向前收敛到新 jti,登录仍失败不交付凭据,重登
+				// 原子推进自愈);读回失败/不匹配才走原条件回补。避免造出
+				// 「Redis=新 jti、MySQL=旧 jti」的跨存储撕裂。
+				if curJTI, found, gerr := u.sessions.GetJTI(ctx, playerID); gerr == nil && found && curJTI == sessJTI {
+					h.Warnw("msg", "session_set_error_but_committed_skip_restore",
+						"player_id", playerID, "gen", sessGen)
+				} else if restored, rerr := u.sessionGen.RestoreSessionJTI(ctx, playerID, sessJTI, sessGenLease); rerr != nil {
 					h.Errorw("msg", "session_generation_restore_failed", "err", rerr,
 						"player_id", playerID, "gen", sessGen)
 				} else if !restored {

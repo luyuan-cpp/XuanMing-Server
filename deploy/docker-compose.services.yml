@@ -136,7 +136,9 @@ services:
       args: { SERVICE_DIR: services/matchmaking/matchmaker, CMD_NAME: matchmaker }
     image: pandora/matchmaker:dev
     container_name: pandora-matchmaker
-    volumes: [ "../run/cluster/etc/matchmaker.yaml:/app/etc/cluster.yaml:ro" ]
+    volumes:
+      - "../run/cluster/etc/matchmaker.yaml:/app/etc/cluster.yaml:ro"
+      - "../configtable/dist:/app/configtable/active:ro"
     ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50011:50011" ]
     # 含战斗混合模式:ds_allocator 跑宿主,matchmaker 经 host.docker.internal:50020 回连(Linux/WSL 需显式映射)。
     extra_hosts:
@@ -152,7 +154,9 @@ services:
       args: { SERVICE_DIR: services/matchmaking/matchmaker, CMD_NAME: matchmaker }
     image: pandora/matchmaker-pve:dev
     container_name: pandora-matchmaker-pve
-    volumes: [ "../run/cluster/etc/matchmaker-pve.yaml:/app/etc/cluster.yaml:ro" ]
+    volumes:
+      - "../run/cluster/etc/matchmaker-pve.yaml:/app/etc/cluster.yaml:ro"
+      - "../configtable/dist:/app/configtable/active:ro"
     ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50018:50018" ]
     # 含战斗混合模式:同 matchmaker,经 host.docker.internal:50020 回连宿主 ds_allocator。
     extra_hosts:

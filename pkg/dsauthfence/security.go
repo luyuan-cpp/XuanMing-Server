@@ -96,6 +96,17 @@ func strictBoolEnv(name string) (bool, error) {
 	}
 }
 
+// DialSecureEtcdClient 以与 AcquireRuntime 完全相同的生产安全姿态(mTLS/最小权限
+// 证明均从环境读取)连接 etcd。供同 module 的栅栏子包(writerlease 继任租约)复用,
+// 保证所有 DS 授权体系的 etcd 客户端走同一套安全构造,不允许旁路明文路径分叉。
+func DialSecureEtcdClient(endpoints []string, timeout time.Duration, prefix string) (*clientv3.Client, error) {
+	security, err := ClientSecurityFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return newEtcdClient(endpoints, timeout, prefix, security)
+}
+
 func newEtcdClient(endpoints []string, timeout time.Duration, prefix string, security ClientSecurity) (*clientv3.Client, error) {
 	config := clientv3.Config{Endpoints: endpoints, DialTimeout: timeout}
 	if security.enabled() {

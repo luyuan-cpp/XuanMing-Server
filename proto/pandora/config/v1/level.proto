@@ -39,6 +39,13 @@ message LevelRow {
   bool disable_ui_shortcut = 6 [(excel_col) = "禁止ui快捷键开关", (excel_default) = "1"];
   // 匹配列表显示(源表空值默认 0=不显示)
   bool show_in_match_list = 7 [(excel_col) = "匹配列表显示", (excel_default) = "0"];
+  // 队伍人数(一方人数;matchmaker 按 map_id 撮合 team_size vs team_size,
+  //   本地端到端 1v1 填 1,正式 5v5 填 5;源表空值默认 0=沿用服务端全局 team_size 兜底,
+  //   仅战斗类关卡有意义,非副本行留空)
+  uint32 team_size = 8 [(excel_col) = "队伍人数", (excel_default) = "0"];
+  // 是否能退出(客户端退出按钮门控:1=允许主动退出并按失败结算返回 Hub,0=不显示退出按钮;
+  //   当前仅单人 PVE 副本置 1,DS 端 RequestSoloDungeonLeave 仍对 PVE/单人 roster 做兜底校验)
+  bool allow_exit = 9 [(excel_col) = "是否能退出", (excel_default) = "0"];
 }
 
 // LevelTableData 关卡表整表容器(dist/level.json 的根对象;excel_file 注解 = 导表登记)。

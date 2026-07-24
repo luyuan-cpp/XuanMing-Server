@@ -103,7 +103,8 @@ Redis 条件写、fenceLoginDelivery 交付终检、Transfer 前后终检、ACK 
    `session_generation_enforce: false`、`require_ticket_sjti: false`(两处)。
 2. 该状态下:新 Login 写代际、新签发面签 sjti、新兑换点对空值告警放行——
    与旧版本任意混版都兼容(旧读者不执行新门,新读者对旧流量放行)。
-3. hub-allocator 是 `Recreate` 单写者(见 §5),发布时有秒级不可用窗;其余服务
+3. hub-allocator 自写者继任协议落地后为 `RollingUpdate{maxUnavailable:0}`
+   无中断发布(见 §5;首次从无继任协议镜像升级按 §5.3 两步法);其余服务
    RollingUpdate 无中断。
 
 ### 阶段 C:排空旧版本 + 等满对应窗口(R9 复审 P0-3 修正)
@@ -150,39 +151,87 @@ Redis 条件写、fenceLoginDelivery 交付终检、Transfer 前后终检、ACK 
   仍有进程内窗口;窗口内交付的是"已再次被轮换"的凭据,后续任何过门请求都会被拒,
   不构成持续能力(见 login.go 注释)。
 
-## 5. hub-allocator `Recreate` 与不停服红线——**未解决冲突,状态 OPEN**(R9 复审 P0-7)
+## 5. hub-allocator 写者继任协议(succession lease + fencing)——**已实现,状态 CLOSED**(R9 复审 P0-7)
 
-`deploy/k8s/services/services.yaml` 中 hub-allocator 显式 `strategy: Recreate` +
-replicas=1,与「不停服更新」硬约束(PROGRESS.md 2026-07-01)**直接冲突**。
-R9 复审认定这不能再以“记录在案的取舍”关闭——本节如实升级为**待决冲突**,
-需要业务方对“发布窗口控制面秒级不可用”与“不停服红线”之间做显式裁决:
+历史背景:`deploy/k8s/services/services.yaml` 中 hub-allocator 曾显式
+`strategy: Recreate` + replicas=1,与「不停服更新」硬约束(PROGRESS.md
+2026-07-01)直接冲突。R9 复审将其升级为待决冲突。现已按 §5.3 原草图落地
+写者继任协议,Deployment 改为 `RollingUpdate{maxSurge:1, maxUnavailable:0}`,
+发布全程无控制面停机窗口。守护测试:
+`cmd/hub_allocator/main_test.go: TestKubernetesDeploymentRollingUpdateRequiresWriterLease`
+(manifest 策略与 main.go 装配互锁,缺一即红)。
 
-### 5.1 为什么现在不能直接改 RollingUpdate
+### 5.1 协议构成(两层防线)
 
-- hub-allocator 是 assignment/capacity ledger 的**单写者**;dsauthfence V3 的
-  激活契约就是单 Hub 写者(测试 `TestV3ActivationRequiresSingleHubWriter`
-  已把该前提锁死)。
-- RollingUpdate 即使 replicas=1 也会短暂并行旧+新二进制;旧写者不理解
-  后继租约,会重新打开重连竞态(正是本事故要关死的窗口)。把秒级控制面
-  窗口换成写者互踢竞态是净损失。
+1. **跨 Pod 继任租约**(`pkg/dsauthfence/writerlease`):基于 etcd
+   `concurrency.Election`(election=`hub_allocator/writer`,复用 dsauthfence
+   的 mTLS etcd 安全姿态)。Campaign 阻塞直至当选;`election.Rev()`(leader
+   key CreateRevision)即**单调 fencing token**,后继届次严格大于前任;
+   session 掉线立即降级(token 清零)并退避重新竞选;进程退出时 Resign
+   实现亚秒交接。租约仅在 `cfg.DSAuth.AuthorityModeRedis()`(Model B)下
+   启用,无新增配置面。
+2. **业务闸门(fail-fast)**:`biz.HubUsecase.requireWriter()` 在
+   AssignHub / ReleaseHub / TransferHub / TransferToLineForPlayer /
+   Heartbeat / AcknowledgeAdmission / AcknowledgeDeparture 入口先检查
+   本副本是否持有租约,未持有 → 可重试 `ErrUnavailable`(客户端/上游
+   Envoy 重试即打到当前写者)。心跳清扫循环在失去租约时暂停。
+3. **存储级 fencing(权威防线)**:每个 pod 权威槽位增加持久化 fence 键
+   `pandora:hub:wfence:{pod}`(与 shard/auth/ledger 键同 hash slot,可进
+   同一 WATCH/MULTI/EXEC 事务)。所有 hub 权威写事务在 Watch 回调内
+   `guardWriterFence`:当前水位 > 本届 token → **零写入**拒绝
+   (`ErrWriterSuperseded`,可重试);< 本届 → 在写管线内原子推进水位;
+   fence 键**永不 TTL、永不删除**(水位下界必须活得比业务记录久)。
+   即使旧写者的迟到写绕过了业务闸门(GC 停顿、时钟漂移、租约误判),
+   也会被存储层确定性拒绝——这是 Chubby sequencer 语义,与会话代际同构。
 
-### 5.2 影响面(诚实表述)
+### 5.2 覆盖范围与诚实残余
 
-- Recreate 发布窗口内 AssignHub/TransferToLine/AcknowledgeAdmission 控制面
-  短暂失败(客户端可重试);**在场玩家不受影响**(DS 会话与已签票据继续有效)。
-- 但这仍是“发布必然产生可观测不可用窗口”,不满足不停服红线的字面要求。
+受 fence 约束的写事务:UpdateShardWithLock、HeartbeatShard、InitAuth、
+StagePending、MarkDelivered、ActivateHeartbeat、QuarantineExpected、
+ReserveRoutableSeat(reserve=true)、ReleaseRoutableSeat、
+ReserveAssignment、AcknowledgeAdmission、AcknowledgeDeparture、
+ReleaseAssignmentSeatExact、RecordInstanceTeardownProof。
+只读路径(CheckRoutable、InspectAssignmentSeat、Get*)不受闸门影响,
+非写者副本可正常服务读请求。
 
-### 5.3 终局方案草图(succession fencing,待排期)
+诚实残余(记录在案,非漏洞):
 
-1. **跨 Pod 继任租约**:基于 pkg/leader(etcd lease)选举当前写者;新 Pod
-   启动后先竞选,拿到租约才打开写路径。
-2. **每次继任单调 fencing token**:租约变更时分配单调递增的 succession 代际,
-   所有 ledger 写入(Redis Lua/MySQL 条件写)携带并比较该代际,旧写者的
-   迟到写被存储层确定性拒绝(与会话代际同构)。
-3. **dsauthfence V3 契约同步改造**:单写者前提放宽为“单活跃代际写者”,
-   测试契约同步更新。
-4. 上述完成前,`Recreate` 是安全下界,**不得**单独把 strategy 改回
-   RollingUpdate(会重新引入本事故的竞态窗口)。
+- **每玩家 assignment 键**(`pandora:hub:player:<id>`,无 hashtag)不与
+  fence 键同 slot,无法纳入同一事务;该键由四层组合收口:
+  ① 业务闸门(入口拒非写者);② 既有精确 CAS(CompareAndSwapAssignment);
+  ③ **继任者水位推扫**(`AdvanceWriterFences`):新写者当选后,心跳清扫循环
+  把**全部已知 pod**(分片 SET ∪ saga 源 pod)的 fence 一次性推进到本届
+  token,消灭逐 slot 懒推进的「未触碰 pod」盲区——推扫完成后,前任在任何
+  {pod} slot 上的席位预留/账本写全部被拒,其签出的票在 Admission 点必然
+  找不到席位;④ **出票前写者复核**(`confirmWriterForTicket`):票据只在
+  「入口到返回全程持有租约」时交付,入口后失主的在途请求不返回票
+  (可重试 `ErrUnavailable`,重试路由到新写者重签)。残余缩窄为:失主
+  通知送达(session.Done)与出票复核之间的瞬时窗口内,前任可能写下一条
+  assignment 记录——该记录数据合法(席位是其在任内合法预留的),继任者
+  下次 CAS 接续或 TTL 回收,且票据未交付,无玩家可凭其进场。
+- 滚动重叠期间打到非写者副本的写请求收到可重试 `ErrUnavailable`,
+  不是零感知——是「重试即成功」而非「必然成功」。
+- readiness 探针未与租约挂钩(避免非写者被摘除读流量);如后续把写读
+  分离到不同 Service,可再考虑基于租约的探针。
+- dsauthfence V3 的「单 Hub 写者」契约语义收窄为「单活跃届次写者」,
+  由 fence 水位保证,V3 激活仪式本身不变。
+
+### 5.3 首次升级迁移仪式(必读,两步法,无额外停机)
+
+**首次**从不含 writerlease 的旧镜像升级时,旧二进制既不竞选也不理解 fence,
+若直接在 RollingUpdate 下换镜像,滚动重叠 = 最后一次无保护双写窗口。
+利用 k8s `spec.strategy` 不属于 pod template、单独修改不触发 Pod 重建的事实,
+正确迁移是两步提交:
+
+1. **保持 `strategy: Recreate` 不变,先只换镜像**到含 writerlease 的新版。
+   Recreate = 先杀旧后拉新,零重叠零双写;停机窗口与此前每次发布完全相同
+   (现状基线,无新增代价)。
+2. 新镜像稳定后,**单独 apply 把 strategy 改为
+   `RollingUpdate{maxSurge:1, maxUnavailable:0}`**——只改策略字段不重建 Pod,
+   零中断零风险。此后所有升级均为无停机滚动。
+
+备选(接受一次主动停机窗口时):`kubectl -n pandora scale deploy hub-allocator
+--replicas=0` → apply 新 manifest → 自动拉起。两法等价,两步法不产生额外窗口,优先。
 
 ## 6. 存量库检查(dbcheck)
 

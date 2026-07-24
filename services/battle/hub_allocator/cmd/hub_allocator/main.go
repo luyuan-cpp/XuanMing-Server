@@ -29,6 +29,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
+	"github.com/luyuancpp/pandora/pkg/dsauthfence/writerlease"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
@@ -557,6 +558,33 @@ func main() {
 			os.Exit(1)
 		}()
 		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch(), "reclaimed_stale_capability", fence.Reclaimed())
+
+		// R9 P0-7:写者继任租约(session-generation-rollout.md §5)。把「单写者」从部署
+		// 策略(Recreate)下沉为运行时协议:全体副本竞选同一 etcd election,仅当选
+		// 副本可写(biz 入口 gate),存储层在同一 Redis 事务内比较/推进单调 fencing
+		// token(data/writer_fence.go),迟到旧写者零写入。etcd 已是本模式硬依赖
+		// (上方 AcquireRuntime),此处不新增依赖类别;启动失败 fail-fast。
+		hostname, _ := os.Hostname()
+		writerLease, wlErr := writerlease.Start(context.Background(), writerlease.Config{
+			Endpoints:   cfg.DSAuth.Fence.EtcdEndpoints,
+			Election:    "hub_allocator/writer",
+			Identity:    fmt.Sprintf("%s/%d", hostname, os.Getpid()),
+			LeaseTTLSec: int(cfg.DSAuth.Fence.EtcdLeaseTTLSec),
+			DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
+		})
+		if wlErr != nil {
+			helper.Errorw("msg", "hub_writer_lease_start_failed", "err", wlErr)
+			os.Exit(1)
+		}
+		defer func() { _ = writerLease.Close() }()
+		uc.SetWriterFence(writerLease)
+		repo.SetWriterFence(writerLease)
+		if authRepo, ok := hubAuthRepo.(*data.RedisHubAuthRepo); ok {
+			authRepo.SetWriterFence(writerLease)
+		}
+		helper.Infow("msg", "hub_writer_lease_started",
+			"election", "hub_allocator/writer", "identity", fmt.Sprintf("%s/%d", hostname, os.Getpid()),
+			"hint", "未当选副本拒写(可重试);存储级 fencing 同事务拦迟到旧写")
 	}
 
 	// 7. 后台心跳超时扫描(随进程生命周期启停)

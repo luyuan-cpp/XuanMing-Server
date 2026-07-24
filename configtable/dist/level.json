@@ -25,13 +25,15 @@
       "name": "战斗测试",
       "asset_path": "/Game/Test/Level/Fight/Lvl_Test_Fight.Lvl_Test_Fight",
       "game_mode_class": "/Script/Pandora.PandoraBattleGameMode",
-      "category": 4
+      "category": 4,
+      "team_size": 1
     },
     {
       "id": 5,
       "name": "测试场景",
       "asset_path": "/Game/Test/Level/_Test/Level_TopDown_Test02.Level_TopDown_Test02",
-      "category": 4
+      "category": 4,
+      "team_size": 1
     },
     {
       "id": 6,
@@ -39,7 +41,8 @@
       "asset_path": "/Game/Test/Level/MobaLevel.MobaLevel",
       "game_mode_class": "/Script/Pandora.PandoraBattleGameMode",
       "category": 4,
-      "show_in_match_list": true
+      "show_in_match_list": true,
+      "team_size": 1
     },
     {
       "id": 7,
@@ -47,7 +50,9 @@
       "asset_path": "/Game/Test/Level/SonglinTown.SonglinTown",
       "game_mode_class": "/Script/Pandora.PandoraPveGameMode",
       "category": 4,
-      "show_in_match_list": true
+      "show_in_match_list": true,
+      "team_size": 1,
+      "allow_exit": true
     },
     {
       "id": 9,
@@ -55,7 +60,8 @@
       "asset_path": "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon.map_dungeon_level_1_dungeon",
       "game_mode_class": "/Script/Pandora.PandoraBattleGameMode",
       "category": 4,
-      "show_in_match_list": true
+      "show_in_match_list": true,
+      "team_size": 3
     },
     {
       "id": 10,
@@ -63,7 +69,9 @@
       "asset_path": "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon_Pve.map_dungeon_level_1_dungeon_Pve",
       "game_mode_class": "/Script/Pandora.PandoraPveGameMode",
       "category": 4,
-      "show_in_match_list": true
+      "show_in_match_list": true,
+      "team_size": 1,
+      "allow_exit": true
     }
   ]
 }

@@ -238,12 +238,17 @@ type HubInstanceTeardownProofRepo interface {
 // RedisHubAuthRepo 是基于 go-redis/v9 的 HubAuthRepo 实现。
 type RedisHubAuthRepo struct {
 	rdb redis.UniversalClient
+	// fence:写者继任 fencing token 源(writer_fence.go;nil = 未启用,保持原行为)。
+	fence WriterFence
 }
 
 // NewRedisHubAuthRepo 构造 RedisHubAuthRepo。
 func NewRedisHubAuthRepo(rdb redis.UniversalClient) *RedisHubAuthRepo {
 	return &RedisHubAuthRepo{rdb: rdb}
 }
+
+// SetWriterFence 注入写者继任 fencing(Model B 生产由 main 注入;见 writer_fence.go)。
+func (r *RedisHubAuthRepo) SetWriterFence(f WriterFence) { r.fence = f }
 
 func (r *RedisHubAuthRepo) GetAuth(ctx context.Context, pod string) (*hubv1.HubShardAuthStorageRecord, bool, error) {
 	b, err := r.rdb.Get(ctx, authKey(pod)).Bytes()
@@ -268,6 +273,10 @@ func (r *RedisHubAuthRepo) InitAuth(ctx context.Context, pod, instanceUID string
 	var out *hubv1.HubShardAuthStorageRecord
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			rec := &hubv1.HubShardAuthStorageRecord{}
 			b, gerr := tx.Get(ctx, key).Bytes()
 			switch {
@@ -315,6 +324,7 @@ func (r *RedisHubAuthRepo) InitAuth(ctx context.Context, pod, instanceUID string
 				return merr
 			}
 			if _, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				pipe.Set(ctx, key, payload, authTTL)
 				return nil
 			}); perr != nil {
@@ -322,7 +332,7 @@ func (r *RedisHubAuthRepo) InitAuth(ctx context.Context, pod, instanceUID string
 			}
 			out = rec
 			return nil
-		}, key)
+		}, fencedWatchKeys([]string{key}, pod, r.fence)...)
 		if txErr == nil {
 			return out, nil
 		}
@@ -344,6 +354,10 @@ func (r *RedisHubAuthRepo) StagePending(ctx context.Context, pod string, cred *h
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		var bizErr error
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			b, gerr := tx.Get(ctx, key).Bytes()
 			if gerr == redis.Nil {
 				bizErr = errAuthStale // 未 InitAuth
@@ -392,6 +406,7 @@ func (r *RedisHubAuthRepo) StagePending(ctx context.Context, pod string, cred *h
 				return merr
 			}
 			if _, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				pipe.Set(ctx, key, payload, authTTL)
 				return nil
 			}); perr != nil {
@@ -399,7 +414,7 @@ func (r *RedisHubAuthRepo) StagePending(ctx context.Context, pod string, cred *h
 			}
 			out = rec
 			return nil
-		}, key)
+		}, fencedWatchKeys([]string{key}, pod, r.fence)...)
 		if txErr == nil {
 			return out, nil
 		}
@@ -426,6 +441,10 @@ func (r *RedisHubAuthRepo) MarkDelivered(ctx context.Context, pod string, expect
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		var bizErr error
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			b, gerr := tx.Get(ctx, key).Bytes()
 			if gerr == redis.Nil {
 				bizErr = errAuthStale
@@ -453,11 +472,12 @@ func (r *RedisHubAuthRepo) MarkDelivered(ctx context.Context, pod string, expect
 				return merr
 			}
 			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				pipe.Set(ctx, key, payload, authTTL)
 				return nil
 			})
 			return perr
-		}, key)
+		}, fencedWatchKeys([]string{key}, pod, r.fence)...)
 		if txErr == nil {
 			return nil
 		}

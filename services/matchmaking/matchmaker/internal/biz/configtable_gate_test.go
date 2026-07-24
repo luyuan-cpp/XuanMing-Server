@@ -156,3 +156,49 @@ func TestStartMatch_MapGateDisabled(t *testing.T) {
 		t.Fatalf("未启用配置表时不应校验 map_id: %v", err)
 	}
 }
+
+// TestTeamSizeForMap 按 map_id 读关卡表一方人数:表填正值按表,未填 / 未知 map / 未启用回退全局 cfg.TeamSize。
+func TestTeamSizeForMap(t *testing.T) {
+	f := newFixtureWith(t, 8400, func(c *conf.MatchConf) {
+		c.TeamSize = 5
+		c.MapId = 6 // map_id==0 的默认副本兜底
+	})
+
+	// 未启用配置表(tables=nil)→ 回退全局 5。
+	if got := f.uc.teamSizeForMap(context.Background(), 7); got != 5 {
+		t.Fatalf("tables=nil 应回退全局 5,得 %d", got)
+	}
+
+	dir := t.TempDir()
+	rows := []*configpb.LevelRow{
+		{Id: 6, Name: "MOBA战斗", AssetPath: "/Game/L/MobaLevel.MobaLevel",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, TeamSize: 5},
+		{Id: 7, Name: "松林镇副本", AssetPath: "/Game/L/SonglinTown.SonglinTown",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE, TeamSize: 1, AllowExit: true},
+		{Id: 8, Name: "未填人数副本", AssetPath: "/Game/L/X.X",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE}, // TeamSize 留 0
+	}
+	writeLevelBatch(t, dir, 100, rows)
+	store := configtable.NewStore()
+	if _, err := store.Load(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	f.uc.SetConfigTables(store)
+
+	cases := []struct {
+		name  string
+		mapID uint32
+		want  int
+	}{
+		{"表填 1v1", 7, 1},
+		{"表填 5v5", 6, 5},
+		{"map_id=0 兜底默认副本 6", 0, 5},
+		{"表内未填人数回退全局", 8, 5},
+		{"表内不存在的 map 回退全局", 999, 5},
+	}
+	for _, c := range cases {
+		if got := f.uc.teamSizeForMap(context.Background(), c.mapID); got != c.want {
+			t.Fatalf("%s: teamSizeForMap(%d)=%d, 期望 %d", c.name, c.mapID, got, c.want)
+		}
+	}
+}

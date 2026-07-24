@@ -105,7 +105,7 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 		seenPlayers[playerID] = struct{}{}
 	}
 	aKey, sKey := authKey(pod), shardKey(pod)
-	watchKeys := append([]string{aKey, sKey}, capacityLedgerKeys(pod)...)
+	watchKeys := fencedWatchKeys(append([]string{aKey, sKey}, capacityLedgerKeys(pod)...), pod, r.fence)
 	// 权威心跳时刻只取服务端接收时间。请求 ts_ms 仅可用于遥测，绝不能决定 TTL/新鲜度，
 	// 否则一个未来时间戳可让失联 DS 长期保持可分配。
 	serverNowMs := time.Now().UnixMilli()
@@ -114,6 +114,10 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 		var bizErr error
 		out = ActivateResult{}
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			// ① 授权记录必须存在。
 			ab, gerr := tx.Get(ctx, aKey).Bytes()
 			if gerr == redis.Nil {
@@ -214,6 +218,7 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 			// ⑧ 一次 EXEC 写 auth+shard+ledger(各自 TTL:CE8 授权键用 authTTL,
 			// 分片键用 shardTTL；ledger retention 按单项绝对 expiry)。
 			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				if err := writeHubCapacityLedger(ctx, pipe, pod, ledger); err != nil {
 					return err
 				}
@@ -282,6 +287,10 @@ func (r *RedisHubAuthRepo) QuarantineExpected(
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		result := QuarantineResult{}
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			authRaw, err := tx.Get(ctx, aKey).Bytes()
 			if err == redis.Nil {
 				return nil
@@ -344,6 +353,7 @@ func (r *RedisHubAuthRepo) QuarantineExpected(
 				}
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				// 紧急吊销 tombstone 必须持久；有限 authTTL 会在 allocator 停机后
 				// 自动丢失，并允许仍存活的同 UID GameServer 被重新 Init/Stage。
 				pipe.Set(ctx, aKey, authPayload, 0)
@@ -357,7 +367,7 @@ func (r *RedisHubAuthRepo) QuarantineExpected(
 				result.ProjectionDrained = projectionMatches
 			}
 			return err
-		}, aKey, sKey)
+		}, fencedWatchKeys([]string{aKey, sKey}, pod, r.fence)...)
 		if txErr == redis.TxFailedErr {
 			casConflictBackoff(ctx, attempt)
 			continue
@@ -394,6 +404,15 @@ func (r *RedisHubAuthRepo) routable(ctx context.Context, pod string, nowMs, maxH
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		out = ReserveResult{}
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			// 写路径(reserve=true)才需 fence；只读检查不拒、不推进,避免失主副本的
+			// 纯读路由判断被误拒(写入仍由各写事务自身的 fence 拦截)。
+			advanceFence := noopAdvance
+			if reserve {
+				var ferr error
+				if advanceFence, ferr = guardWriterFence(ctx, tx, pod, r.fence); ferr != nil {
+					return ferr
+				}
+			}
 			ab, gerr := tx.Get(ctx, aKey).Bytes()
 			if gerr == redis.Nil {
 				out.Reason = "auth-missing"
@@ -495,6 +514,7 @@ func (r *RedisHubAuthRepo) routable(ctx context.Context, pod string, nowMs, maxH
 					return merr
 				}
 				_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+					advanceFence(pipe)
 					pipe.Set(ctx, sKey, payload, shardTTL)
 					return nil
 				})
@@ -515,7 +535,7 @@ func (r *RedisHubAuthRepo) routable(ctx context.Context, pod string, nowMs, maxH
 			out.PlayerCount = shard.PlayerCount
 			out.OK = true
 			return nil
-		}, aKey, sKey)
+		}, fencedWatchKeys([]string{aKey, sKey}, pod, r.fence)...)
 		if txErr == nil {
 			return out, nil
 		}
@@ -539,6 +559,10 @@ func (r *RedisHubAuthRepo) ReleaseRoutableSeat(ctx context.Context, pod string, 
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		released := false
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			ab, err := tx.Get(ctx, aKey).Bytes()
 			if err == redis.Nil {
 				return nil
@@ -582,6 +606,7 @@ func (r *RedisHubAuthRepo) ReleaseRoutableSeat(ctx context.Context, pod string, 
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				pipe.Set(ctx, sKey, payload, shardTTL)
 				return nil
 			})
@@ -589,7 +614,7 @@ func (r *RedisHubAuthRepo) ReleaseRoutableSeat(ctx context.Context, pod string, 
 				released = true
 			}
 			return err
-		}, aKey, sKey)
+		}, fencedWatchKeys([]string{aKey, sKey}, pod, r.fence)...)
 		if txErr == redis.TxFailedErr {
 			casConflictBackoff(ctx, attempt)
 			continue
@@ -619,6 +644,10 @@ func (r *RedisHubAuthRepo) releaseAssignmentSeatLegacy(
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		released := false
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			aRaw, err := tx.Get(ctx, aKey).Bytes()
 			if err == redis.Nil {
 				return nil
@@ -662,6 +691,7 @@ func (r *RedisHubAuthRepo) releaseAssignmentSeatLegacy(
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				pipe.Set(ctx, sKey, payload, shardTTL)
 				return nil
 			})
@@ -669,7 +699,7 @@ func (r *RedisHubAuthRepo) releaseAssignmentSeatLegacy(
 				released = true
 			}
 			return err
-		}, aKey, sKey)
+		}, fencedWatchKeys([]string{aKey, sKey}, pod, r.fence)...)
 		if txErr == redis.TxFailedErr {
 			casConflictBackoff(ctx, attempt)
 			continue

@@ -36,6 +36,15 @@ type fakeRepo struct {
 
 	// setAssignErr 非 nil 时，SetAssignment 直接返回该错误（测试注入失败用）。
 	setAssignErr error
+	// advanceFenceCalls 记录 AdvanceWriterFences 调用次数（继任者水位推扫测试用）。
+	advanceFenceCalls int
+}
+
+func (f *fakeRepo) AdvanceWriterFences(_ context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.advanceFenceCalls++
+	return nil
 }
 
 type emptyObservedFleet struct {

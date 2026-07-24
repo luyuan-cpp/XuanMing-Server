@@ -181,6 +181,53 @@ func TestLogin_RestoreFailure_DoesNotMaskOriginalError(t *testing.T) {
 	}
 }
 
+// committedButErroredSessionRepo:Set 报网络类错误但写入**实际已提交**(Lua 已执行、
+// 应答丢失),GetJTI 读回本次写入的 jti。
+type committedButErroredSessionRepo struct {
+	fakeSessionRepo
+	lastJTI string
+}
+
+func (f *committedButErroredSessionRepo) Set(_ context.Context, _ uint64, _, jti, _ string, _ time.Duration, _ uint64) error {
+	f.lastJTI = jti
+	return errcode.New(errcode.ErrUnavailable, "redis reply lost after commit")
+}
+
+func (f *committedButErroredSessionRepo) GetJTI(_ context.Context, _ uint64) (string, bool, error) {
+	return f.lastJTI, f.lastJTI != "", nil
+}
+
+// 复审 P0-3:「Redis 报错但实际已提交」时禁止回补 MySQL——否则造出 Redis=新 jti、
+// MySQL=旧 jti 的跨存储撕裂。读回收敛:Redis 已持有本次 jti → 跳过回补,登录仍失败
+// 零凭据,两存储向前收敛,下一次登录原子推进自愈。
+func TestLogin_RedisCommittedButErrored_SkipsRestore(t *testing.T) {
+	sessions := &committedButErroredSessionRepo{}
+	gen := &fakeSessionGenRepo{gen: 6}
+	uc := newGenUsecase2(t, sessions, gen)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "device-A")
+	if err == nil || res != nil {
+		t.Fatalf("commit-but-errored write must still fail the login, err=%v res=%+v", err, res)
+	}
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("login must surface the original infra failure, got: %v", err)
+	}
+	if len(gen.restoreCalls) != 0 {
+		t.Fatalf("Redis already converged to the new jti — restore must be skipped, got %d calls", len(gen.restoreCalls))
+	}
+}
+
+// newGenUsecase2 与 newGenUsecase 相同,但接受任意 SessionRepo 实现。
+func newGenUsecase2(t *testing.T, sessions data.SessionRepo, gen *fakeSessionGenRepo) *LoginUsecase {
+	t.Helper()
+	signer, verifier := newTicketTestPair(t)
+	repo := &fakeAccountRepo{playerID: 42, passwordHash: mustBcrypt(t, "pw")}
+	uc := NewLoginUsecase(repo, sessions, nil, nil, nil, snowflake.NewNode(1),
+		"127.0.0.1:7777", "cn", signer, verifier, nil, false, false, nil, false)
+	uc.SetSessionGenerationRepo(gen)
+	return uc
+}
+
 // currentJTISessionRepo:GetJTI 恒返回固定"当前一代"jti(precommit 复核用)。
 type currentJTISessionRepo struct {
 	fakeSessionRepo

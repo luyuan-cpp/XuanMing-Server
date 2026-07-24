@@ -11,6 +11,7 @@ package biz
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,11 +93,34 @@ func ownerBeginPlayersWeak(ctx context.Context, auth OwnerAuthority, players []u
 // 仅当记录确实指向本实例(pod+uid 同 && 类型同 && PENDING)才 Admit,目标取记录自身字段
 // (Admit 的 exact 全等校验由 owner 侧执行;pod/uid 是本调用方独立断言的部分)。
 // 屏障未开(retryAfter>0)→ 本轮跳过,下次心跳重试;其余失败告警跳过。
+//
+// 复审 P1-2:缓存按 census 轮剪枝——玩家离开本实例(不再出现在 census)即删除其
+// 缓存项;其回流本实例时(owner epoch 已推进、新 PENDING)缓存必然 miss,重新
+// Query→Admit,不会被上一纪元的 admitted 缓存误吞。持续在场的玩家缓存命中跳过
+// Query(原优化保留;在场期间同实例重连是 decideOwnerBegin 幂等跳过,epoch 不推进)。
+//
+// 复审 P1-3:resolveTarget 非 nil 时,对「记录不指向本实例但玩家确在本实例 census」
+// 的玩家做自愈弱 Begin——签票点弱 Begin 失败后无人重试,owner 记录会长期漂移;
+// census 是周期性重试点(归属镜像同样指向本实例才补 Begin,不与真实迁移打架)。
 func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sync.Map,
-	players []uint64, ownerType int8, selfPod, selfUID string, budget time.Duration) {
+	players []uint64, ownerType int8, selfPod, selfUID string, budget time.Duration,
+	resolveTarget func(context.Context, uint64) (data.OwnerTargetView, bool)) {
 	if auth == nil || len(players) == 0 {
 		return
 	}
+	present := make(map[string]struct{}, len(players))
+	for _, playerID := range players {
+		present[selfUID+"|"+fmt.Sprintf("%d", playerID)] = struct{}{}
+	}
+	admitted.Range(func(k, _ any) bool {
+		key, ok := k.(string)
+		if ok && strings.HasPrefix(key, selfUID+"|") {
+			if _, in := present[key]; !in {
+				admitted.Delete(key)
+			}
+		}
+		return true
+	})
 	budgetCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	for _, playerID := range players {
@@ -113,7 +137,19 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 			continue
 		}
 		if rec.OwnerType != ownerType || rec.PodName != selfPod || rec.InstanceUID != selfUID {
-			continue // 记录不指向本实例(迁移中/漂移),不是本实例可断言的准入。
+			// 记录不指向本实例(迁移中/漂移)。复审 P1-3:若归属镜像仍指向本实例
+			// (resolveTarget 确认),说明是签票点弱 Begin 失败留下的漂移,补一次弱
+			// Begin 自愈;否则是真实迁移,不干预。
+			if resolveTarget != nil {
+				if tgt, ok := resolveTarget(budgetCtx, playerID); ok && tgt.PodName == selfPod && tgt.InstanceUID == selfUID {
+					if skip, expectEpoch := decideOwnerBegin(rec, ownerType, tgt); !skip {
+						if berr := auth.BeginTransition(budgetCtx, playerID, expectEpoch, uuid.NewString(), ownerType, tgt); berr != nil {
+							plog.With(ctx).Warnw("msg", "owner_census_heal_begin_failed_weak", "player_id", playerID, "err", berr)
+						}
+					}
+				}
+			}
+			continue
 		}
 		if rec.Phase == ownerPhaseAdmitted {
 			admitted.Store(key, struct{}{})

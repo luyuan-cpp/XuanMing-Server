@@ -2,10 +2,11 @@
 //
 // 投递模型:Redis 投递缓冲是唯一定序与投递权威(data/offline.go)。连接写者
 // (RunSubscribeStream)按「本地唤醒信号 + 定时轮询」从缓冲 Range(>游标) 拉取投递:
-//   - 本 Pod 消费到该玩家消息 → SendTo 置一个唤醒信号(不传帧,帧已在缓冲);
-//   - **其他 Pod** 消费到(滚动重叠 / 跨 topic consumer 落位不同)→ 本 Pod 收不到
-//     信号,由写者的定时轮询(默认 1s)兜底拉到 —— 在线客户端不再依赖断线重连
-//     才能看到跨 Pod 写入(审计 P1)。
+//   - 消费 Pod 先本地 SendTo 快路径唤醒,再**无条件**发跨 Pod 唤醒信号
+//     (consumer.go PublishWake;复审 P1-5:本地 slot 可能是陈旧残留,不得抑制
+//     跨 Pod 信号);信号丢失/未装配时由写者的定时轮询(pollFallbackInterval,
+//     默认 30s,见 push.go)兜底拉到 —— 在线客户端不再依赖断线重连才能看到
+//     跨 Pod 写入(审计 P1)。
 //
 // 单写者不变:每条 stream 只有写者 goroutine 调 stream.Send;SendTo/Broadcast 都是
 // 非阻塞投递(信号 size-1 去重;广播箱有界,满则丢弃计数——广播本就丢失容忍),

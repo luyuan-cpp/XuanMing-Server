@@ -265,10 +265,13 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 		)
 		return errcode.New(errcode.ErrPushOfflineCorrupted, "delivery buffer failed: %v", err)
 	}
-	// 本地无该玩家连接 → 跨 Pod 唤醒信号(R5 复审 P2-10):持有连接的 Pod 立即拉取,
-	// 不再等 30s 兜底轮询(该轮询保留为信号丢失/未装配时的正确性兜底)。
-	// best-effort:publish 失败不影响 ack(帧已入缓冲,轮询必达)。
-	if !k.cm.SendTo(playerID) && k.wake != nil {
+	// 唤醒(R5 复审 P2-10 + 复审 P1-5):先本地快路径唤醒,再**无条件**发跨 Pod 唤醒
+	// 信号。不能以「本地有 slot」抑制跨 Pod 信号——本地 slot 可能是半死连接/已被顶号
+	// 的陈旧残留(SendTo 只看索引,不验证连接活性),真持有新连接的 Pod 会被迫等
+	// 30s 兜底轮询。wake 是 size-1 去重的幂等信号,重复唤醒零代价;PUBLISH 每消息
+	// 一次,成本可接受。best-effort:publish 失败不影响 ack(帧已入缓冲,轮询必达)。
+	k.cm.SendTo(playerID)
+	if k.wake != nil {
 		if werr := k.wake.PublishWake(ctx, playerID); werr != nil {
 			h.Warnw("msg", "push_wake_publish_failed", "player_id", playerID, "err", werr)
 		}

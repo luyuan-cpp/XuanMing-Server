@@ -145,6 +145,11 @@ type HubUsecase struct {
 	authTTL time.Duration
 	// releasePolicy 只决定无 assignment 玩家首次尝试的轨；实际命中轨写入 assignment 后粘性。
 	releasePolicy releasetrack.Policy
+	// writerFence:写者继任租约视图(R9 P0-7,session-generation-rollout.md §5;
+	// SetWriterFence 注入,nil = 未启用——dev/mock 或单副本 Recreate 部署)。入口层
+	// requireWriter 快速拒写 + 后台 sweep 非写者跳 tick;存储级最终防线见
+	// data/writer_fence.go(同事务 fencing token 比较)。
+	writerFence data.WriterFence
 }
 
 // HubCredential 是 service 层从**验签通过**的 Model B hub 令牌抽出的凭据身份(§7),
@@ -191,6 +196,35 @@ func (u *HubUsecase) SetAuthTTL(d time.Duration) { u.authTTL = d }
 
 // SetReleaseTrackPolicy 注入 player_id 级确定性 cohort 策略。
 func (u *HubUsecase) SetReleaseTrackPolicy(p releasetrack.Policy) { u.releasePolicy = p }
+
+// SetWriterFence 注入写者继任租约视图(R9 P0-7;仅 Model B 生产由 main 注入)。
+func (u *HubUsecase) SetWriterFence(f data.WriterFence) { u.writerFence = f }
+
+// requireWriter 写路径入口门:未持有写者租约的副本快速拒写(ErrUnavailable 可重试,
+// 重试会被路由到当前写者副本)。注意这只是快路径礼貌拒绝;防住「检查后失主」
+// 竞态的最终防线是 data/writer_fence.go 的同事务存储级 fencing。
+func (u *HubUsecase) requireWriter() error {
+	if u.writerFence == nil {
+		return nil
+	}
+	if _, held := u.writerFence.Current(); !held {
+		return errcode.New(errcode.ErrUnavailable,
+			"hub allocator writer lease not held on this replica; retry")
+	}
+	return nil
+}
+
+// confirmWriterForTicket 出票前写者复核(writer_fence.go 覆盖边界 ④):assignment 单键
+// 无法进 {pod} slot fence 事务,票据只在「入口到返回全程持有租约」时交付。入口后失主
+// 的在途请求走到这里被拦——存储侧可能已留下 assignment/席位(合法数据,继任者 CAS
+// 接续或 TTL 回收),但票绝不交给调用方;ErrUnavailable 引导重试路由到新写者重签。
+func (u *HubUsecase) confirmWriterForTicket(ctx context.Context, playerID uint64) error {
+	if err := u.requireWriter(); err != nil {
+		plog.With(ctx).Warnw("msg", "hub_ticket_withheld_writer_lost", "player_id", playerID)
+		return err
+	}
+	return nil
+}
 
 // SetSessionGate 注入会话现行性权威只读视图(R7 复审 P0-3;nil = dev 无权威)。
 // 迁移重签取玩家当前会话 jti 签进 sjti;AcknowledgeAdmission 复核票据 sjti 现行性。
@@ -305,6 +339,9 @@ type AssignResult struct {
 // (VerifyDSTicket 在线核销时复核现行性,响应窗口交付的旧票在兑换点作废)。
 // 空 = 旧调用方/dev 直连,票据不带 sjti(兼容窗)。
 func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64, sessionJTI string) (*AssignResult, error) {
+	if err := u.requireWriter(); err != nil {
+		return nil, err
+	}
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
@@ -367,6 +404,9 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 						continue
 					}
 					u.addShardMember(ctx, next.HubPodName, playerID)
+					if werr := u.confirmWriterForTicket(ctx, playerID); werr != nil {
+						return nil, werr
+					}
 					return u.signResult(ctx, playerID, effectiveRole, next, sourceMatchID, sessionJTI)
 				}
 				if errcode.As(ensureErr) != errcode.ErrHubNoAvailable {
@@ -472,6 +512,9 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 			u.releaseAssignmentSeat(ctx, existing)
 			u.removeShardMember(ctx, existing.HubPodName, playerID)
 		}
+		if werr := u.confirmWriterForTicket(ctx, playerID); werr != nil {
+			return nil, werr
+		}
 		plog.With(ctx).Infow("msg", "hub_assigned",
 			"player_id", playerID, "pod", target.HubPodName, "shard_id", target.ShardId,
 			"region", target.Region, "release_track", target.ReleaseTrack)
@@ -484,6 +527,9 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 
 // ReleaseHub 玩家离开大厅,退分片占位 + 删归属。幂等:无归属视为已离开。
 func (u *HubUsecase) ReleaseHub(ctx context.Context, playerID uint64) error {
+	if err := u.requireWriter(); err != nil {
+		return err
+	}
 	if playerID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
@@ -593,6 +639,9 @@ type TransferResult struct {
 
 // TransferHub 跨分片传送:先占新分片(失败不动旧分片),再切归属到新分片,最后退旧分片占位,重签票据。
 func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHubID uint64) (*TransferResult, error) {
+	if err := u.requireWriter(); err != nil {
+		return nil, err
+	}
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
@@ -661,6 +710,9 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 				if !swapped {
 					continue
 				}
+				if werr := u.confirmWriterForTicket(ctx, playerID); werr != nil {
+					return nil, werr
+				}
 				return signedResult, nil
 			}
 		}
@@ -724,6 +776,9 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 		} else {
 			u.releaseAssignmentSeat(ctx, assignment)
 			u.removeShardMember(ctx, assignment.HubPodName, playerID)
+		}
+		if werr := u.confirmWriterForTicket(ctx, playerID); werr != nil {
+			return nil, werr
 		}
 		plog.With(ctx).Infow("msg", "hub_transferred",
 			"player_id", playerID, "from", assignment.HubPodName, "to", target.HubPodName)
@@ -842,6 +897,9 @@ type TransferToLineResult struct {
 //  3. 目标线路不存在/非本 region → ErrHubTransferFailed;已满 → ErrHubLineFull
 //  4. 复用内部 TransferHub 完成 占新→切归属→退旧→重签票
 func (u *HubUsecase) TransferToLineForPlayer(ctx context.Context, playerID uint64, targetShardID uint32) (*TransferToLineResult, error) {
+	if err := u.requireWriter(); err != nil {
+		return nil, err
+	}
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
@@ -1119,6 +1177,9 @@ func (u *HubUsecase) HeartbeatWithCredential(ctx context.Context, pod string, pl
 
 func (u *HubUsecase) heartbeat(ctx context.Context, pod string, playerCount int32, playerIDs []uint64,
 	maxPlayers uint32, state string, tsMs int64, tokenGen uint64, cred *HubCredential) (*HeartbeatResult, error) {
+	if err := u.requireWriter(); err != nil {
+		return nil, err
+	}
 	if pod == "" {
 		return nil, errcode.New(errcode.ErrInvalidArg, "hub_pod_name required")
 	}
@@ -1215,7 +1276,7 @@ func (u *HubUsecase) heartbeatModelB(ctx context.Context, pod string, playerCoun
 	// contract 阶段移交 DS Admission 链)。弱依赖,失败/屏障未开都不影响心跳。
 	if len(playerIDs) > 0 {
 		ownerAdmitCensusWeak(ctx, u.ownerAuth, &u.ownerAdmitted, playerIDs,
-			ownerTypeHub, pod, res.InstanceUID, 2*time.Second)
+			ownerTypeHub, pod, res.InstanceUID, 2*time.Second, u.resolveOwnerTargetFromAssignment)
 	}
 	command, graceSeconds := commandNone, int32(0)
 	switch res.ShardState {
@@ -1329,6 +1390,9 @@ type AcknowledgeDepartureResult struct {
 func (u *HubUsecase) AcknowledgeAdmission(ctx context.Context, playerID uint64, assignmentID, pod,
 	admissionID string, admissionSeq uint64, ticketSessionJTI string,
 	cred *HubCredential) (*AcknowledgeAdmissionResult, error) {
+	if err := u.requireWriter(); err != nil {
+		return nil, err
+	}
 	if u.authRepo == nil || cred == nil {
 		return nil, errcode.New(errcode.ErrUnauthorized, "hub admission requires model B authority")
 	}
@@ -1462,6 +1526,9 @@ func assignmentMatchesAdmission(a *hubv1.HubAssignmentStorageRecord, playerID ui
 // AcknowledgeDeparture exact 删除当前 admission owner；Conflict 由旧连接晚到 Logout 触发。
 func (u *HubUsecase) AcknowledgeDeparture(ctx context.Context, playerID uint64, assignmentID, pod,
 	admissionID string, admissionSeq uint64, cred *HubCredential) (*AcknowledgeDepartureResult, error) {
+	if err := u.requireWriter(); err != nil {
+		return nil, err
+	}
 	if u.authRepo == nil || cred == nil {
 		return nil, errcode.New(errcode.ErrUnauthorized, "hub departure requires model B authority")
 	}
@@ -1521,12 +1588,40 @@ func (u *HubUsecase) RunHeartbeatSweep(ctx context.Context) {
 	defer ticker.Stop()
 	plog.With(ctx).Infow("msg", "hub_heartbeat_sweep_started",
 		"interval", u.cfg.SweepInterval.String(), "timeout", u.cfg.HeartbeatTimeout.String())
+	wasWriter := true
+	var sweptToken uint64 // 本届已完成 fence 水位推扫的 token(writer_fence.go 覆盖边界 ③)
 	for {
 		select {
 		case <-ctx.Done():
 			plog.With(ctx).Infow("msg", "hub_heartbeat_sweep_stopped")
 			return
 		case <-ticker.C:
+			// R9 P0-7:非写者副本跳 tick,避免 RollingUpdate 重叠窗口内双写者并发
+			// reconcile/sweep(存储级 fence 是最终防线,这里是快路径 + 降噪)。
+			if u.writerFence != nil {
+				token, held := u.writerFence.Current()
+				if !held {
+					if wasWriter {
+						plog.With(ctx).Warnw("msg", "hub_heartbeat_sweep_paused_not_writer")
+						wasWriter = false
+					}
+					continue
+				}
+				if !wasWriter {
+					plog.With(ctx).Infow("msg", "hub_heartbeat_sweep_resumed_writer")
+					wasWriter = true
+				}
+				// 继任者水位推扫:每届当选后把全部已知 pod 的 fence 一次性推进到本届
+				// token,消灭懒推进的「未触碰 pod」盲区;失败下个 tick 重试,不阻塞扫描。
+				if token != sweptToken {
+					if err := u.repo.AdvanceWriterFences(ctx); err != nil {
+						plog.With(ctx).Warnw("msg", "hub_writer_fence_sweep_failed", "token", token, "err", err)
+					} else {
+						sweptToken = token
+						plog.With(ctx).Infow("msg", "hub_writer_fence_swept", "token", token)
+					}
+				}
+			}
 			if err := u.reconcileOwnerCleanups(ctx); err != nil {
 				plog.With(ctx).Warnw("msg", "hub_owner_cleanup_reconcile_failed", "err", err)
 			}
@@ -2422,6 +2517,27 @@ func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID 
 		ReleaseTrack:             binding.ReleaseTrack,
 	}, 1500*time.Millisecond)
 	return token, expMs, nil
+}
+
+// resolveOwnerTargetFromAssignment 从归属镜像重建 owner Begin 目标(census 自愈路径,
+// 复审 P1-3)。与 signHubTicket 的 Begin 目标同源(ticketBindingFromAssignment),保证
+// exact 等值自洽;绑定不完整/无归属 → (zero, false) 不自愈。
+func (u *HubUsecase) resolveOwnerTargetFromAssignment(ctx context.Context, playerID uint64) (data.OwnerTargetView, bool) {
+	assignment, found, err := u.repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		return data.OwnerTargetView{}, false
+	}
+	binding := ticketBindingFromAssignment(assignment)
+	if binding.PodName == "" || binding.InstanceUID == "" {
+		return data.OwnerTargetView{}, false
+	}
+	return data.OwnerTargetView{
+		PodName:                  binding.PodName,
+		InstanceUID:              binding.InstanceUID,
+		InstanceEpoch:            binding.ProtocolEpoch,
+		AssignmentOrAllocationID: binding.HubAssignmentID,
+		ReleaseTrack:             binding.ReleaseTrack,
+	}, true
 }
 
 func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord, sourceMatchID uint64, sessionJTI string) (*AssignResult, error) {

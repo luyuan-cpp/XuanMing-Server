@@ -22,6 +22,13 @@ node:
     max_idle_conns: 16
     conn_max_lifetime: "30m"
     ping_timeout: "3s"
+  # 会话权威共享 Redis(pandora:sess,与 login 同库):session_gate 的现行性判定端点,
+  # 兼公会资料读缓存。漏配 + require=true 会在启动期 fail-fast 拒启(sessiongate.MustBuild)。
+  redis_client:
+    host: "__REDIS_HOST__:6379"
+    password: "__REDIS_PASSWORD__"
+    db: 0
+    dial_timeout: "2s"
 
 kafka:
   brokers: ["kafka:9092"]
@@ -32,3 +39,10 @@ guild:
   max_guild_members: 100
   max_group_members: 50
   max_name_len: 24
+
+# 会话现行性门(R5 复审 P0-1,INC-20260722-004):客户端面请求 jti 必须等于 login 会话
+# 权威当前一代,顶号后旧 JWT 立即失效。生产必须 require: true(强制档:gate 未装配 =
+# fail-closed 拒请求;端点漏配 = 启动拒启),否则正常走 Envoy 的旧 JWT 仍可调用
+# Guild/Group(R6 复审开放缺口②,本模板补齐)。
+session_gate:
+  require: true

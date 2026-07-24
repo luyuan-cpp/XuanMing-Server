@@ -36,17 +36,12 @@ snowflake:
   step_bits: 15
 
 push:
-  # 订阅 topic 列表;不填走 kafkax.PushTopics 默认,但显式列出会覆盖默认,新增 topic 必须同步补全。
-  # 2026-06-15 friend 服务上线,补 pandora.friend.event。
-  # 2026-06-15 hub_allocator 强制整合上线,补 pandora.hub.migrate(大厅迁移通知)。
-  # 2026-06-16 chat 三频道补全,补 pandora.chat.team(队伍)/ pandora.chat.world(世界广播)。
-  topics:
-    - "pandora.team.update"
-    - "pandora.match.progress"
-    - "pandora.chat.private"
-    - "pandora.chat.team"
-    - "pandora.chat.world"
-    - "pandora.friend.event"
-    - "pandora.hub.migrate"
-    - "pandora.player.experience"
+  # topics 不填 = 走 kafkax.PushTopics 权威默认集合(新业务 topic 在 pkg/kafkax/topics.go
+  # 里维护,push 无需改配置)。显式列出会覆盖默认且极易漏项——本模板曾漏
+  # pandora.chat.guild / pandora.chat.group / pandora.guild.event / pandora.presence.update
+  # 四个 topic(按旧模板部署对应事件完全不消费),故改为不列。
+  # 如确需裁剪订阅面,列出时必须与 kafkax.PushTopics 全量核对。
   offline_cache_ttl: "5m"
+  # 会话现行性门强制档(P0,INC-20260722-004;R6 复审开放缺口③,本模板补齐):
+  # 生产必须 true——绕过 Envoy 直连服务且省略 JTI 时宽松档会放行建流。
+  require_session_gate: true

@@ -13,8 +13,11 @@ package data
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
@@ -62,6 +65,15 @@ func NewGrpcHubAssigner(conn *grpc.ClientConn) *GrpcHubAssigner {
 	}
 }
 
+// 写者继任短重试(R9 P0-7 writerlease):非写者副本/交接窗口内 allocator 返回可重试
+// ErrUnavailable;正常滚动交接(主动 Resign)为亚秒级,登录路径就地短退避重试即可吸收
+// 绝大多数交接窗口;崩溃接任(lease TTL 到期,数秒—分15s)不在登录就地等待,重试
+// 耗尽后把 ErrUnavailable 交回 biz(回退自签或报错,由客户端重登)。有界、尊重 ctx。
+const (
+	assignHubMaxAttempts  = 3
+	assignHubRetryBackoff = 150 * time.Millisecond
+)
+
 // AssignHub 调 HubAllocatorService.AssignHub,返回分片地址 + hub 票据。
 //
 // 登录时玩家尚未组队,teamID 一般为 0;region 由 login 配置给出(空 = 让 allocator 选最空分片)。
@@ -74,17 +86,38 @@ func (a *GrpcHubAssigner) AssignHub(ctx context.Context, playerID uint64, region
 		SourceMatchId: sourceMatchID,
 		SessionJti:    sessionJTI,
 	}
-	resp, err := a.client.AssignHub(ctx, req)
-	if err != nil {
-		return nil, errcode.New(errcode.ErrInternal, "hub_allocator AssignHub rpc: %v", err)
+	var lastErr error
+	for attempt := 0; attempt < assignHubMaxAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, errcode.New(errcode.ErrUnavailable,
+					"hub_allocator AssignHub canceled during writer-handover retry: %v", ctx.Err())
+			case <-time.After(assignHubRetryBackoff):
+			}
+		}
+		resp, err := a.client.AssignHub(ctx, req)
+		if err != nil {
+			if status.Code(err) == codes.Unavailable {
+				lastErr = errcode.New(errcode.ErrUnavailable, "hub_allocator AssignHub transport unavailable: %v", err)
+				continue
+			}
+			return nil, errcode.New(errcode.ErrInternal, "hub_allocator AssignHub rpc: %v", err)
+		}
+		if resp.GetCode() != commonv1.ErrCode_OK {
+			codeErr := errcode.New(errcode.Code(resp.GetCode()), "hub_allocator AssignHub code=%d", resp.GetCode())
+			if errcode.Code(resp.GetCode()) == errcode.ErrUnavailable {
+				lastErr = codeErr
+				continue
+			}
+			return nil, codeErr
+		}
+		return &HubAssignment{
+			HubDSAddr:  resp.GetHubDsAddr(),
+			HubTicket:  resp.GetHubTicket(),
+			HubPodName: resp.GetHubPodName(),
+			ShardID:    resp.GetShardId(),
+		}, nil
 	}
-	if resp.GetCode() != commonv1.ErrCode_OK {
-		return nil, errcode.New(errcode.Code(resp.GetCode()), "hub_allocator AssignHub code=%d", resp.GetCode())
-	}
-	return &HubAssignment{
-		HubDSAddr:  resp.GetHubDsAddr(),
-		HubTicket:  resp.GetHubTicket(),
-		HubPodName: resp.GetHubPodName(),
-		ShardID:    resp.GetShardId(),
-	}, nil
+	return nil, lastErr
 }

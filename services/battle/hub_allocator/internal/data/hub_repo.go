@@ -151,6 +151,10 @@ type HubRepo interface {
 	TryTransferCooldown(ctx context.Context, playerID uint64, cooldown time.Duration) (bool, error)
 	// ClearTransferCooldown 清除切线冷却占坑(切线失败时释放,让玩家可立即重试)。best-effort。
 	ClearTransferCooldown(ctx context.Context, playerID uint64) error
+
+	// AdvanceWriterFences 继任者水位推扫:把全部已知 pod 的写者 fence 推进到本届 token
+	// (writer_fence.go 覆盖边界 ③)。fence 未启用时 no-op;失主/被继任返 ErrWriterSuperseded。
+	AdvanceWriterFences(ctx context.Context) error
 }
 
 // ── Redis 实现 ────────────────────────────────────────────────────────────────
@@ -158,12 +162,17 @@ type HubRepo interface {
 // RedisHubRepo 是基于 go-redis/v9 的 HubRepo 实现。
 type RedisHubRepo struct {
 	rdb redis.UniversalClient
+	// fence:写者继任 fencing token 源(writer_fence.go;nil = 未启用,保持原行为)。
+	fence WriterFence
 }
 
 // NewRedisHubRepo 构造 RedisHubRepo。
 func NewRedisHubRepo(rdb redis.UniversalClient) *RedisHubRepo {
 	return &RedisHubRepo{rdb: rdb}
 }
+
+// SetWriterFence 注入写者继任 fencing(Model B 生产由 main 注入;见 writer_fence.go)。
+func (r *RedisHubRepo) SetWriterFence(f WriterFence) { r.fence = f }
 
 func (r *RedisHubRepo) GetShard(ctx context.Context, pod string) (*hubv1.HubShardStorageRecord, bool, error) {
 	b, err := r.rdb.Get(ctx, shardKey(pod)).Bytes()
@@ -231,11 +240,17 @@ func (r *RedisHubRepo) UpdateShardWithLock(
 	shardTTL time.Duration,
 ) error {
 	key := shardKey(pod)
+	watchKeys := fencedWatchKeys([]string{key}, pod, r.fence)
 
 	for attempt := 0; attempt <= maxRetry; attempt++ {
 		var fnErr error
 
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			// 写者继任 fence(writer_fence.go):迟到旧写者 fail-closed 零写入。
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			b, err := tx.Get(ctx, key).Bytes()
 			if err == redis.Nil {
 				return errcode.New(errcode.ErrHubNoAvailable, "hub shard %s not found", pod)
@@ -254,13 +269,14 @@ func (r *RedisHubRepo) UpdateShardWithLock(
 			if err != nil {
 				return err
 			}
-			// Cluster 兼容:WATCH/SET 只围 shardKey 单 slot;全局 shardsSetKey 移出事务。
+			// Cluster 兼容:WATCH/SET 只围 {pod} 单 slot;全局 shardsSetKey 移出事务。
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				pipe.Set(ctx, key, payload, shardTTL)
 				return nil
 			})
 			return err
-		}, key)
+		}, watchKeys...)
 
 		if txErr == nil {
 			// shards membership re-ensure(独立命令,幂等;membership 已在 CreateShard 建立,
@@ -290,6 +306,11 @@ func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCou
 	key := shardKey(pod)
 	found := false
 	err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+		// 写者继任 fence:与令牌代际门同理,必须在任何镜像变更之前 fail-closed。
+		advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+		if ferr != nil {
+			return ferr
+		}
 		b, gerr := tx.Get(ctx, key).Bytes()
 		if gerr == redis.Nil {
 			found = false
@@ -318,13 +339,14 @@ func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCou
 		if merr != nil {
 			return merr
 		}
-		// Cluster 兼容:WATCH/SET 只围 shardKey 单 slot;全局 shards/active 索引移出事务(见下)。
+		// Cluster 兼容:WATCH/SET 只围 {pod} 单 slot;全局 shards/active 索引移出事务(见下)。
 		_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			advanceFence(pipe)
 			pipe.Set(ctx, key, payload, shardTTL)
 			return nil
 		})
 		return perr
-	}, key)
+	}, fencedWatchKeys([]string{key}, pod, r.fence)...)
 	if err != nil {
 		return false, err
 	}

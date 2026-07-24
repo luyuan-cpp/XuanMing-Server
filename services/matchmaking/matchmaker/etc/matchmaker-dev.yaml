@@ -45,8 +45,8 @@ snowflake:
 #   StartMatch 校验 map_id 必须是关卡表战斗类关卡;热更走 ConfigTableAdminService.ReloadConfigTable。
 #   dir 留空 / 注释 = 不启用(现行为不变)。dev 直接指仓库 dist(相对服务目录);
 #   部署环境用发布脚本落的 <deploy-root>/configtable/active。
-# config_table:
-#   dir: "../../../configtable/dist"
+config_table:
+  dir: "../../../configtable/dist"
 
 match:
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验

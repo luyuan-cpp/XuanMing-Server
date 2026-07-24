@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -164,6 +165,12 @@ type MatchUsecase struct {
 	lastLivenessSweep  time.Time
 	lastStartReconcile time.Time
 	lastMatchReconcile time.Time
+
+	// fallbackLogged 记录每个 effective map_id 上次已告警过的「一方人数走全局回退」原因,
+	// 供 teamSizeForMap 去重告警(见 logTeamSizeFallback)。teamSizeForMap 从 StartMatch RPC
+	// 与 RunMatchLoop 撮合循环两个 goroutine 并发调用,故不能复用上面「单 goroutine」的 time.Time
+	// 节流字段,须用 sync.Map。值类型为 string(reason)。
+	fallbackLogged sync.Map
 }
 
 func allocationOperationID() string {
@@ -220,6 +227,53 @@ func (u *MatchUsecase) validateMapID(mapID uint32) error {
 			"map_id %d not a battle level in level table (version %d)", effective, tb.Version)
 	}
 	return nil
+}
+
+// teamSizeForMap 取某副本(map_id)的一方人数:关卡表 team_size>0 时按表(「策划填表即用」,
+// 每个副本各自 1v1 / 5v5),否则回退服务端全局 cfg.TeamSize(配置表未启用 / 该行未填时的历史口径)。
+// 与 validateMapID 同一 effective 兜底:map_id==0 表示用本实例默认副本 cfg.MapId。
+// 走任一回退分支时按 (effective map_id, reason) 去重告警一次(见 logTeamSizeFallback),
+// 便于运维发现「撮合没吃关卡表、在用 yaml 全局 team_size」;命中表后清除去重,回退再现可再告警。
+func (u *MatchUsecase) teamSizeForMap(ctx context.Context, mapID uint32) int {
+	fallback := u.cfg.TeamSize
+	effective := mapID
+	if effective == 0 {
+		effective = u.cfg.MapId
+	}
+	if u.tables == nil {
+		u.logTeamSizeFallback(ctx, mapID, effective, "config_table_disabled", fallback)
+		return fallback
+	}
+	tb := u.tables.Tables()
+	if tb == nil {
+		u.logTeamSizeFallback(ctx, mapID, effective, "config_table_not_loaded", fallback)
+		return fallback
+	}
+	row, ok := tb.Level.ByID(effective)
+	if !ok {
+		u.logTeamSizeFallback(ctx, mapID, effective, "map_not_in_level_table", fallback)
+		return fallback
+	}
+	if ts := int(row.GetTeamSize()); ts > 0 {
+		u.fallbackLogged.Delete(effective) // 命中表:清除去重,后续若再回退可重新告警
+		return ts
+	}
+	u.logTeamSizeFallback(ctx, mapID, effective, "team_size_unset_in_row", fallback)
+	return fallback
+}
+
+// logTeamSizeFallback 对「撮合一方人数走 yaml 全局回退」按 effective map_id 去重打一条 WARN:
+// teamSizeForMap 从 StartMatch RPC 与 RunMatchLoop 撮合循环(每 match_interval 命中同一稳定配置态)
+// 并发调用,若无条件打日志会刷屏,故用 sync.Map 只在「该 map 首次回退 / 回退原因变化」时告警一次。
+// reason 区分回退来源:config_table_disabled(未启用配置表,dev / 历史口径)、config_table_not_loaded
+// (启用但快照未就绪)、map_not_in_level_table(表内无此副本)、team_size_unset_in_row(表内该行未填人数)。
+func (u *MatchUsecase) logTeamSizeFallback(ctx context.Context, mapID, effective uint32, reason string, teamSize int) {
+	if prev, ok := u.fallbackLogged.Load(effective); ok && prev.(string) == reason {
+		return
+	}
+	u.fallbackLogged.Store(effective, reason)
+	plog.With(ctx).Warnw("msg", "team_size_table_fallback",
+		"map_id", mapID, "effective_map_id", effective, "reason", reason, "team_size", teamSize)
 }
 
 // ticketRegion 解析一张票据的 owner region(以队长 captain_id 为 owner 锚点)。
@@ -374,7 +428,7 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 		return 0, err
 	}
 
-	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID)
+	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID, mapID)
 	if err != nil {
 		return 0, err
 	}
@@ -736,7 +790,7 @@ func (u *MatchUsecase) advanceStartOperation(ctx context.Context, current *match
 
 // resolveMembers 根据 team 快照构造 match 成员列表 + 计算平均 MMR。
 // reader 为 nil 时退化为"仅 captain 单人票据"(本机不起 team 的骨架联调路径)。
-func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uint64) ([]*matchv1.MatchMemberStorageRecord, int32, error) {
+func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uint64, mapID uint32) ([]*matchv1.MatchMemberStorageRecord, int32, error) {
 	if u.reader == nil {
 		m := []*matchv1.MatchMemberStorageRecord{{PlayerId: captainID, TeamId: teamID, Confirm: confirmPending}}
 		return m, 0, nil
@@ -755,8 +809,9 @@ func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uin
 	if team.CaptainId != captainID {
 		return nil, 0, errcode.New(errcode.ErrTeamNotCaptain, "player %d not captain of team %d", captainID, teamID)
 	}
-	if len(team.Members) == 0 || len(team.Members) > u.cfg.TeamSize {
-		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d invalid size %d", teamID, len(team.Members))
+	if teamSize := u.teamSizeForMap(ctx, mapID); len(team.Members) == 0 || len(team.Members) > teamSize {
+		return nil, 0, errcode.New(errcode.ErrMatchTeamNotReady, "team %d invalid size %d (map %d team_size %d)",
+			teamID, len(team.Members), mapID, teamSize)
 	}
 
 	members := make([]*matchv1.MatchMemberStorageRecord, 0, len(team.Members))
@@ -2544,12 +2599,14 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 // formMatchesInPool 在「同一副本(map_id)」的票据组内撮合:单 Cell/dev 走单桶贪心,
 // 多 Region 走两级(region 内优先 + 跨 region 溢出兜底)。从 matchOnce 抽出,便于按 map_id 分组复用。
 func (u *MatchUsecase) formMatchesInPool(ctx context.Context, tickets []*matchv1.MatchTicketStorageRecord, now int64) {
-	need := 2 * u.cfg.TeamSize
+	// 本池票据同属一个副本(partitionTicketsByMap),一方人数按该 map_id 读表(表未填回退全局)。
+	teamSize := u.teamSizeForMap(ctx, matchMapID(tickets))
+	need := 2 * teamSize
 	used := make(map[uint64]bool)
 
 	// 单 Cell / dev / 阶段 1~2(router 未配)→ 单桶贪心(历史行为,零分区开销)。
 	if u.router == nil {
-		u.greedyFormMatches(ctx, tickets, used, now, nil)
+		u.greedyFormMatches(ctx, tickets, used, now, teamSize, nil)
 		return
 	}
 
@@ -2559,7 +2616,7 @@ func (u *MatchUsecase) formMatchesInPool(ctx context.Context, tickets []*matchv1
 	//     且每局受"跨 region 玩家比例软上限"约束(WithinCrossRegionCap)。
 	buckets, order := partitionTicketsByRegion(tickets, u.ticketRegion)
 	for _, region := range order {
-		u.greedyFormMatches(ctx, buckets[region], used, now, nil)
+		u.greedyFormMatches(ctx, buckets[region], used, now, teamSize, nil)
 	}
 
 	// 收集本 region 内未成局的剩余票据(保持 MMR 升序),挑出可溢出者跨 region 兜底撮合。
@@ -2574,7 +2631,7 @@ func (u *MatchUsecase) formMatchesInPool(ctx context.Context, tickets []*matchv1
 	leftoverTotals := leftoverRegionBucketTotals(leftover, u.ticketRegion, u.ticketMmrBucket)
 	overflow := selectOverflowTickets(leftover, u.ticketRegion, leftoverTotals, u.ticketMmrBucket, need, u.regionPolicy, u.ticketTier, now)
 	if len(overflow) > 0 {
-		u.greedyFormMatches(ctx, overflow, used, now, u.withinCrossRegionCap)
+		u.greedyFormMatches(ctx, overflow, used, now, teamSize, u.withinCrossRegionCap)
 	}
 }
 
@@ -2636,9 +2693,10 @@ func (u *MatchUsecase) greedyFormMatches(
 	tickets []*matchv1.MatchTicketStorageRecord,
 	used map[uint64]bool,
 	now int64,
+	teamSize int,
 	validate func(group []*matchv1.MatchTicketStorageRecord) bool,
 ) {
-	need := 2 * u.cfg.TeamSize
+	need := 2 * teamSize
 	for start := 0; start < len(tickets); start++ {
 		if used[tickets[start].TicketId] {
 			continue
@@ -2659,7 +2717,7 @@ func (u *MatchUsecase) greedyFormMatches(
 		if total != need {
 			continue
 		}
-		sideA, sideB, ok := binPack(group, u.cfg.TeamSize)
+		sideA, sideB, ok := binPack(group, teamSize)
 		if !ok {
 			continue
 		}

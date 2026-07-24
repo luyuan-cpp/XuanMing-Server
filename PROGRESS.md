@@ -1655,3 +1655,79 @@ R6 只读复审推翻上一条"P0 5/5 完成"的结论(上一条中"旧流零轮
   (MyTeamModel/MyFriendModel/MyMatchModel/PandoraDSGameModeBase/PandoraHubGameMode)仅过
   静态诊断,**编译由用户执行,本轮无编译证据**。**诚实边界**:P0-7 未解决;真实并发/混版
   矩阵/故障注入未跑。**INC-20260722-004 保持未关闭,待 R10 复审**。
+
+## 2026-07-23(续:INC-20260722-004 R9 P0-7 收口——hub-allocator 写者继任协议落地,Claude)
+
+- **P0-7 关闭**:按 rollout doc §5.3 原草图实现写者继任协议,hub-allocator Deployment
+  从 `Recreate` 改为 `RollingUpdate{maxSurge:1, maxUnavailable:0}`,发布无停机窗口,
+  不停服红线(2026-07-01 硬约束)与单写者约束同时满足。三层构成:
+  - **继任租约** `pkg/dsauthfence/writerlease`(dsauthfence 子包,零 go.mod 变更,
+    复用其 etcd mTLS 安全姿态):etcd `concurrency.Election`(election=
+    `hub_allocator/writer`),`election.Rev()`(leader key CreateRevision)即单调
+    fencing token,届次严格递增;session 掉线立即降级+退避重竞选,退出时 Resign
+    亚秒交接。仅 Model B(`AuthorityModeRedis`)启用,无新增配置面。
+  - **业务闸门**:`biz.requireWriter()` 于 AssignHub/ReleaseHub/TransferHub/
+    TransferToLineForPlayer/Heartbeat/AcknowledgeAdmission/AcknowledgeDeparture
+    入口 fail-fast,非写者返回可重试 UNAVAILABLE;心跳清扫失租暂停、得租恢复。
+  - **存储级 fencing(权威防线)**:持久化 fence 键 `pandora:hub:wfence:{pod}`
+    (与 shard/auth/ledger 同 slot,进同一 WATCH/MULTI/EXEC);所有 hub 权威写
+    事务 Watch 回调内 guard:水位 > 本届 token → 零写入拒绝(ErrWriterSuperseded,
+    可重试),< 本届 → 写管线内原子推进;fence 键永不 TTL/删除。迟到旧写者即使
+    绕过业务闸门也被存储层确定性拒绝(Chubby sequencer,与会话代际同构)。
+- **守护测试互锁**:main_test.go `TestKubernetesDeploymentRollingUpdateRequiresWriterLease`
+  同时断言 manifest RollingUpdate/maxUnavailable=0 与 main.go 装配 writerlease,
+  缺一即红;新增 data 层 fence 测试(拒写零变更/推进水位/幂等/损坏值 fail-closed/
+  nil fence legacy/teardown proof 受 fence)与 biz 闸门测试。writerlease 自带
+  fake backend 单测(当选/失租降级/重竞选 token 递增/Close Resign/配置校验)。
+- **验证**:pkg/dsauthfence(含 writerlease)与 hub_allocator 全模块 build/vet/test 绿。
+- **诚实残余**(rollout doc §5.2 记录):每玩家 assignment 键(无 hashtag)不可入
+  fence 事务,仅业务闸门+既有精确 CAS 保护;滚动重叠期非写者副本写请求收可重试
+  UNAVAILABLE(重试即成功,非零感知);readiness 未与租约挂钩(保读流量)。
+- **首次升级迁移仪式(必读,rollout doc §5.3)**:首次从不含 writerlease 的旧镜像
+  升级时旧二进制不受协议约束,滚动重叠=最后一次无保护双写窗口;必须先
+  `kubectl -n pandora scale deploy hub-allocator --replicas=0` 再 apply。此后升级全程无停机。
+
+## 2026-07-23(续:静态复审逐条核实与修复——7 P0/10 P1/3 P2 判定处置,Claude)
+
+- **外部静态复审逐条核实**,判定后按批修复(全部服务端测试绿):
+  - **P0-4 assignment 键 fencing 盲区 → 修复**:①继任者 fence sweep
+    `AdvanceWriterFences`(RunHeartbeatSweep 每届次一次,shard SET ∪ transfer 清理源
+    pod 逐个 WATCH/MULTI 单调推进,消除 lazy-advance 盲区);②签票前
+    `confirmWriterForTicket` 复核租约(AssignHub 新/旧路径 + TransferHub 两路径,
+    失租扣票返回可重试 UNAVAILABLE)。§5.2 残余口径改写为四层覆盖
+    (闸门/CAS/sweep/签票复核),残余窗口收窄至「失租通知与复核之间旧写者可能写一条
+    合法 assignment(数据有效、票据不下发)」。
+  - **P0-3 login Set 报错但已提交 → 修复**:sessions.Set 失败后回读 GetJTI,确认
+    已提交则跳过 JTI restore 向前收敛(登录仍失败,但不再回滚已生效的新会话)。
+  - **P0-6 writerlease 竞选静默失败 → 修复**:新增 `Health()` 可观测(连续失败数+
+    最后错误);连续竞选失败 ≥15 次(约 30s)日志升级 Error 提示「可能全局无写者」。
+  - **P0-5 两步迁移误判 → 驳回**(spec.strategy 不属 pod template,strategy-only
+    apply 不重启 Pod,§5.3 两步法成立);**P0-1/P0-2(UE 预生成复核前移)为 R9 既定
+    取舍,保持现状待用户裁决**(前移会给每次进场加一跳阻塞 RPC)。
+  - **P1-2 owner census admitted 缓存吞掉重进 → 修复**:缓存按 census 轮剪枝,
+    离场玩家条目删除,重进(代际推进)后重新查询+重新 Admit。
+  - **P1-3 owner 记录漂移无自愈 → 修复**:census 发现记录不指向自己但本地
+    assignment 指向自己时,以弱一致 BeginTransition 自愈(真迁移不受影响)。
+  - **P1-4 login AssignHub 单发即败 → 修复**:有界重试(3 次/150ms 退避,仅
+    UNAVAILABLE 类可重试,其余 fail-fast),覆盖写者交接窗口。
+  - **P1-5 push 本地陈旧 slot 抑制跨 Pod 唤醒 → 修复**:消费后本地 SendTo 快路径 +
+    **无条件** PublishWake(wake 幂等 size-1 去重,双唤醒零成本)。
+  - **配置模板**:guild/push 生产 .example 补 session gate require:true 与
+    node.redis_client;push topics 硬编码列表移除(回落 kafkax.PushTopics 单一权威)。
+- **UE 客户端修复(静态改动,编译由用户执行)**:
+  - P1-6 PandoraPushClient 解析错误路径排队的 CloseStream 补 generation 守卫,
+    旧流迟到关流任务不再误杀新流;
+  - P1-7 修复方式**修正复审建议**:不能在 AbandonRecovery 移除 push 重订阅 ticker
+    (匹配失败路径玩家仍持会话留大厅,摘 ticker 会让已关闭推送流永不恢复);
+    实际收口在 ResubscribePush 增加未登录守卫,登出后迟到 ticker 零副作用;
+  - P1-10 Hub Admission/Departure ACK 补 10s 有界超时(对齐本文件 unary 约定,
+    悬死不再卡住准入重试链);
+  - P2-1 Friend/Team Deinitialize 补 ClearTimer(ResyncRepullRetryTimer);
+  - P1-8 判定**无需改码**:两模型在每次新 resync 信号已重置重试预算=3,
+    「预算耗尽永久停止」只持续到下一次 resync,为 R9 有界重试既定设计。
+- **验证**:hub_allocator/login/push/pkg-dsauthfence 全模块 build/vet/test 绿
+  (新增 owner census 剪枝+自愈、写者失租扣票、fence sweep、login 重试与
+  回读收敛、writerlease Health、push 无条件唤醒等回归用例)。UE 五文件改动
+  仅静态检查,**编译由用户执行**。**诚实边界**:P0-1/P0-2 保持现状待裁决;
+  mail/leaderboard 无生产 .example 模板(超出本轮范围);
+  **INC-20260722-004 保持未关闭**。新增文件未纳管,待用户提交。

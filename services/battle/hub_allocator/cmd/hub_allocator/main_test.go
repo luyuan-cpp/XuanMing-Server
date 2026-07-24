@@ -11,7 +11,14 @@ import (
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/biz"
 )
 
-func TestKubernetesDeploymentUsesRecreateSingleWriterStrategy(t *testing.T) {
+// TestKubernetesDeploymentRollingUpdateRequiresWriterLease:R9 P0-7 起单写者约束由
+// 运行时写者继任租约(writerlease)+ 存储级 fencing 保证,部署策略允许 RollingUpdate
+// (maxUnavailable=0 消除升级停机)。本测试守护两个耦合不变量:
+//  1. manifest 必须是 maxUnavailable: 0 的 RollingUpdate(不允许悄悄退回 Recreate
+//     停机,也不允许放开 maxUnavailable 造成升级空窗);
+//  2. main.go 必须真的装配 writerlease 且注入 usecase/repo——没有租约的
+//     RollingUpdate 就是 INC-20260722-004 R9 P0-7 的双写者事故窗口。
+func TestKubernetesDeploymentRollingUpdateRequiresWriterLease(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("cannot resolve test source path")
@@ -31,9 +38,19 @@ func TestKubernetesDeploymentUsesRecreateSingleWriterStrategy(t *testing.T) {
 	if end := strings.Index(section, "\n---"); end >= 0 {
 		section = section[:end]
 	}
-	if !strings.Contains(section, "replicas: 1") ||
-		!strings.Contains(section, "strategy: { type: Recreate }") {
-		t.Fatalf("hub-allocator must be a single-writer Recreate Deployment:\n%s", section)
+	if !strings.Contains(section, "type: RollingUpdate") ||
+		!strings.Contains(section, "maxUnavailable: 0") {
+		t.Fatalf("hub-allocator must roll with RollingUpdate maxUnavailable=0 (writer succession lease):\n%s", section)
+	}
+	mainSrc, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(mainSrc)
+	if !strings.Contains(source, "writerlease.Start(") ||
+		!strings.Contains(source, "uc.SetWriterFence(") ||
+		!strings.Contains(source, "repo.SetWriterFence(") {
+		t.Fatal("RollingUpdate is only safe with the writer succession lease wired into usecase and repos (R9 P0-7)")
 	}
 }
 

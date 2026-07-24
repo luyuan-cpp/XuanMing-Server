@@ -284,11 +284,13 @@ spec:
           readinessProbe: { grpc: { port: 50011 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts:
             - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker.yaml, readOnly: true }
+            - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
             # DSTicket v2(方案 B)RSA 签发私钥(签发方专属,见 login 注释)。
             - { name: dsticket, mountPath: /run/secrets/pandora-dsticket, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes:
         - { name: conf, secret: { secretName: pandora-config } }
+        - { name: configtable, configMap: { name: pandora-configtable } }
         - { name: dsticket, secret: { secretName: pandora-dsticket-signer-r1, defaultMode: 0440 } }
 ---
 apiVersion: v1
@@ -317,11 +319,13 @@ spec:
           readinessProbe: { grpc: { port: 50018 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts:
             - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker-pve.yaml, readOnly: true }
+            - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
             # DSTicket v2(方案 B)RSA 签发私钥(签发方专属,见 login 注释)。
             - { name: dsticket, mountPath: /run/secrets/pandora-dsticket, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes:
         - { name: conf, secret: { secretName: pandora-config } }
+        - { name: configtable, configMap: { name: pandora-configtable } }
         - { name: dsticket, secret: { secretName: pandora-dsticket-signer-r1, defaultMode: 0440 } }
 ---
 apiVersion: v1
@@ -550,10 +554,17 @@ kind: Deployment
 metadata: { name: hub-allocator, namespace: pandora, labels: { app: hub-allocator } }
 spec:
   replicas: 1
-  # hub-allocator is the sole writer of the assignment/capacity ledger.  A
-  # RollingUpdate briefly runs old+new binaries even at replicas=1; old writers
-  # do not understand successor leases and can reopen the reconnect race.
-  strategy: { type: Recreate }
+  # hub-allocator 是 assignment/容量账本的单写者。R9 P0-7 起单写者约束不再依赖
+  # Recreate 部署策略,而由运行时写者继任租约保证(pkg/dsauthfence/writerlease:
+  # etcd election + 单调 fencing token + Redis 同事务存储级 fencing,见
+  # docs/design/session-generation-rollout.md §5)。RollingUpdate 重叠窗口内
+  # 未当选副本对写请求返回可重试 UNAVAILABLE,迟到旧写者被存储层 fence 拒绝。
+  # maxUnavailable=0 保证升级全程始终有副本在服务(旧副本收 SIGTERM 时主动 Resign,
+  # 新副本亚秒接任)。
+  # 迁移警告:首次从不含 writerlease 的旧镜像升级时,旧二进制不参与竞选也不受 fence
+  # 约束,滚动重叠 = 无保护双写窗口;首次升级按 rollout 文档 §5.3 两步法:先保持
+  # Recreate 只换镜像,再单独 apply 本 strategy(strategy 变更不重建 Pod,零额外窗口)。
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
   selector: { matchLabels: { app: hub-allocator } }
   template:
     metadata: { labels: { app: hub-allocator, pandora.dev/ds-auth-writer-epoch: "2" } }

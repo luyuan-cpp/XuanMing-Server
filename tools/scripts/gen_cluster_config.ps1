@@ -1242,10 +1242,10 @@ function Set-ProdBattleResultProgressOff([string]$text) {
         '${1}progress_enabled: false', 1)
 }
 
-function Set-PlayerClusterConfigTableDir([string]$text) {
-    $location = Get-YamlSectionSecretLocation 'player' $text 'config_table' 'dir'
+function Set-ServiceClusterConfigTableDir([string]$serviceName, [string]$text) {
+    $location = Get-YamlSectionSecretLocation $serviceName $text 'config_table' 'dir'
     if ($location.RawValue -cne '../../../configtable/dist') {
-        throw '[FATAL] player.config_table.dir 不是宿主 dev 模板路径,拒绝静默覆盖未知配置。'
+        throw "[FATAL] $serviceName.config_table.dir 不是宿主 dev 模板路径,拒绝静默覆盖未知配置。"
     }
     $location.Lines[$location.SecretIndex] = $location.Prefix + '"/app/configtable/active"' + $location.Suffix
     return ($location.Lines -join $location.Newline)
@@ -1502,10 +1502,14 @@ function Assert-GeneratedSet {
                 throw '[FATAL] -Prod 产物 battle-result progress_enabled 必须且只能为 false(实时通道启用是独立显式动作)。'
             }
         }
+        if ($svc.Name -in @('matchmaker', 'matchmaker-pve', 'player')) {
+            if (([regex]::Matches($yaml, '(?m)^[ \t]{2}dir:[ \t]*"/app/configtable/active"[ \t]*$')).Count -ne 1) {
+                throw "[FATAL] $($svc.Name) 集群产物必须只读 /app/configtable/active。"
+            }
+        }
         if ($svc.Name -eq 'player') {
-            if (([regex]::Matches($yaml, '(?m)^[ \t]{2}dir:[ \t]*"/app/configtable/active"[ \t]*$')).Count -ne 1 -or
-                [regex]::IsMatch($yaml, 'exp_curve:')) {
-                throw '[FATAL] player 集群产物必须只读 /app/configtable/active 且不得残留 exp_curve。'
+            if ([regex]::IsMatch($yaml, 'exp_curve:')) {
+                throw '[FATAL] player 集群产物不得残留 exp_curve。'
             }
             if ($Prod -and ([regex]::Matches($yaml, '(?m)^[ \t]{2}experience_enabled:[ \t]*false[ \t]*$')).Count -ne 1) {
                 throw '[FATAL] -Prod 产物 player experience_enabled 必须为 false(策划正式数值确认后独立启用)。'
@@ -1702,7 +1706,9 @@ try {
         $src = Join-Path $ProjectRoot $s.Conf
         $raw = Get-Content -LiteralPath $src -Raw
         $out = Convert-DevToCluster $raw
-        if ($s.Name -eq 'player') { $out = Set-PlayerClusterConfigTableDir $out }
+        if ($s.Name -in @('matchmaker', 'matchmaker-pve', 'player')) {
+            $out = Set-ServiceClusterConfigTableDir $s.Name $out
+        }
         if ($s.Name -eq 'auction') { $out = Set-AuctionClusterSafety $out }
         if ($Prod -and $s.Name -eq 'battle-result') { $out = Set-ProdBattleResultProgressOff $out }
         if ($Prod -and $s.Name -eq 'push') { $out = Set-ProdPushSessionGateOn $out }

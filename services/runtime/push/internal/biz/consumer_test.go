@@ -265,3 +265,41 @@ func TestKafkaConsumer_HandleBroadcastWorld(t *testing.T) {
 		t.Fatalf("broadcast must not enter buffer, got=%+v", offline.buffered)
 	}
 }
+
+// mockWake 记录 PublishWake 调用(复审 P1-5)。
+type mockWake struct {
+	mu    sync.Mutex
+	calls map[uint64]int
+}
+
+func (w *mockWake) PublishWake(_ context.Context, playerID uint64) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.calls == nil {
+		w.calls = map[uint64]int{}
+	}
+	w.calls[playerID]++
+	return nil
+}
+
+// 复审 P1-5:本地 slot 存在(可能是半死/被顶号的陈旧残留)也必须发跨 Pod 唤醒——
+// 不得以「本地在线」抑制信号,否则真持有新连接的 Pod 被迫等 30s 兜底轮询。
+func TestKafkaConsumer_WakePublishedEvenWhenLocallyOnline(t *testing.T) {
+	sender := newMockSender()
+	sender.online[42] = true // 本地有 slot
+	offline := newMockOffline()
+	wake := &mockWake{}
+	kc := makeConsumer(t, sender, offline)
+	kc.wake = wake
+
+	msg := makeMsg("pandora.team.update", "42", []byte("e"), "")
+	if err := kc.handle(context.Background(), msg); err != nil {
+		t.Fatalf("handle err=%v", err)
+	}
+	if sender.wakes[42] != 1 {
+		t.Fatalf("local fast-path wake=%d want=1", sender.wakes[42])
+	}
+	if wake.calls[42] != 1 {
+		t.Fatalf("cross-pod wake must be published even with a local slot, got=%d", wake.calls[42])
+	}
+}

@@ -43,6 +43,11 @@ try {
     $playerProd = Get-Content -LiteralPath (Join-Path $OutDirProd 'player.yaml') -Raw
     Assert-True (([regex]::Matches($playerProd, '(?m)^[ \t]{2}dir:[ \t]*"/app/configtable/active"[ \t]*$')).Count -eq 1) `
         '-Prod player 必须读取 Pod 挂载的 configtable active 目录'
+    foreach ($matchmakerName in @('matchmaker', 'matchmaker-pve')) {
+        $matchmakerProd = Get-Content -LiteralPath (Join-Path $OutDirProd "$matchmakerName.yaml") -Raw
+        Assert-True (([regex]::Matches($matchmakerProd, '(?m)^[ \t]{2}dir:[ \t]*"/app/configtable/active"[ \t]*$')).Count -eq 1) `
+            "-Prod $matchmakerName 必须读取 Pod 挂载的 configtable active 目录"
+    }
     Assert-True (-not $playerProd.Contains('exp_curve:')) '-Prod player 不得残留 YAML exp_curve'
     Assert-True (([regex]::Matches($playerProd, '(?m)^[ \t]{2}experience_enabled:[ \t]*false[ \t]*$')).Count -eq 1) `
         '-Prod player 必须机械关闭 experience_enabled(策划数值尚未正式确认)'
@@ -73,6 +78,11 @@ try {
     $playerDev = Get-Content -LiteralPath (Join-Path $OutDirDev 'player.yaml') -Raw
     Assert-True (([regex]::Matches($playerDev, '(?m)^[ \t]{2}dir:[ \t]*"/app/configtable/active"[ \t]*$')).Count -eq 1) `
         'dev player 必须读取 Pod/容器挂载的 configtable active 目录'
+    foreach ($matchmakerName in @('matchmaker', 'matchmaker-pve')) {
+        $matchmakerDev = Get-Content -LiteralPath (Join-Path $OutDirDev "$matchmakerName.yaml") -Raw
+        Assert-True (([regex]::Matches($matchmakerDev, '(?m)^[ \t]{2}dir:[ \t]*"/app/configtable/active"[ \t]*$')).Count -eq 1) `
+            "dev $matchmakerName 必须读取 Pod/容器挂载的 configtable active 目录"
+    }
     Assert-True (-not $playerDev.Contains('exp_curve:')) 'dev player 不得残留 YAML exp_curve'
     Assert-True (([regex]::Matches($playerDev, '(?m)^[ \t]{2}experience_enabled:[ \t]*true[ \t]*$')).Count -eq 1) `
         'dev player 应保留 experience_enabled 联调开关'

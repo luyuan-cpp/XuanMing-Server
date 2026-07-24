@@ -79,14 +79,38 @@ func (r *RedisHubAuthRepo) RecordInstanceTeardownProof(ctx context.Context, pod,
 		return errcode.New(errcode.ErrInvalidArg, "hub instance teardown proof requires pod and uid")
 	}
 	key := instanceTeardownProofKey(pod)
-	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+	write := func(pipe redis.Pipeliner) error {
 		pipe.HSet(ctx, key, instanceUID, time.Now().UnixMilli())
 		if proofTTL > 0 {
 			pipe.Expire(ctx, key, proofTTL)
 		}
 		return nil
-	})
-	return err
+	}
+	if r.fence == nil {
+		_, err := r.rdb.TxPipelined(ctx, write)
+		return err
+	}
+	// teardown proof 会解锁 connected ownership 清理,同样必须受写者 fence 约束:
+	// 失主副本伪造 proof 等于绕过 Departure 物理门。
+	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
+		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
+			_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
+				return write(pipe)
+			})
+			return err
+		}, wfenceKey(pod))
+		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
+			continue
+		}
+		return txErr
+	}
+	return errcode.New(errcode.ErrUnavailable, "hub teardown proof %s: cas retry exhausted", pod)
 }
 
 func (r *RedisHubAuthRepo) HasInstanceTeardownProof(ctx context.Context, pod, instanceUID string) (bool, error) {
@@ -628,10 +652,14 @@ func (r *RedisHubAuthRepo) ReserveAssignment(ctx context.Context, pod string, re
 		return ReserveResult{}, successorFieldErr
 	}
 	aKey, shardKeyName := authKey(pod), shardKey(pod)
-	watchKeys := append([]string{aKey, shardKeyName, instanceTeardownProofKey(pod)}, capacityLedgerKeys(pod)...)
+	watchKeys := fencedWatchKeys(append([]string{aKey, shardKeyName, instanceTeardownProofKey(pod)}, capacityLedgerKeys(pod)...), pod, r.fence)
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		out := ReserveResult{}
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			aRaw, err := tx.Get(ctx, aKey).Bytes()
 			if err == redis.Nil {
 				out.Reason = "auth-missing"
@@ -795,6 +823,7 @@ func (r *RedisHubAuthRepo) ReserveAssignment(ctx context.Context, pod string, re
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				if err := writeHubCapacityLedger(ctx, pipe, pod, ledger); err != nil {
 					return err
 				}
@@ -832,12 +861,16 @@ func (r *RedisHubAuthRepo) AcknowledgeAdmission(ctx context.Context, pod string,
 		return AdmissionResult{}, errcode.New(errcode.ErrInvalidArg, "hub admission identity invalid")
 	}
 	aKey, shardKeyName := authKey(pod), shardKey(pod)
-	watchKeys := append([]string{aKey, shardKeyName}, capacityLedgerKeys(pod)...)
+	watchKeys := fencedWatchKeys(append([]string{aKey, shardKeyName}, capacityLedgerKeys(pod)...), pod, r.fence)
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		out := AdmissionResult{}
 		var rejected bool
 		var conflict bool
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			aRaw, err := tx.Get(ctx, aKey).Bytes()
 			if err == redis.Nil {
 				rejected = true
@@ -942,6 +975,7 @@ func (r *RedisHubAuthRepo) AcknowledgeAdmission(ctx context.Context, pod string,
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				if err := writeHubCapacityLedger(ctx, pipe, pod, ledger); err != nil {
 					return err
 				}
@@ -990,11 +1024,15 @@ func (r *RedisHubAuthRepo) AcknowledgeDeparture(ctx context.Context, pod string,
 		return DepartureResult{}, errcode.New(errcode.ErrInvalidArg, "hub departure identity invalid")
 	}
 	aKey, shardKeyName := authKey(pod), shardKey(pod)
-	watchKeys := append([]string{aKey, shardKeyName}, capacityLedgerKeys(pod)...)
+	watchKeys := fencedWatchKeys(append([]string{aKey, shardKeyName}, capacityLedgerKeys(pod)...), pod, r.fence)
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		out := DepartureResult{}
 		var unauthorized bool
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			aRaw, err := tx.Get(ctx, aKey).Bytes()
 			if err == redis.Nil {
 				unauthorized = true
@@ -1079,6 +1117,7 @@ func (r *RedisHubAuthRepo) AcknowledgeDeparture(ctx context.Context, pod string,
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				if err := writeHubCapacityLedger(ctx, pipe, pod, ledger); err != nil {
 					return err
 				}
@@ -1256,10 +1295,14 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeatExact(ctx context.Context, pod s
 			"assignment seat release placement identity invalid")
 	}
 	aKey, shardKeyName := authKey(pod), shardKey(pod)
-	watchKeys := append([]string{aKey, shardKeyName}, capacityLedgerKeys(pod)...)
+	watchKeys := fencedWatchKeys(append([]string{aKey, shardKeyName}, capacityLedgerKeys(pod)...), pod, r.fence)
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
 		out := ReleaseAssignmentSeatResult{}
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			advanceFence, ferr := guardWriterFence(ctx, tx, pod, r.fence)
+			if ferr != nil {
+				return ferr
+			}
 			scanCapacity := int32(0)
 			if raw, err := tx.Get(ctx, shardKeyName).Bytes(); err == nil {
 				scanShard, decodeErr := unmarshalShard(pod, raw)
@@ -1364,6 +1407,7 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeatExact(ctx context.Context, pod s
 					// concurrently, WATCH retries and the caller will evict that owner.
 					if successor != nil {
 						_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+							advanceFence(pipe)
 							pipe.HDel(ctx, successorsKey(pod), successorField)
 							pipe.ZRem(ctx, successorExpiryKey(pod), successorField)
 							return nil
@@ -1401,6 +1445,7 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeatExact(ctx context.Context, pod s
 						return marshalErr
 					}
 					_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+						advanceFence(pipe)
 						if err := writeHubCapacityLedger(ctx, pipe, pod, ledger); err != nil {
 							return err
 						}
@@ -1413,6 +1458,7 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeatExact(ctx context.Context, pod s
 					return err
 				}
 				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+					advanceFence(pipe)
 					pipe.HDel(ctx, sessionsKey(pod), expected.AssignmentID)
 					pipe.ZRem(ctx, sessionExpiryKey(pod), expected.AssignmentID)
 					pipe.HDel(ctx, successorsKey(pod), successorField)
@@ -1457,6 +1503,7 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeatExact(ctx context.Context, pod s
 				shard.GetLastVerifiedWriterEpoch() == expected.WriterEpoch
 			if !currentProjection {
 				_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+					advanceFence(pipe)
 					pipe.HDel(ctx, reservationsKey(pod), expected.AssignmentID)
 					pipe.ZRem(ctx, reservationExpiryKey(pod), expected.AssignmentID)
 					pipe.HDel(ctx, successorsKey(pod), successorField)
@@ -1487,6 +1534,7 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeatExact(ctx context.Context, pod s
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				advanceFence(pipe)
 				if err := writeHubCapacityLedger(ctx, pipe, pod, ledger); err != nil {
 					return err
 				}
