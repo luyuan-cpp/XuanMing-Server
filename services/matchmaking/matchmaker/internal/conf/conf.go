@@ -106,12 +106,19 @@ type MatchConf struct {
 	// TeamSize 一方人数(MOBA 5v5,一方 5 人)。
 	TeamSize int `yaml:"team_size,omitempty" json:"team_size,omitempty"`
 
-	// EnableSoloMatch 仅用于本地端到端联调。开启后,单张队伍票据可以直接成局并拉起 Battle DS。
-	// 生产环境必须保持 false。
+	// EnableSoloMatch 是「即时开局 / walk-in」分叉开关:开启后 matchOnce 对每张票走 formSoloMatch——
+	// 单人或整队立即成局、跳过撮合与确认、直接拉起 Battle DS,不与陌生人凑对手。
+	//   - PVP 实例(matchmaker-dev.yaml):false —— 走正常撮合(凑齐 2×TeamSize + 确认期)。
+	//   - PVE 实例(matchmaker-pve.yaml,game_mode=pve_coop):true —— 「组好队 / 单人直进副本」的生产核心路径。
+	// 命名债:名字含 solo 且历史注释曾写「测试专用」,实际语义是「入口是否撮合」;
+	// 详见 docs/design/decision-dungeon-entry-modes.md(建议后续正名 walk_in / instant_start)。
 	EnableSoloMatch bool `yaml:"enable_solo_match,omitempty" json:"enable_solo_match,omitempty"`
 
-	// AutoConfirmMatch 仅用于本地端到端联调。开启后,撮合成功后跳过客户端确认期并直接拉 Battle DS。
-	// 生产环境必须保持 false。
+	// AutoConfirmMatch 只作用于撮合(versus)路径:开启后凑齐成局即视为全员已确认、跳过确认期直接拉 DS。
+	//   - 默认 false —— 保留真实确认期(玩家点接受),PVP 正式对局用;
+	//   - dev / 压测设 true 省去人工点确认(robot/stress 默认与之对齐)。
+	// 与 solo / walk-in 无关:formSoloMatch 本就直接建成 confirmAccepted,不看本开关
+	//(PVE 实例保留 true 仅防误配,walk-in 下不生效)。
 	AutoConfirmMatch bool `yaml:"auto_confirm_match,omitempty" json:"auto_confirm_match,omitempty"`
 
 	// MmrBaseWindow 初始 MMR 撮合窗口半宽(默认 200);两张票 avg_mmr 差 ≤ 窗口才可同场。

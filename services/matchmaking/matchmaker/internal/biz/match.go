@@ -2740,7 +2740,10 @@ func (u *MatchUsecase) greedyFormMatches(
 	}
 }
 
-// formSoloMatch 是本地端到端测试路径:单张队伍票据直接成局,跳过多人确认。
+// formSoloMatch 是「即时开局 / walk-in」成局路径(EnableSoloMatch=true 时 matchOnce 逐票调用):
+// 单张队伍票据(单人或整队)直接成局、跳过撮合与确认,不与陌生人凑对手。
+// PVE 实例(matchmaker-pve.yaml,game_mode=pve_coop)的生产核心路径 =「组好队 / 单人直进副本」;
+// 非仅测试用(历史注释误导,正名建议见 docs/design/decision-dungeon-entry-modes.md)。
 // 它仍须先完成票据/claim 图，再提交 durable ALLOCATING job。
 func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord) error {
 	if err := u.requireLocalGameMode(ticket.GetGameMode()); err != nil {
