@@ -222,11 +222,11 @@ func (u *PlayerUsecase) UpdateMMR(ctx context.Context, playerID uint64, delta in
 		return 0, false, err
 	}
 	if already {
-		plog.With(ctx).Infow("msg", "update_mmr_idempotent_hit",
+		plog.With(ctx).Debugw("msg", "update_mmr_idempotent_hit",
 			"player_id", playerID, "idempotency_key", idempotencyKey, "new_mmr", newMMR)
 		return newMMR, true, nil
 	}
-	plog.With(ctx).Infow("msg", "update_mmr_applied",
+	plog.With(ctx).Debugw("msg", "update_mmr_applied",
 		"player_id", playerID, "delta", delta, "reason", reason, "new_mmr", newMMR)
 	// 分片:档案(含段位 mmr)是 owner 数据,锁定玩家 owner cell(ProfileShardKey=player_id,
 	// §4.2 line 142)。router 为 nil(单 Cell)→ 不打,行为与历史一致。
@@ -265,7 +265,7 @@ func (u *PlayerUsecase) SelectHero(ctx context.Context, playerID uint64, heroID 
 	if err := u.repo.SetActiveHero(ctx, playerID, heroID); err != nil {
 		return err
 	}
-	plog.With(ctx).Infow("msg", "select_hero", "player_id", playerID, "hero_id", heroID)
+	plog.With(ctx).Debugw("msg", "select_hero", "player_id", playerID, "hero_id", heroID)
 	return nil
 }
 
@@ -296,7 +296,7 @@ func (u *PlayerUsecase) GrantAttributePoints(ctx context.Context, playerID uint6
 		return 0, err
 	}
 	if already {
-		plog.With(ctx).Infow("msg", "grant_attr_idempotent_hit",
+		plog.With(ctx).Debugw("msg", "grant_attr_idempotent_hit",
 			"player_id", playerID, "idempotency_key", idempotencyKey, "unspent", unspent)
 	}
 	return unspent, nil
@@ -395,7 +395,7 @@ func (u *PlayerUsecase) SetEquipment(ctx context.Context, playerID uint64, slots
 	if err := u.repo.SetEquipment(ctx, playerID, slots); err != nil {
 		return err
 	}
-	plog.With(ctx).Infow("msg", "set_equipment", "player_id", playerID, "slots", len(slots))
+	plog.With(ctx).Debugw("msg", "set_equipment", "player_id", playerID, "slots", len(slots))
 	return nil
 }
 
@@ -426,7 +426,7 @@ func (u *PlayerUsecase) GrantTalentPoints(ctx context.Context, playerID uint64, 
 		return 0, err
 	}
 	if already {
-		plog.With(ctx).Infow("msg", "grant_talent_idempotent_hit",
+		plog.With(ctx).Debugw("msg", "grant_talent_idempotent_hit",
 			"player_id", playerID, "idempotency_key", idempotencyKey, "unspent", unspent)
 	}
 	return unspent, nil

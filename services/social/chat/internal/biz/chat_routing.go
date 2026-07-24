@@ -73,14 +73,14 @@ func (u *ChatUsecase) logPrivateRouting(ctx context.Context, senderID, targetID 
 		return
 	}
 	if peers.CrossRegionPrivate() {
-		plog.With(ctx).Infow("msg", "chat_private_routing",
+		plog.With(ctx).Debugw("msg", "chat_private_routing",
 			"cross_region", true,
 			"sender_region", peers.SenderRegionID,
 			"target_region", peers.TargetRegionID,
 			"bridge_key", PrivateBridgeKey(targetID))
 		return
 	}
-	plog.With(ctx).Infow("msg", "chat_private_routing",
+	plog.With(ctx).Debugw("msg", "chat_private_routing",
 		"cross_region", false,
 		"region", peers.SenderRegionID)
 }

@@ -526,7 +526,7 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		}
 	}
 
-	plog.With(ctx).Infow("msg", "battle_warming", "match_id", matchID, "pod", podName, "ds_addr", addr, "players", len(playerIDs))
+	plog.With(ctx).Debugw("msg", "battle_warming", "match_id", matchID, "pod", podName, "ds_addr", addr, "players", len(playerIDs))
 
 	// 等 DS 用正确 match_id/pod 的心跳上报 ready/running,后端才把 ds_addr 回给 matchmaker。
 	res, werr := u.waitBattleReady(ctx, matchID, podName, allocationID)
@@ -550,7 +550,7 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		ReleaseTrack:             res.ReleaseTrack,
 	}, 3*time.Second)
 
-	plog.With(ctx).Infow("msg", "battle_ready_after_heartbeat", "match_id", matchID, "pod", podName, "ds_addr", addr)
+	plog.With(ctx).Debugw("msg", "battle_ready_after_heartbeat", "match_id", matchID, "pod", podName, "ds_addr", addr)
 	return res, nil
 }
 
@@ -757,7 +757,7 @@ func (u *AllocatorUsecase) awaitExistingAllocation(
 			"battle %d preactive gameserver release is not confirmed", matchID)
 	}
 	if !u.modelB && battleReadyForPod(existing, existing.DsPodName, matchID, existing.AllocatedAtMs) {
-		plog.With(ctx).Infow("msg", "allocate_idempotent_hit", "match_id", matchID,
+		plog.With(ctx).Debugw("msg", "allocate_idempotent_hit", "match_id", matchID,
 			"ds_addr", existing.DsAddr, "state", existing.State, "allocation_id", existing.AllocationId)
 		return allocateResultFromBattle(existing), nil
 	}
@@ -767,7 +767,7 @@ func (u *AllocatorUsecase) awaitExistingAllocation(
 		return nil, errcode.New(errcode.ErrDSAllocationFailed,
 			"battle %d in state %s, not allocatable", matchID, existing.State)
 	}
-	plog.With(ctx).Infow("msg", "allocate_idempotent_wait", "match_id", matchID,
+	plog.With(ctx).Debugw("msg", "allocate_idempotent_wait", "match_id", matchID,
 		"pod", existing.DsPodName, "state", existing.State, "allocation_id", existing.AllocationId)
 	res, err := u.waitBattleReady(ctx, matchID, existing.DsPodName, existing.AllocationId)
 	if err != nil {
@@ -1301,7 +1301,7 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 		return err
 	}
 	if !found {
-		plog.With(ctx).Infow("msg", "release_idempotent_miss", "match_id", matchID, "reason", reason)
+		plog.With(ctx).Debugw("msg", "release_idempotent_miss", "match_id", matchID, "reason", reason)
 		return nil
 	}
 	if battle.State == stateAllocationUncertain || battle.State == stateAllocationReconciling ||
@@ -1318,7 +1318,7 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 	if err := u.repo.DeleteBattle(ctx, matchID); err != nil {
 		return err
 	}
-	plog.With(ctx).Infow("msg", "battle_released", "match_id", matchID, "pod", battle.DsPodName, "reason", reason)
+	plog.With(ctx).Debugw("msg", "battle_released", "match_id", matchID, "pod", battle.DsPodName, "reason", reason)
 	return nil
 }
 
@@ -1907,7 +1907,7 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 	}
 	if becameReady {
 		// 验收日志:Battle DS heartbeat match_id=<id> pod=<pod> state=running/ready
-		plog.With(ctx).Infow("msg", "battle_ds_heartbeat_ready", "match_id", matchID, "pod", podName, "state", state)
+		plog.With(ctx).Debugw("msg", "battle_ds_heartbeat_ready", "match_id", matchID, "pod", podName, "state", state)
 	}
 	if emptyAbandoned {
 		// 空场超时判弃:回收 pod + 投递补偿 + 移出 active,回 stop 指令令 DS 停机。
@@ -2413,6 +2413,6 @@ func (u *AllocatorUsecase) deliverAbandoned(ctx context.Context, matchID uint64,
 		plog.With(ctx).Warnw("msg", "ds_lifecycle_publish_failed_will_retry", "match_id", matchID, "err", err)
 		return false
 	}
-	plog.With(ctx).Infow("msg", "ds_lifecycle_published", "match_id", matchID)
+	plog.With(ctx).Debugw("msg", "ds_lifecycle_published", "match_id", matchID)
 	return true
 }

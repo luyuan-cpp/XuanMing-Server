@@ -114,7 +114,7 @@ func (u *BattleResultUsecase) logSettlementRouting(ctx context.Context, result *
 			"sample_settle_key", SettlementKey(result.GetMatchId(), owners[0].PlayerID))
 		return
 	}
-	plog.With(ctx).Infow("msg", "battle_settlement_routing",
+	plog.With(ctx).Debugw("msg", "battle_settlement_routing",
 		"match_id", result.GetMatchId(),
 		"region_count", len(regions),
 		"cross_region", false)

@@ -111,7 +111,7 @@ func (u *TradeUsecase) logSettlementRouting(ctx context.Context, orderID, buyerI
 			"sample_leg_key", SettlementLegKey(orderID, buyerID, LegBuyerDebit))
 		return
 	}
-	plog.With(ctx).Infow("msg", "trade_settlement_routing",
+	plog.With(ctx).Debugw("msg", "trade_settlement_routing",
 		"order_id", orderID,
 		"cross_shard", parties.CrossShardSettlement(),
 		"cross_region", false)

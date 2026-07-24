@@ -65,7 +65,7 @@ func (u *LocatorUsecase) logLocationPlacement(ctx context.Context, playerID uint
 	if !ok {
 		return
 	}
-	plog.With(ctx).Infow("msg", "location_placement",
+	plog.With(ctx).Debugw("msg", "location_placement",
 		"player_id", playerID,
 		"state", state,
 		"region", loc.RegionID,

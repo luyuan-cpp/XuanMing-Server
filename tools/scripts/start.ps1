@@ -5357,6 +5357,9 @@ function Get-VersionInfo {
             Pop-Location
         }
     }
+    # 发布版本号显式覆盖(标准 CI:VERSION 优先于 git describe,免打 tag)。
+    # 由 publish_offline_images.ps1 -Version 设置;Commit 仍保留 git sha 作溯源。
+    if ($env:PANDORA_RELEASE_VERSION) { $ver = $env:PANDORA_RELEASE_VERSION.Trim() }
     return [pscustomobject]@{ Version = $ver; Commit = $commit; BuildTime = $built }
 }
 

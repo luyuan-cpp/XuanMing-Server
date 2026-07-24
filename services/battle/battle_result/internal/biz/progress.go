@@ -296,7 +296,7 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		}
 		return 0, err
 	}
-	plog.With(ctx).Infow("msg", "battle_progress_applied",
+	plog.With(ctx).Debugw("msg", "battle_progress_applied",
 		"match_id", matchID, "acked_seq", newSeq, "events", len(events),
 		"grant_rows", len(rows), "skipped_facts", skippedFact,
 		"batch_exp", batchExp, "batch_items", batchItems)
@@ -318,7 +318,7 @@ func reconcileProgress(ctx context.Context, matchID, finalSeq uint64, info data.
 			"match_id", matchID, "final_seq", finalSeq, "applied_seq", info.LastAppliedSeq,
 			"hint", "尾窗事件丢失(DS 崩溃/网络),只告警不自动补(realtime-progression.md §9)")
 	default:
-		plog.With(ctx).Infow("msg", "progress_reconcile_ok",
+		plog.With(ctx).Debugw("msg", "progress_reconcile_ok",
 			"match_id", matchID, "applied_seq", info.LastAppliedSeq)
 	}
 }
@@ -412,7 +412,7 @@ func (u *BattleResultUsecase) publishProgressBatch(ctx context.Context) (int, er
 		granted++
 	}
 	if granted > 0 {
-		plog.With(ctx).Infow("msg", "progress_outbox_granted", "count", granted)
+		plog.With(ctx).Debugw("msg", "progress_outbox_granted", "count", granted)
 	}
 	return granted, nil
 }

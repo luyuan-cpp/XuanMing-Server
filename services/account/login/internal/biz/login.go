@@ -454,7 +454,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	}
 
 	// 确定性 region/cell 路由已在上方一次算好(regionID/cellID),这里直接复用。
-	h.Infow("msg", "login_ok", "player_id", playerID, "device_id", deviceID,
+	h.Debugw("msg", "login_ok", "player_id", playerID, "device_id", deviceID,
 		"session_exp_ms", sessExpMs, "hub_ticket_exp_ms", hubExpMs,
 		"region_id", regionID, "cell_id", cellID)
 
@@ -778,7 +778,7 @@ func (u *LoginUsecase) tryBattleReconnect(
 		h.Warnw("msg", "touch_device_failed", "err", err, "player_id", playerID, "device_id", deviceID)
 	}
 
-	h.Infow("msg", "login_battle_reconnect", "player_id", playerID, "device_id", deviceID,
+	h.Debugw("msg", "login_battle_reconnect", "player_id", playerID, "device_id", deviceID,
 		"match_id", bl.MatchID, "battle_ds_addr", battleResult.BattleDSAddr,
 		"battle_ticket_exp_ms", battleExpMs, "region_id", regionID, "cell_id", cellID)
 
@@ -909,7 +909,7 @@ func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID
 				return "", "", 0, errcode.New(errcode.ErrUnavailable,
 					"hub allocator returned an invalid ticket: %v", verr)
 			}
-			h.Infow("msg", "hub_assigned", "player_id", playerID,
+			h.Debugw("msg", "hub_assigned", "player_id", playerID,
 				"hub_pod", assign.HubPodName, "shard_id", assign.ShardID, "hub_ds_addr", assign.HubDSAddr)
 			return assign.HubDSAddr, assign.HubTicket, expMs, nil
 		}
@@ -1139,7 +1139,7 @@ func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID u
 		h.Errorw("msg", "select_role_resolve_hub_failed", "err", err, "player_id", playerID, "role_id", roleID)
 		return "", "", 0, err
 	}
-	h.Infow("msg", "select_role_ok", "player_id", playerID, "role_id", roleID, "hub_ds_addr", addr)
+	h.Debugw("msg", "select_role_ok", "player_id", playerID, "role_id", roleID, "hub_ds_addr", addr)
 	return addr, ticket, expMs, nil
 }
 
@@ -1278,7 +1278,7 @@ func (u *LoginUsecase) Logout(ctx context.Context, sessionToken string) error {
 			}
 		}
 	}
-	h.Infow("msg", "logout_ok", "player_id", playerID)
+	h.Debugw("msg", "logout_ok", "player_id", playerID)
 	return nil
 }
 

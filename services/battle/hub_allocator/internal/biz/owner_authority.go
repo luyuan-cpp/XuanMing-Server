@@ -33,6 +33,24 @@ const (
 	ownerPhaseAdmitted int8 = 2
 )
 
+// ownerAdmittedStaleTTL 是 census 已准入缓存项(ownerAdmitted,key=instanceUID|playerID)的
+// 最大保鲜期。活实例每次心跳 census 对在场玩家续期 last-touch;超过本值未续期 = 其所属实例
+// 已销毁(UID 不再心跳),项由 sweepStaleOwnerAdmitted 清除,防缓存随历史实例 UID 无界增长
+// (复审 P1-5;§9.18 客户端触发型内存容器有界)。取值远大于心跳/census 周期,活实例项绝不误清。
+const ownerAdmittedStaleTTL = 5 * time.Minute
+
+// sweepStaleOwnerAdmitted 删除 last-touch 早于 cutoff 的 census 准入缓存项(复审 P1-5)。
+// 值意外非 time.Time(理论不达,所有写入点均写 time.Time)也删除,保证 fail-safe 有界。
+// best-effort:被清项若玩家仍在场,下一轮 census 会重新 Query→Admit 补回(至多一次多余往返)。
+func sweepStaleOwnerAdmitted(admitted *sync.Map, cutoff time.Time) {
+	admitted.Range(func(k, v any) bool {
+		if t, ok := v.(time.Time); !ok || t.Before(cutoff) {
+			admitted.Delete(k)
+		}
+		return true
+	})
+}
+
 // OwnerAuthority 是 owner 权威的 migrate 调用面(Query/Begin/Admit;弱依赖)。
 // 由 data.GrpcOwnerLeaseRenewer 实现(与租约续写共用连接);可为 nil(未启用)。
 type OwnerAuthority interface {
@@ -105,9 +123,12 @@ func ownerBeginPlayersWeak(ctx context.Context, auth OwnerAuthority, players []u
 func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sync.Map,
 	players []uint64, ownerType int8, selfPod, selfUID string, budget time.Duration,
 	resolveTarget func(context.Context, uint64) (data.OwnerTargetView, bool)) {
-	if auth == nil || len(players) == 0 {
+	if auth == nil {
 		return
 	}
+	// 复审 P1-4:先按本实例 census 剪枝——即使本轮 census 为空(最后一名玩家离场)也必须执行,
+	// 否则该玩家的 admitted 项残留;其回流同实例(owner epoch 已推进、新 PENDING)时会被下方
+	// 缓存命中(admitted.Load)误吞、跳过 Query→Admit。故剪枝前置到「无玩家早退」之前。
 	present := make(map[string]struct{}, len(players))
 	for _, playerID := range players {
 		present[selfUID+"|"+fmt.Sprintf("%d", playerID)] = struct{}{}
@@ -121,11 +142,20 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 		}
 		return true
 	})
+	if len(players) == 0 {
+		return // 剪枝已完成;本轮无玩家可代提交 Admit。
+	}
 	budgetCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
+	now := time.Now()
 	for _, playerID := range players {
 		key := selfUID + "|" + fmt.Sprintf("%d", playerID)
-		if _, ok := admitted.Load(key); ok {
+		if v, ok := admitted.Load(key); ok {
+			// 复审 P1-5:命中即续期(接近过期才写,降 sync.Map 写争用);活实例项恒新鲜,
+			// 仅已销毁实例(UID 不再心跳续期)的项会老化超 TTL 被 sweepStaleOwnerAdmitted 清除。
+			if t, isTime := v.(time.Time); !isTime || now.Sub(t) > ownerAdmittedStaleTTL/2 {
+				admitted.Store(key, now)
+			}
 			continue
 		}
 		if budgetCtx.Err() != nil {
@@ -152,7 +182,7 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 			continue
 		}
 		if rec.Phase == ownerPhaseAdmitted {
-			admitted.Store(key, struct{}{})
+			admitted.Store(key, now)
 			continue
 		}
 		if rec.Phase != ownerPhasePending {
@@ -165,7 +195,7 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 		retryAfter, aerr := auth.Admit(budgetCtx, playerID, rec.OwnerEpoch, rec.OperationID, target)
 		switch {
 		case aerr == nil:
-			admitted.Store(key, struct{}{})
+			admitted.Store(key, now)
 		case retryAfter > 0:
 			// 屏障未开:预期中的 WAIT,下次心跳重试,不告警刷屏。
 		default:

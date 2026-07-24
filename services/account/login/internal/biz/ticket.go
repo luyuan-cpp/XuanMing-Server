@@ -332,7 +332,7 @@ func (u *TicketUsecase) issueBattleDSTicketV2(
 		h.Errorw("msg", "sign_ds_ticket_v2_failed", "err", err, "player_id", playerID, "match_id", matchID)
 		return nil, errcode.New(errcode.ErrInternal, "sign v2 battle ticket failed: %v", err)
 	}
-	h.Infow("msg", "ds_ticket_v2_issued",
+	h.Debugw("msg", "ds_ticket_v2_issued",
 		"player_id", playerID, "ds_type", "battle", "match_id", matchID,
 		"jti", jti, "exp_ms", expMs, "region_id", regionID, "cell_id", cellID,
 		"pod", target.PodName, "allocation_id", target.AllocationID)
@@ -364,7 +364,7 @@ func (u *TicketUsecase) issueDSTicketAtCell(
 		return nil, errcode.New(errcode.ErrInternal, "sign ds ticket failed: %v", err)
 	}
 
-	h.Infow("msg", "ds_ticket_issued",
+	h.Debugw("msg", "ds_ticket_issued",
 		"player_id", playerID, "ds_type", string(ds), "target_id", targetID,
 		"jti", jti, "exp_ms", expMs, "region_id", regionID, "cell_id", cellID)
 
@@ -542,7 +542,7 @@ func (u *TicketUsecase) verifyDSTicket(
 		}
 	}
 
-	h.Infow("msg", "ds_ticket_verified",
+	h.Debugw("msg", "ds_ticket_verified",
 		"player_id", claims.PlayerID,
 		"ds_type", claims.DSType, "match_id", claims.MatchID,
 		"jti", claims.JTI, "ds_pod", dsPodName)

@@ -64,7 +64,7 @@ func (u *DataUsecase) logPlayerDataPlacement(ctx context.Context, playerID uint6
 	if !ok {
 		return
 	}
-	plog.With(ctx).Infow("msg", "player_data_placement",
+	plog.With(ctx).Debugw("msg", "player_data_placement",
 		"player_id", playerID,
 		"op", op,
 		"region", owner.RegionID,

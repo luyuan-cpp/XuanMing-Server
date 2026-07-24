@@ -129,7 +129,7 @@ func (u *FriendUsecase) logFriendshipSharding(ctx context.Context, requestID, re
 	regions := DistinctEdgeRegions(owners)
 	crossRegion := len(regions) > 1
 	if crossRegion {
-		plog.With(ctx).Infow("msg", "friend_edge_sharding",
+		plog.With(ctx).Debugw("msg", "friend_edge_sharding",
 			"request_id", requestID,
 			"region_count", len(regions),
 			"cross_shard", true,
@@ -137,7 +137,7 @@ func (u *FriendUsecase) logFriendshipSharding(ctx context.Context, requestID, re
 			"sample_edge_key", EdgeBuildKey(requestID, owners[0].PlayerID))
 		return
 	}
-	plog.With(ctx).Infow("msg", "friend_edge_sharding",
+	plog.With(ctx).Debugw("msg", "friend_edge_sharding",
 		"request_id", requestID,
 		"region_count", len(regions),
 		"cross_shard", CrossShardFriendship(owners),

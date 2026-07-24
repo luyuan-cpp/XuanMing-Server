@@ -94,6 +94,72 @@ func TestOwnerAdmitCensus_CachePrunedOnDepartureThenReadmits(t *testing.T) {
 	}
 }
 
+// 复审 P1-4:最后一名玩家离场使 census 为空时,缓存仍必须被剪枝——否则该玩家回流
+// 同实例(epoch 已推进、新 PENDING)会被上一纪元 admitted 缓存误吞、跳过 Admit。
+// 本用例直接传空 census(旧实现早退不剪枝时,回流玩家不会被重新 Admit,断言失败)。
+func TestOwnerAdmitCensus_EmptyCensusStillPrunesThenReadmits(t *testing.T) {
+	const pod, uid = "hub-1", "uid-1"
+	auth := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{
+		1001: pendingRecord(pod, uid, 3),
+	}}
+	var admitted sync.Map
+	ctx := context.Background()
+
+	// 第一轮:PENDING → Admit,进缓存。
+	ownerAdmitCensusWeak(ctx, auth, &admitted, []uint64{1001}, ownerTypeHub, pod, uid, time.Second, nil)
+	if len(auth.admits) != 1 {
+		t.Fatalf("first census must admit once, got %d", len(auth.admits))
+	}
+	// 最后一名玩家离场:census 为空,仍须剪枝该玩家缓存项。
+	ownerAdmitCensusWeak(ctx, auth, &admitted, nil, ownerTypeHub, pod, uid, time.Second, nil)
+	if _, ok := admitted.Load(uid + "|1001"); ok {
+		t.Fatal("empty census must still prune departed player's admitted cache entry")
+	}
+	// 回流同实例:epoch 已推进、新 PENDING → 必须重新 Admit(未被 stale 缓存误吞)。
+	auth.records[1001] = pendingRecord(pod, uid, 9)
+	ownerAdmitCensusWeak(ctx, auth, &admitted, []uint64{1001}, ownerTypeHub, pod, uid, time.Second, nil)
+	admitsFor1001 := 0
+	for _, id := range auth.admits {
+		if id == 1001 {
+			admitsFor1001++
+		}
+	}
+	if admitsFor1001 != 2 {
+		t.Fatalf("returning player after empty census must be re-admitted, got %d admits", admitsFor1001)
+	}
+}
+
+// 复审 P1-5:census 准入缓存按 last-touch TTL 清死实例项。已销毁实例(UID 不再心跳续期)
+// 的项老化超 cutoff 被清,活实例(刚续期)的项保留,防 ownerAdmitted 随历史 UID 无界增长。
+func TestSweepStaleOwnerAdmitted(t *testing.T) {
+	const pod, uid = "hub-1", "uid-1"
+	auth := &scriptedOwnerAuthority{records: map[uint64]data.OwnerRecordView{
+		1001: pendingRecord(pod, uid, 3),
+	}}
+	var admitted sync.Map
+	// 一轮 census:1001 进缓存(值为 last-touch time.Time)。
+	ownerAdmitCensusWeak(context.Background(), auth, &admitted, []uint64{1001}, ownerTypeHub, pod, uid, time.Second, nil)
+	if _, ok := admitted.Load(uid + "|1001"); !ok {
+		t.Fatal("census 应把 1001 写入缓存")
+	}
+	// 模拟死实例遗留项(旧 UID,last-touch 很久以前)。
+	admitted.Store("uid-DEAD|2002", time.Now().Add(-time.Hour))
+	// cutoff = now-ownerAdmittedStaleTTL:活实例项(刚续期)保留,死实例项清除。
+	sweepStaleOwnerAdmitted(&admitted, time.Now().Add(-ownerAdmittedStaleTTL))
+	if _, ok := admitted.Load(uid + "|1001"); !ok {
+		t.Fatal("活实例(刚续期)缓存项不应被清")
+	}
+	if _, ok := admitted.Load("uid-DEAD|2002"); ok {
+		t.Fatal("死实例(超 TTL 未续期)缓存项必须被清")
+	}
+	// 非 time.Time 值也应被 fail-safe 清除。
+	admitted.Store("uid-BAD|3003", struct{}{})
+	sweepStaleOwnerAdmitted(&admitted, time.Now().Add(-ownerAdmittedStaleTTL))
+	if _, ok := admitted.Load("uid-BAD|3003"); ok {
+		t.Fatal("非 time.Time 值应被 fail-safe 清除")
+	}
+}
+
 // 复审 P1-3:owner 记录漂移(不指向本实例)但归属镜像仍指向本实例 → census 补弱
 // Begin 自愈;下一轮 Admit 收敛。归属指向他处/缺失 → 不干预。
 func TestOwnerAdmitCensus_HealsDriftedRecordViaResolver(t *testing.T) {

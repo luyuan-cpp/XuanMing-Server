@@ -210,7 +210,7 @@ func (u *TeamUsecase) CreateTeam(ctx context.Context, teamID, playerID uint64) (
 	u.pushUpdate(ctx, 0, []uint64{playerID}, team,
 		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
 
-	plog.With(ctx).Infow("msg", "team_created", "team_id", teamID, "captain_id", playerID)
+	plog.With(ctx).Debugw("msg", "team_created", "team_id", teamID, "captain_id", playerID)
 	// 分片:队伍锁定队长 owner cell(TeamShardKey=captain_id);新建队仅队长一人,region 分布
 	// 为单一,但统一打点便于后续成员加入后对比。router 为 nil(单 Cell)→ 不打。
 	u.logTeamComposition(ctx, team)
@@ -265,7 +265,7 @@ func (u *TeamUsecase) Invite(ctx context.Context, inviteID, teamID, inviterID, t
 			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_INVITE_SENT, inviteID)
 	}
 
-	plog.With(ctx).Infow("msg", "team_invite_sent",
+	plog.With(ctx).Debugw("msg", "team_invite_sent",
 		"team_id", teamID, "inviter_id", inviterID,
 		"target_player_id", targetPlayerID, "invite_id", inviteID)
 	return team, nil
@@ -338,7 +338,7 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 	u.pushUpdate(ctx, playerID, memberIDs(result), result,
 		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
 
-	plog.With(ctx).Infow("msg", "team_accept_invite", "team_id", teamID, "player_id", playerID)
+	plog.With(ctx).Debugw("msg", "team_accept_invite", "team_id", teamID, "player_id", playerID)
 	// 分片:成员加入后队伍 region 分布可能变跨 region(影响 §4.4 battle DS 放置)。router 为 nil → 不打。
 	u.logTeamComposition(ctx, result)
 	return result, nil
@@ -402,7 +402,7 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_LEFT, 0)
 	}
 
-	plog.With(ctx).Infow("msg", "team_leave", "team_id", teamID, "player_id", playerID,
+	plog.With(ctx).Debugw("msg", "team_leave", "team_id", teamID, "player_id", playerID,
 		"new_state", result.State)
 	return result, nil
 }
@@ -455,7 +455,7 @@ func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerI
 	u.pushUpdate(ctx, captainID, recipients, result,
 		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_KICKED, 0)
 
-	plog.With(ctx).Infow("msg", "team_kick", "team_id", teamID, "captain_id", captainID,
+	plog.With(ctx).Debugw("msg", "team_kick", "team_id", teamID, "captain_id", captainID,
 		"target_player_id", targetPlayerID)
 	return result, nil
 }
@@ -505,7 +505,7 @@ func (u *TeamUsecase) SetReady(ctx context.Context, teamID, playerID uint64, rea
 	// push 给其他成员(不发给自己 — 原则 2)
 	u.pushUpdate(ctx, playerID, memberIDs(result), result, reason, 0)
 
-	plog.With(ctx).Infow("msg", "team_set_ready", "team_id", teamID, "player_id", playerID,
+	plog.With(ctx).Debugw("msg", "team_set_ready", "team_id", teamID, "player_id", playerID,
 		"ready", ready, "new_state", result.State)
 	return result, nil
 }
@@ -645,7 +645,7 @@ func (u *TeamUsecase) cancelMatchmaking(ctx context.Context, teamID, playerID ui
 			"team_id", teamID, "player_id", playerID, "err", err)
 		return
 	}
-	plog.With(ctx).Infow("msg", "team_matchmaking_cancelled_on_leave",
+	plog.With(ctx).Debugw("msg", "team_matchmaking_cancelled_on_leave",
 		"team_id", teamID, "player_id", playerID)
 }
 

@@ -165,7 +165,7 @@ func TestTeamSizeForMap(t *testing.T) {
 	})
 
 	// 未启用配置表(tables=nil)→ 回退全局 5。
-	if got := f.uc.teamSizeForMap(context.Background(), 7); got != 5 {
+	if got := f.uc.teamSizeForMap(7); got != 5 {
 		t.Fatalf("tables=nil 应回退全局 5,得 %d", got)
 	}
 
@@ -197,7 +197,7 @@ func TestTeamSizeForMap(t *testing.T) {
 		{"表内不存在的 map 回退全局", 999, 5},
 	}
 	for _, c := range cases {
-		if got := f.uc.teamSizeForMap(context.Background(), c.mapID); got != c.want {
+		if got := f.uc.teamSizeForMap(c.mapID); got != c.want {
 			t.Fatalf("%s: teamSizeForMap(%d)=%d, 期望 %d", c.name, c.mapID, got, c.want)
 		}
 	}

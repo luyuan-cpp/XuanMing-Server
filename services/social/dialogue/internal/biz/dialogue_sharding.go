@@ -65,7 +65,7 @@ func (u *DialogueUsecase) logSessionPlacement(ctx context.Context, dialogueID, p
 	if !ok {
 		return
 	}
-	plog.With(ctx).Infow("msg", "dialogue_session_placement",
+	plog.With(ctx).Debugw("msg", "dialogue_session_placement",
 		"dialogue_id", dialogueID,
 		"player_id", playerID,
 		"region", loc.RegionID,

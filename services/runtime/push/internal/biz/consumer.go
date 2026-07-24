@@ -53,8 +53,9 @@ type FrameRouter interface {
 	FrameBroadcaster
 }
 
-// WakePublisher 跨 Pod 唤醒信号发布端(R5 复审 P2-10:本地无连接时广播 player_id,
-// 持有该玩家连接的 Pod 立即拉取投递,消除跨 Pod 场景对 30s 兜底轮询的依赖)。
+// WakePublisher 跨 Pod 唤醒信号发布端(R5 复审 P2-10 + 复审 P1-5:写完投递缓冲后**无条件**
+// 广播 player_id——不以「本地有连接」抑制,因本地 slot 可能是被顶号的陈旧残留;持有该玩家
+// 真连接的 Pod 收到后立即拉取投递,消除跨 Pod 场景对 30s 兜底轮询的依赖)。
 // best-effort:失败只记日志,交付正确性由缓冲 + 轮询保证。nil = 未装配(单测/联调)。
 type WakePublisher interface {
 	PublishWake(ctx context.Context, playerID uint64) error

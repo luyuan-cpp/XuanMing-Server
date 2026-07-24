@@ -96,3 +96,22 @@ func TestValidateHookWired(t *testing.T) {
 		t.Fatal("category 未填应被伴生钩子拦下")
 	}
 }
+
+// TestValidateTeamSizeUpperBound team_size 上限校验(防撮合 need=2*teamSize 预分配爆内存):
+// 0(沿用全局)与 ≤MaxLevelTeamSize 放行,超上限整表拒绝(§9.15 加载失败保留旧表)。
+func TestValidateTeamSizeUpperBound(t *testing.T) {
+	zero := battleRow(6, "默认沿用全局") // TeamSize 默认 0
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{zero}}); err != nil {
+		t.Fatalf("team_size=0 应放行(沿用全局兜底),得 %v", err)
+	}
+	atMax := battleRow(7, "上限内")
+	atMax.TeamSize = MaxLevelTeamSize
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{atMax}}); err != nil {
+		t.Fatalf("team_size=MaxLevelTeamSize 应放行,得 %v", err)
+	}
+	over := battleRow(8, "超上限")
+	over.TeamSize = MaxLevelTeamSize + 1
+	if _, err := newLevelTable(&configpb.LevelTableData{Rows: []*configpb.LevelRow{over}}); err == nil {
+		t.Fatalf("team_size>%d 应被拦下(防预分配爆内存)", MaxLevelTeamSize)
+	}
+}
