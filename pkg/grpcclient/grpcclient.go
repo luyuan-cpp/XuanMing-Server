@@ -39,24 +39,43 @@ func init() {
 	selector.SetGlobalSelector(wrr.NewBuilder())
 }
 
+// roundRobinServiceConfig 让 ClientConn 对解析出的**多个**后端做每-RPC round_robin
+// (gRPC 官方 LB 策略,非 Kratos selector——后者只在走 WithDiscovery 时生效)。
+const roundRobinServiceConfig = `{"loadBalancingConfig":[{"round_robin":{}}]}`
+
 // MustDial 直连指定 endpoint(host:port),不走服务发现。
 // W2 简化版用,W3+ 切到 MustDialDiscovery。
 //
 // 默认挂载 Trace + Metrics middleware,默认 15s 超时。
 func MustDial(endpoint string, customMW ...middleware.Middleware) *grpc.ClientConn {
-	return mustDial(false, endpoint, nil, DefaultTimeout, customMW...)
+	return mustDial(false, endpoint, nil, DefaultTimeout, "", customMW...)
 }
 
 // MustDialDiscovery 经服务发现连接(target 形如 "discovery:///pandora.login")。
 // reg 是 Kratos registry.Discovery 实现(etcd / consul / nacos)。
 func MustDialDiscovery(endpoint string, reg registry.Discovery, customMW ...middleware.Middleware) *grpc.ClientConn {
-	return mustDial(false, endpoint, reg, DefaultTimeout, customMW...)
+	return mustDial(false, endpoint, reg, DefaultTimeout, "", customMW...)
 }
 
 // MustDialInsecure 同 MustDial,但显式声明 insecure(不强制 TLS)。
 // 内网服务间通信用这个;Envoy 入站才用 TLS。
 func MustDialInsecure(endpoint string, customMW ...middleware.Middleware) *grpc.ClientConn {
-	return mustDial(true, endpoint, nil, DefaultTimeout, customMW...)
+	return mustDial(true, endpoint, nil, DefaultTimeout, "", customMW...)
+}
+
+// MustDialInsecureRoundRobin 同 MustDialInsecure,但启用 gRPC round_robin 客户端负载均衡。
+// endpoint 应指向 headless Service 的 DNS(形如 "dns:///hub-allocator-headless.pandora.svc.cluster.local:50018",
+// headless = clusterIP:None,DNS 返回全部 Pod IP);gRPC dns 解析 + round_robin 每-RPC 轮询后端。
+//
+// 用途(P0#5):hub_allocator 是单写者,普通 ClusterIP 直连被 L4 钉在某一 Pod,落到非-writer
+// 就永远非-writer。改用 round_robin 后,调用方对「非-writer 可重试错误」重发时每次 RPC 轮到
+// 不同副本,数次内必命中当前 writer。单端点(dev 静态 host:port / passthrough,无 dns:/// 前缀)
+// 下 round_robin 退化为单后端,行为与 MustDialInsecure 一致(§14 默认不坏)。
+//
+// 注意:LB 分发效果依赖 k8s headless DNS + gRPC dns 解析,只能在集群内运行时验证;本机 build
+// 只能证明装配正确,不能证明分发行为(交接为在集群做冒烟:观察 RPC 落到多个 Pod)。
+func MustDialInsecureRoundRobin(endpoint string, customMW ...middleware.Middleware) *grpc.ClientConn {
+	return mustDial(true, endpoint, nil, DefaultTimeout, roundRobinServiceConfig, customMW...)
 }
 
 // MustDialInsecureTimeout 同 MustDialInsecure,但单次 RPC 默认超时用 timeout 而非 DefaultTimeout(15s)。
@@ -68,10 +87,10 @@ func MustDialInsecureTimeout(endpoint string, timeout time.Duration, customMW ..
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	return mustDial(true, endpoint, nil, timeout, customMW...)
+	return mustDial(true, endpoint, nil, timeout, "", customMW...)
 }
 
-func mustDial(insecure bool, endpoint string, reg registry.Discovery, timeout time.Duration, customMW ...middleware.Middleware) *grpc.ClientConn {
+func mustDial(insecure bool, endpoint string, reg registry.Discovery, timeout time.Duration, serviceConfig string, customMW ...middleware.Middleware) *grpc.ClientConn {
 	// 默认 client middleware:Trace 透传 + Metrics + 第 4 层熔断(SRE breaker)。
 	// 熔断挂在 client 侧:下游故障时快速失败,避免雪崩拖垮调用方。
 	mws := append([]middleware.Middleware{
@@ -87,6 +106,10 @@ func mustDial(insecure bool, endpoint string, reg registry.Discovery, timeout ti
 	}
 	if reg != nil {
 		opts = append(opts, kgrpc.WithDiscovery(reg))
+	}
+	if serviceConfig != "" {
+		// 注入 gRPC 官方 LB / 服务配置(如 round_robin):经 kgrpc.WithOptions 透传原生 DialOption。
+		opts = append(opts, kgrpc.WithOptions(grpc.WithDefaultServiceConfig(serviceConfig)))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

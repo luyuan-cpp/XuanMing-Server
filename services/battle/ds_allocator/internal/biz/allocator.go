@@ -2067,6 +2067,11 @@ func (u *AllocatorUsecase) RunHeartbeatSweep(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "heartbeat_sweep_stopped")
 			return
 		case <-ticker.C:
+			// 压测前审核 P1:census 准入缓存按 last-touch TTL 清死实例项(对齐 hub_allocator)。
+			// 纯本地内存卫生,不经存储、不依赖 writer 身份,故每 tick 无条件先执行——否则本副本
+			// 处理过心跳的已销毁 Battle 实例(UID 永不复用)留下的 admitted 项永不回收,长压测 OOM。
+			// 活实例项每心跳 census 续期,仅超 TTL 未续期(实例已销毁)的项被清。
+			sweepStaleOwnerAdmitted(&u.ownerAdmitted, time.Now().Add(-ownerAdmittedStaleTTL))
 			if err := u.sweepOnce(ctx); err != nil {
 				plog.With(ctx).Warnw("msg", "heartbeat_sweep_failed", "err", err)
 			}

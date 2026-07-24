@@ -437,6 +437,10 @@ func (u *TicketUsecase) verifyDSTicket(
 			return nil, err
 		}
 		if markerStatus == data.AdmissionMarkerConflict {
+			// 票据已属于另一次 admission 的冲突拒绝 = replay / 双准入安全信号(ErrLoginTicketReplayed
+			// 是业务码,access log 不当故障)→ 显式 WARN 带 jti/player/ds_pod 便于排查为何 DS 准入被拒。
+			h.Warnw("msg", "ds_ticket_replayed", "jti", claims.JTI,
+				"player_id", claims.PlayerID, "ds_pod", dsPodName, "ds_type", claims.DSType)
 			return nil, errcode.New(errcode.ErrLoginTicketReplayed, "ticket already belongs to another admission")
 		}
 		if markerStatus == data.AdmissionMarkerMissing {

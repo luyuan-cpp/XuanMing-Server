@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 )
 
@@ -169,6 +170,14 @@ func (c *Config) Defaults() {
 	}
 	if c.Match.TeamSize == 0 {
 		c.Match.TeamSize = 5
+	}
+	// 越界钳制(复审 P1:全局 YAML match.team_size 此前完全不校验)。撮合按 need=2*teamSize
+	// 预分配票据切片:负值(int 型 YAML 可为负)会导致 make 负容量 panic,巨值会 OOM。
+	// 钳到 [1, configtable.MaxLevelTeamSize],与关卡表入口同一上限常量,防阈值漂移。
+	if c.Match.TeamSize < 1 {
+		c.Match.TeamSize = 1
+	} else if c.Match.TeamSize > configtable.MaxLevelTeamSize {
+		c.Match.TeamSize = configtable.MaxLevelTeamSize
 	}
 	if c.Match.MmrBaseWindow == 0 {
 		c.Match.MmrBaseWindow = 200

@@ -162,6 +162,10 @@ type MySQLConf struct {
 	MaxOpenConns    int      `yaml:"max_open_conns,omitempty" json:"max_open_conns,omitempty"`
 	MaxIdleConns    int      `yaml:"max_idle_conns,omitempty" json:"max_idle_conns,omitempty"`
 	ConnMaxLifetime Duration `yaml:"conn_max_lifetime,omitempty" json:"conn_max_lifetime,omitempty"`
+	// ConnMaxIdleTime 空闲连接最长存活;留空 = 0(database/sql 默认:不因空闲回收,只受
+	// ConnMaxLifetime 限制)。压测前审核门禁-B:高并发登录后回落期给空闲连接设上限,
+	// 及时释放池占用、避免长时间持有对端已关的陈旧连接。opt-in,默认不改变现有行为。
+	ConnMaxIdleTime Duration `yaml:"conn_max_idle_time,omitempty" json:"conn_max_idle_time,omitempty"`
 	PingTimeout     Duration `yaml:"ping_timeout,omitempty" json:"ping_timeout,omitempty"`
 
 	// Shards 是分库 DSN 列表。留空 = 单库(用 DSN)。配置 >=2 个 DSN = 分库模式,
@@ -183,6 +187,14 @@ type RedisConf struct {
 	DialTimeout  Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
 	ReadTimeout  Duration `yaml:"read_timeout,omitempty" json:"read_timeout,omitempty"`
 	WriteTimeout Duration `yaml:"write_timeout,omitempty" json:"write_timeout,omitempty"`
+
+	// 连接池参数(压测前审核门禁-C:让运维可按核数/并发调优,消除 Redis 抖动下池耗尽拖垮
+	// 登录的盲区)。全部留空 = 0 → 沿用 go-redis 默认(PoolSize=10×GOMAXPROCS、
+	// PoolTimeout=ReadTimeout+1s、MinIdleConns=0),不改变现有行为;opt-in。
+	// login/session/locator 等 Redis 强依赖的在线关键服务应在 yaml 显式设定,并配 read/write_timeout。
+	PoolSize     int      `yaml:"pool_size,omitempty" json:"pool_size,omitempty"`
+	MinIdleConns int      `yaml:"min_idle_conns,omitempty" json:"min_idle_conns,omitempty"`
+	PoolTimeout  Duration `yaml:"pool_timeout,omitempty" json:"pool_timeout,omitempty"`
 
 	// Addrs 是 Redis Cluster / Sentinel 多节点地址。
 	//

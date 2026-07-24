@@ -27,7 +27,7 @@
 
 ⚠️ **架构决策 2026-06-04 终版**(详见 `gateway-decision.md`):
 - Client **不走 gRPC**(自己直接走),也不走 HTTP/JSON
-- Client 走 **gRPC-Web over HTTP/2 TLS**(UE 5.7 FHttpModule 自带,自研 grpc-web frame 解析)
+- Client 走 **gRPC-Web over HTTP/2 TLS**(UE 5.8 FHttpModule 自带,自研 grpc-web frame 解析)
 - **gRPC 标准协议只存在于后台服务之间**(Envoy → Kratos / 服务之间互调)
 - **客户端连接最终值 = 2 条**(① NetDriver / ② FHttpModule)
 
@@ -312,7 +312,7 @@ C:/work/Pandora/Source/
 
 ### 3.1 默认走 Iris
 
-UE 5.7 时代 Iris 应该已经 production-ready,**默认开 Iris**:
+UE 5.8 时代 Iris 应该已经 production-ready,**默认开 Iris**:
 
 ```ini
 ; Config/DefaultEngine.ini

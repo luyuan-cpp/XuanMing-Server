@@ -16,6 +16,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	configpb "github.com/luyuancpp/pandora/proto/gen/go/pandora/config/v1"
+	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/conf"
 )
@@ -200,5 +201,48 @@ func TestTeamSizeForMap(t *testing.T) {
 		if got := f.uc.teamSizeForMap(c.mapID); got != c.want {
 			t.Fatalf("%s: teamSizeForMap(%d)=%d, 期望 %d", c.name, c.mapID, got, c.want)
 		}
+	}
+}
+
+// TestTeamSizeForMap_ClampsGlobalFallback 复审 P1:全局 YAML cfg.TeamSize 未在别处校验,
+// 负值/巨值经回退分支会流进撮合 need=2*teamSize(负容量 panic / OOM)。teamSizeForMap 必须
+// 把最终一方人数钳到 [1, MaxLevelTeamSize],无论来源是全局 fallback 还是关卡表。
+func TestTeamSizeForMap_ClampsGlobalFallback(t *testing.T) {
+	// 负值(int 型 YAML 可为负)→ 钳到下界 1(tables=nil 走 fallback 分支)。
+	fNeg := newFixtureWith(t, 8410, func(c *conf.MatchConf) { c.TeamSize = -3 })
+	if got := fNeg.uc.teamSizeForMap(7); got != 1 {
+		t.Fatalf("负 team_size 应钳到 1,得 %d", got)
+	}
+	// 巨值 → 钳到上界 MaxLevelTeamSize。
+	fBig := newFixtureWith(t, 8411, func(c *conf.MatchConf) { c.TeamSize = 1 << 20 })
+	if got := fBig.uc.teamSizeForMap(7); got != configtable.MaxLevelTeamSize {
+		t.Fatalf("巨 team_size 应钳到 %d,得 %d", configtable.MaxLevelTeamSize, got)
+	}
+}
+
+// TestPartitionTicketsByMap_NormalizesDefaultMap 复审 P1:map_id=0(省略=默认副本)与显式默认
+// map(cfg.MapId)语义相同,必须归一化进同一撮合池,否则被拆两池永不互相成局。
+func TestPartitionTicketsByMap_NormalizesDefaultMap(t *testing.T) {
+	f := newFixtureWith(t, 8420, func(c *conf.MatchConf) { c.MapId = 6 })
+	mk := func(id uint64, mapID uint32) *matchv1.MatchTicketStorageRecord {
+		return &matchv1.MatchTicketStorageRecord{
+			TicketId: id, CaptainId: id, MapId: mapID,
+			Members: []*matchv1.MatchMemberStorageRecord{{PlayerId: id * 100}},
+		}
+	}
+	tickets := []*matchv1.MatchTicketStorageRecord{mk(1, 0), mk(2, 6), mk(3, 7)}
+	groups := f.uc.partitionTicketsByMap(tickets)
+	// map_id=0 与显式默认 6 归一同池 → 只应有 2 个池(默认副本 + 副本 7)。
+	if len(groups) != 2 {
+		t.Fatalf("map_id=0 与显式默认 6 应归一同池 → 期望 2 个池,得 %d", len(groups))
+	}
+	merged := false
+	for _, g := range groups {
+		if len(g) == 2 { // 含 ticket 1(map 0)与 ticket 2(map 6)
+			merged = true
+		}
+	}
+	if !merged {
+		t.Fatal("map_id=0 与显式默认 map 未归一到同一池")
 	}
 }

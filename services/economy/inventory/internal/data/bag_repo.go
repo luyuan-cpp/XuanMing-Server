@@ -27,6 +27,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	bagv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/bag/v1"
 )
 
@@ -122,6 +123,10 @@ func lockBagMetaTx(ctx context.Context, tx *sql.Tx, playerID, reqEpoch uint64) (
 		return 0, errcode.New(errcode.ErrInternal, "lock bag_meta player=%d: %v", playerID, qerr)
 	}
 	if reqEpoch < storedEpoch {
+		// 失租旧 DS 的迟到写在存储侧 owner_epoch 单调 CAS 被拒(§9.22 fencing / 脑裂防线)。
+		// ErrBagEpochFenced 是业务码,不被 access log 中间件当故障 → 在此显式 WARN 留证。
+		plog.With(ctx).Warnw("msg", "bag_owner_epoch_fenced",
+			"player_id", playerID, "req_epoch", reqEpoch, "current_epoch", storedEpoch)
 		return 0, errcode.New(errcode.ErrBagEpochFenced,
 			"stale owner epoch player=%d req=%d current=%d", playerID, reqEpoch, storedEpoch)
 	}
@@ -183,12 +188,19 @@ func (r *MySQLBagRepo) LoadBag(ctx context.Context, playerID, ownerEpoch uint64)
 	for _, row := range tail {
 		expect++
 		if row.JournalSeq != expect {
+			// journal 缺口 = 加载会静默少资产(误删 / 损坏 / 越权清理),事故级(INC-20260722-003)。
+			// 这里已 fail-closed 拒绝有损加载;独立 ERROR 带完整 seq 便于告警与取证(§16.9)。
+			plog.With(ctx).Errorw("msg", "bag_journal_gap",
+				"player_id", playerID, "expect_seq", expect, "got_seq", row.JournalSeq,
+				"covered_seq", coveredSeq, "last_seq", lastSeq)
 			return nil, nil, 0, errcode.New(errcode.ErrInternal,
 				"bag journal tail gap player=%d: expect seq %d got %d (covered=%d last=%d), refusing lossy load",
 				playerID, expect, row.JournalSeq, coveredSeq, lastSeq)
 		}
 	}
 	if expect != lastSeq {
+		plog.With(ctx).Errorw("msg", "bag_journal_truncated",
+			"player_id", playerID, "tail_end_seq", expect, "watermark_seq", lastSeq, "covered_seq", coveredSeq)
 		return nil, nil, 0, errcode.New(errcode.ErrInternal,
 			"bag journal tail truncated player=%d: tail ends at %d but watermark %d (covered=%d), refusing lossy load",
 			playerID, expect, lastSeq, coveredSeq)
@@ -241,6 +253,9 @@ func (r *MySQLBagRepo) AppendJournal(ctx context.Context, playerID, ownerEpoch u
 			return 0, errcode.New(errcode.ErrInternal, "count journal quota player=%d: %v", playerID, qerr)
 		}
 		if recent+int64(len(entries)) > hourlyQuota {
+			// 额度封顶触发(五要件④限流):某玩家 / DS 在猛刷背包写路径,应能主动发现。
+			plog.With(ctx).Warnw("msg", "bag_journal_quota_exceeded",
+				"player_id", playerID, "recent", recent, "batch", len(entries), "quota", hourlyQuota)
 			return 0, errcode.New(errcode.ErrBagQuotaExceeded,
 				"journal hourly quota exceeded player=%d recent=%d batch=%d quota=%d",
 				playerID, recent, len(entries), hourlyQuota)

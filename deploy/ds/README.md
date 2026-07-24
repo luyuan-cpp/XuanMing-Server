@@ -55,7 +55,7 @@ ds_allocator 收到该心跳才下发 address:port ──► matchmaker push mat
 ## 交接给 Codex：启动
 
 ### 0. 前置
-- Windows 机装好 UE5.7 + **Linux 跨平台工具链**（设 `LINUX_MULTIARCH_ROOT`/`UE_ENGINE_DIR`）。
+- Windows 机装好 UE5.8 + **Linux 跨平台工具链**（设 `LINUX_MULTIARCH_ROOT`/`UE_ENGINE_DIR`）。
 - 一个能跑 Agones 的 K8s（minikube/kind/云）：`kubectl get crd | grep agones.dev` 能看到 CRD。
 
 ### 0.0 minikube 最新版（国内下载）
@@ -97,7 +97,7 @@ powershell -ExecutionPolicy Bypass -File .\deploy\ds\start-minikube-agones.ps1
 ### 1. 打 Linux DS（Windows，客户端仓库）
 ```powershell
 # 在客户端仓库根目录：
-./Tool/Server/Agones/build-linux-ds.ps1 -EngineDir "D:\UE_5.7"
+./Tool/Server/Agones/build-linux-ds.ps1 -EngineDir "D:\UE_5.8"
 # 产物归档并自动拷到后端 E:\work\Pandora\deploy\ds\stage\LinuxServer
 # 若后端在别处，加 -StageDir "<repo>\deploy\ds\stage\LinuxServer"
 ```

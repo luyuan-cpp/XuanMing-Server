@@ -16,6 +16,8 @@ server:
     network: tcp
     addr: ":50001"
     timeout: "5s"                 # prod 收紧(dev 15s)
+    enable_rate_limit: true       # 压测前审核门禁-A:BBR 自适应限流(dev 默认关,prod 必开),
+                                  # 过载时按 CPU/inflight/RT 丢负载,防登录洪峰把副本压垮/OOM
     # enable_reflection 不写 = false:prod 关闭 reflection
   http:
     network: tcp
@@ -29,11 +31,22 @@ node:
     password: "__REDIS_PASSWORD__"   # prod 必须设 Redis 密码
     db: 0
     dial_timeout: "2s"
+    # 压测前审核门禁-C:login 的 session/JTI 校验强依赖 Redis 且不可降级。显式配读写超时,
+    # 把单命令最坏 socket 占用从 go-redis 默认 3s 降到 1s、更快 fail(与 matchmaker/battle 对齐);
+    # 池参数消除 Redis 抖动下池耗尽拖垮登录的盲区(留空则沿用 10×GOMAXPROCS,事故中无法临时扩池)。
+    read_timeout: "1s"
+    write_timeout: "1s"
+    pool_size: 100                   # 示例:按 CPU 核数×并发登录目标调整(建议引入 automaxprocs 使核数准确)
+    min_idle_conns: 10
+    pool_timeout: "2s"               # 取不到连接的最长等待(默认 read_timeout+1s),超时即快失败
   mysql_client:
     dsn: "pandora:__MYSQL_STRONG_PASSWORD__@tcp(__MYSQL_HOST__:3306)/pandora_account?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
-    max_open_conns: 64
+    # 压测前审核门禁-B:按目标登录 QPS×单登录持连时长核定 max_open_conns(与 MySQL
+    # max_connections 一起放大);单登录 4 次往返、PersistSessionJTI 事务持连+行锁最久。
+    max_open_conns: 64               # 示例:登录风暴下按压测 DBStats.WaitCount/WaitDuration 调整
     max_idle_conns: 16
     conn_max_lifetime: "30m"
+    conn_max_idle_time: "5m"         # 门禁-B:高并发登录回落期及时释放空闲连接(留空=不因空闲回收)
     ping_timeout: "3s"
 
 snowflake:
@@ -83,7 +96,12 @@ login:
   locator:
     addr: "player-locator.pandora.svc.cluster.local:50006"
   hub:
-    addr: "hub-allocator.pandora.svc.cluster.local:50021"
+    # P0#5:用 headless Service 的 dns:/// 端点(clusterIP:None,DNS 返回全部 Ready Pod IP)+
+    # 客户端 round_robin(见 login main.go)。hub-allocator 是单写者,普通 ClusterIP 直连会被 L4
+    # 钉在某一 Pod,落到非-writer 就永远拿可重试 UNAVAILABLE;dns:/// + round_robin 让 AssignHub
+    # 就地重试每次轮到不同副本,滚动重叠(maxSurge 双 Pod)内数次命中当前 writer。
+    # 前缀 dns:/// 不可省(缺则 gRPC 按 passthrough 单后端,LB 退化无效)。
+    addr: "dns:///hub-allocator-headless.pandora.svc.cluster.local:50021"
   # matchmaker 只读权威兜底(P0 修复 2026-07-15,生产必配):locator presence 未命中 BATTLE
   # 时再查 ResolvePlayerMatchContext,防 READY↔投影窗口/租约蒸发把在局玩家误路由回 Hub。
   # auth_secret/auth_audience:login→matchmaker 内部服务鉴权(internalrpcauth)。

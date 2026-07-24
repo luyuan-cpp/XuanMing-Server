@@ -1359,6 +1359,12 @@ func (u *HubUsecase) pendingHubEvictionOrders(ctx context.Context, sourcePod, in
 			return nil, inspectErr
 		}
 		if seat.Conflict {
+			// 源席位账本上出现与预期不符的 owner 身份 = 潜在双 owner / 脑裂(§9.22 核心不变量)。
+			// 上层只把它泛化成 hub_eviction_order_discovery_failed,丢了"是身份冲突"这一关键区分 →
+			// 在此打 ERROR 带精确 fencing 身份,便于直接定位脑裂。
+			plog.With(ctx).Errorw("msg", "hub_eviction_owner_conflict",
+				"source_pod", sourcePod, "instance_uid", instanceUID,
+				"protocol_epoch", protocolEpoch, "writer_epoch", writerEpoch)
 			return nil, errcode.New(errcode.ErrInvalidState,
 				"Hub eviction source owner identity conflict")
 		}

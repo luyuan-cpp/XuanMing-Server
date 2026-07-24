@@ -478,8 +478,14 @@ func mustBuildHubAssigner(cfg *conf.Config, h kratosHelper) (data.HubAssigner, l
 			"hint", "set login.hub.addr to 127.0.0.1:50021 to assign real hub shard + ticket")
 		return nil, nil, "disabled"
 	}
-	conn := grpcclient.MustDialInsecure(addr)
-	h.Infow("msg", "hub_allocator_dial_ok", "addr", addr, "region", cfg.Login.Hub.Region)
+	// P0#5:hub_allocator 是单写者,普通 ClusterIP 直连被 L4 钉在某一 Pod,落到非-writer 副本
+	// 就永远拿 ErrWriterSuperseded(可重试)。改用 round_robin 客户端 LB——生产 addr 配成
+	// dns:///hub-allocator-headless.<ns>.svc.cluster.local:<port>(headless Service,DNS 返回全部
+	// Pod IP)时,AssignHub 的就地重试每次 RPC 轮到不同副本,数次内命中当前 writer;dev 单静态
+	// addr(无 dns:/// 前缀,passthrough 单后端)下 round_robin 退化为单后端,行为不变。
+	conn := grpcclient.MustDialInsecureRoundRobin(addr)
+	h.Infow("msg", "hub_allocator_dial_ok", "addr", addr, "region", cfg.Login.Hub.Region,
+		"lb", "round_robin", "hint", "生产 addr 用 dns:/// headless 才有多后端轮询效果")
 	return data.NewGrpcHubAssigner(conn), conn, "grpc"
 }
 

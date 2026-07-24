@@ -65,10 +65,19 @@ func (u *HubUsecase) SetOwnerAuthority(a OwnerAuthority) {
 }
 
 // decideOwnerBegin 判定是否需要发起迁移(§9.23 幂等 no-op 规则):
-// 记录已指向同一实例(类型同 && pod+uid 同)且处于 PENDING/ADMITTED → 跳过
-// (同目标重连/重复交付不再推进 epoch);否则以当前 epoch 为 CAS 期望发起。
+// 记录已指向**同一 exact owner identity**且处于 PENDING/ADMITTED → 跳过(同目标重连/
+// 重复交付不再推进 epoch);否则以当前 epoch 为 CAS 期望发起。
+//
+// 复审 P1-3:同目标判定必须包含 InstanceEpoch。§9.22 明确"Pod UID / instance epoch 变化
+// 或灾备接管都必须递增 owner_epoch"——只比 (type,pod,uid) 会把"同 pod+uid 但 instance
+// epoch 已推进(灾备接管 / 实例代次翻转)"误判为同目标而跳过,漏掉本应发生的 owner 迁移。
+// 故加入 rec.InstanceEpoch == target.InstanceEpoch。
+// 有意不纳入 AssignmentOrAllocationID / ReleaseTrack:同一 exact 实例上的 assignment 刷新
+// (seat 续租)是同一 owner 的重复交付,纳入会造成 epoch 无谓翻动(churn);release track
+// (stable/canary)是独立 Fleet,track 变化必伴随 pod/uid 变化,已被上面捕获。
 func decideOwnerBegin(rec data.OwnerRecordView, ownerType int8, target data.OwnerTargetView) (skip bool, expectEpoch uint64) {
 	if rec.OwnerType == ownerType && rec.PodName == target.PodName && rec.InstanceUID == target.InstanceUID &&
+		rec.InstanceEpoch == target.InstanceEpoch &&
 		(rec.Phase == ownerPhasePending || rec.Phase == ownerPhaseAdmitted) {
 		return true, 0
 	}

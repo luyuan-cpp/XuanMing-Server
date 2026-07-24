@@ -14,7 +14,7 @@
 ## 2. 双仓库结构
 
 - 后端仓库:go 服务 + proto + docs + deploy
-- UE 仓库:UE 5.7 客户端 + 大厅 DS + 战斗 DS
+- UE 仓库:UE 5.8 客户端 + 大厅 DS + 战斗 DS
 
 **协作纪律**:
 - proto **source of truth 在 Pandora 后端仓库**(`Pandora/proto/`)
@@ -292,7 +292,7 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | DS 崩溃数据丢失 | 🟡 中 | kafka at-least-once + 幂等 + 死信 |
 | 跨 hub 分片可见性 | 🟡 中 | 先做"看不到"最简方案 |
 | 防作弊 | 🟡 中 | 服务端权威 + 移动速度校验 + 审计日志 |
-| UE 5.7 API 不稳定 | 🟡 中 | 关注 release notes,必要时降到 5.6 |
+| UE 5.8 API 不稳定 | 🟡 中 | 关注 release notes,必要时降到 5.6 |
 | 单人开发节奏 | 🟡 中 | 严格遵守 PROGRESS.md + 每日 commit |
 
 ## 11. 决策行(只追加)
@@ -302,7 +302,7 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | 0 | 2026-06-03 | 立项,新建 Pandora 项目 | - |
 | 0 | 2026-06-03 | 后端 monorepo go.work,UE 独立仓库 | - |
 | 0 | 2026-06-03 | 大厅 DS 化,500 人/实例,全图自由 PvP | - |
-| 0 | 2026-06-03 | UE 5.7 + Iris + GAS,Agones 调度 | - |
+| 0 | 2026-06-03 | UE 5.8 + Iris + GAS,Agones 调度 | - |
 | 0 | 2026-06-03 | License MIT,Go 1.23,基础设施全新搭一套 | - |
 | 0 | 2026-06-03 | 后端框架继续用 go-zero(历史决策,后续已切换 Kratos) | - |
 | 0 | 2026-06-03 | **否决"严格 A:客户端只连 DS"** | 见 `architecture-rejected-strict-ds-only.md`,6 个不可接受后果(故障域过大 / 500 人 PvP 性能预算被破 / UE 代码量爆炸 / 大厂无先例) |
@@ -312,7 +312,7 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | 0 | 2026-06-03 | 4 协议原则 | Response 同步完整 / push 不发给 caller / 已受理型显式标注 / proto 注释强制 |
 | 0 | **2026-06-04** | **切换后端框架:go-zero → Kratos**(推翻 D2.1)| go-zero 不支持 gRPC stream,推送架构受限;Kratos 基于原生 grpc-go,完整支持 unary + stream |
 | 0 | 2026-06-04 | 引入 **Envoy 作为 Edge Gateway** | 标准 gRPC-Web ↔ gRPC 协议转换,替代 go-zero/gateway |
-| 0 | 2026-06-04 | 客户端协议:**gRPC-Web over HTTP/2 TLS** | UE 5.7 FHttpModule 已暴露(`SetOption("HttpVersion","2TLS")`),源码挖掘验证 |
+| 0 | 2026-06-04 | 客户端协议:**gRPC-Web over HTTP/2 TLS** | UE 5.8 FHttpModule 已暴露(`SetOption("HttpVersion","2TLS")`),源码挖掘验证 |
 | 0 | 2026-06-04 | 推送架构:**集中 push 服务 + gRPC server stream** | 替代之前规划的 WebSocket 自研 + envelope,标准 gRPC 协议 |
 | W3 ⑦.0 | 2026-06-05 | **协议类型边界固化** | Snowflake 业务 ID 一律 `uint64`;配置表 ID 默认 `uint32`;proto enum / 状态常量保持生成 enum 类型或 `int32` 语义,不按非负常量改 `uint32` |
 | W4 文档 | 2026-06-06 | **客户端可见结构与服务端存储快照硬隔离** | 面向客户端的 response / push 不得直接返回 `*StorageRecord`、数据库整行、Redis value、内部 Kafka envelope 或审计字段;由服务端按客户端最小需求组装 / 计算视图 |

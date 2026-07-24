@@ -6,7 +6,7 @@
 
 - **类型**:MOBA(5v5)+ 持续在线大厅(全图自由 PvP,500 人/hub 实例)
 - **后端**:Go(14 个服务 + 公共框架 pkg/)
-- **客户端 + DS**:UE 5.7 + GAS + Iris,**独立仓库**(本仓库 `Pandora` 是后端)
+- **客户端 + DS**:UE 5.8 + GAS + Iris,**独立仓库**(本仓库 `Pandora` 是后端)
 - **DS 编排**:Agones on k8s
 - **协议**:gRPC(同步) + Kafka(异步事件)
 - **基础设施**:MySQL 8 + Redis 8 + Kafka 3 + etcd 3

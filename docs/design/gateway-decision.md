@@ -9,7 +9,7 @@
 
 ```
                           ┌─────────────────────────────────────┐
-                          │           Client(UE 5.7)           │
+                          │           Client(UE 5.8)           │
                           │  - 引擎自带 NetDriver(连 DS)       │
                           │  - 引擎自带 FHttpModule(连 Envoy)  │
                           │  - 自研 grpc-web 客户端(~3-5 天)  │
@@ -92,7 +92,7 @@
 
 | 维度 | 内容 |
 |---|---|
-| 协议 | gRPC-Web over **HTTP/2 + TLS**(UE 5.7 官方支持) |
+| 协议 | gRPC-Web over **HTTP/2 + TLS**(UE 5.8 官方支持) |
 | 频率 | 业务请求 1~10 req/s/玩家;推送 stream 长连接 |
 | 用途 | **所有业务请求 + 所有推送**(unary + server stream 复用同协议)|
 | 谁负责 | 客户端:UE FHttpModule(引擎自带)+ 自研 grpc-web 协议解析;服务端:Envoy + Kratos |
@@ -164,11 +164,11 @@
 
 ---
 
-## §3 UE 5.7 FHttpModule HTTP/2 实现指南
+## §3 UE 5.8 FHttpModule HTTP/2 实现指南
 
-### 3.1 验证依据(2026-06-04 直接挖 UE 5.7 源码确认)
+### 3.1 验证依据(2026-06-04 直接挖 UE 5.8 源码确认)
 
-UE 5.7 源码路径 `Engine/Source/Runtime/Online/HTTP/`,关键 API:
+UE 5.8 源码路径 `Engine/Source/Runtime/Online/HTTP/`,关键 API:
 
 **HttpConstants.h**:
 ```cpp
@@ -209,11 +209,11 @@ void FCurlHttpRequest::SetupOptionHttpVersion()
 }
 ```
 
-**结论**:UE 5.7 官方暴露 HTTP/2 over TLS,libcurl 后端通过 `CURL_HTTP_VERSION_2TLS` 启用。
+**结论**:UE 5.8 官方暴露 HTTP/2 over TLS,libcurl 后端通过 `CURL_HTTP_VERSION_2TLS` 启用。
 
 ### 3.2 重要约束:HTTP/2 必须走 TLS
 
-UE 5.7 用的常量是 `VERSION_2TLS`,**不支持明文 HTTP/2**(h2c)。
+UE 5.8 用的常量是 `VERSION_2TLS`,**不支持明文 HTTP/2**(h2c)。
 - 生产环境本来就需要 TLS,无影响
 - 本地开发期用自签证书(mkcert / openssl)
 
@@ -270,7 +270,7 @@ StreamRequest->SetResponseBodyReceiveStreamDelegateV2(
 StreamRequest->ProcessRequest();
 ```
 
-### 3.4 UE 5.7 vs HTTP/1.1 fallback
+### 3.4 UE 5.8 vs HTTP/1.1 fallback
 
 如果某天发现 HTTP/2 有兼容性问题,代码降级**只改一行**:
 ```cpp
@@ -790,7 +790,7 @@ push 服务 → 推 10 个客户端 stream
 
 ### 11.4 Pandora 选择
 
-✅ **自研 grpc-web 客户端基于 FHttpModule**(已验证 UE 5.7 完全支持)
+✅ **自研 grpc-web 客户端基于 FHttpModule**(已验证 UE 5.8 完全支持)
 
 工作量预估:~3-5 天
 - 协议解析:grpc-web frame 格式公开,简单(1 字节 flag + 4 字节 length + payload)
@@ -807,7 +807,7 @@ push 服务 → 推 10 个客户端 stream
 |---|---|---|
 | 2026-06-04 | 切换后端框架:go-zero → **Kratos** | go-zero 不支持 gRPC stream,推送架构受限 |
 | 2026-06-04 | 引入 **Envoy** 作为 Edge Gateway | 标准 gRPC-Web ↔ gRPC 协议转换 |
-| 2026-06-04 | 客户端协议:**gRPC-Web over HTTP/2 TLS** | UE 5.7 FHttpModule 已暴露(SetOption "HttpVersion=2TLS") |
+| 2026-06-04 | 客户端协议:**gRPC-Web over HTTP/2 TLS** | UE 5.8 FHttpModule 已暴露(SetOption "HttpVersion=2TLS") |
 | 2026-06-04 | 推送架构:**集中 push 服务 + server stream** | 替代 kafka→ws 自研,延迟低 + 协议标准 |
 | 2026-06-04 | 客户端实现:**自研 grpc-web 客户端基于 FHttpModule** | 不引入第三方 UE gRPC 插件(5 个共性坑) |
 | 2026-06-04 | 服务清单 13 → **14**(新增 push)| Envoy 作为基础设施不计 go 服务 |

@@ -328,6 +328,8 @@ FORMING → READY(全员 ready)→ MATCHING(进入匹配)→ IN_BATTLE → DISBA
 
 ### 2.8 matchmaker
 
+> 模块级调用链 / 状态机 / 配置项详解见服务 README [`services/matchmaking/matchmaker/README.md`](../../services/matchmaking/matchmaker/README.md);本节为要约。
+
 **职责**:撮合 5v5
 
 **对外 RPC**:

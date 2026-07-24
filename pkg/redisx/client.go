@@ -31,6 +31,10 @@ func NewClient(c config.RedisConf) *redis.Client {
 		DialTimeout:  c.DialTimeout.Std(),
 		ReadTimeout:  c.ReadTimeout.Std(),
 		WriteTimeout: c.WriteTimeout.Std(),
+		// 门禁-C:连接池参数 opt-in,留空(0)沿用 go-redis 默认。
+		PoolSize:     c.PoolSize,
+		MinIdleConns: c.MinIdleConns,
+		PoolTimeout:  c.PoolTimeout.Std(),
 		MaintNotificationsConfig: &maintnotifications.Config{
 			Mode: resolveMaintMode(c.MaintNotifications),
 		},
@@ -100,6 +104,10 @@ func newUniversalClient(
 		DialTimeout:  c.DialTimeout.Std(),
 		ReadTimeout:  c.ReadTimeout.Std(),
 		WriteTimeout: c.WriteTimeout.Std(),
+		// 门禁-C:连接池参数 opt-in,留空(0)沿用 go-redis 默认(PoolSize=10×GOMAXPROCS 等)。
+		PoolSize:     c.PoolSize,
+		MinIdleConns: c.MinIdleConns,
+		PoolTimeout:  c.PoolTimeout.Std(),
 		// 默认 false 保持历史语义；拍卖 market 锁等严格截止路径显式走
 		// NewDeadlineUniversalClient，防单次 Redis I/O 越过业务 maxWait/TTL。
 		ContextTimeoutEnabled: contextTimeoutEnabled,

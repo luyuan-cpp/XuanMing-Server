@@ -160,6 +160,23 @@ func TestSweepStaleOwnerAdmitted(t *testing.T) {
 	}
 }
 
+// 复审 P1-3:decideOwnerBegin 同目标判定必须含 InstanceEpoch——同 pod+uid 但 instance
+// epoch 已推进(灾备接管 / 实例代次翻转)不得当同目标跳过,须发起迁移(§9.22)。
+func TestDecideOwnerBegin_InstanceEpochGate(t *testing.T) {
+	rec := data.OwnerRecordView{
+		OwnerEpoch: 5, OwnerType: ownerTypeHub, Phase: ownerPhasePending,
+		PodName: "hub-1", InstanceUID: "uid-1", InstanceEpoch: 3,
+	}
+	same := data.OwnerTargetView{PodName: "hub-1", InstanceUID: "uid-1", InstanceEpoch: 3}
+	if skip, _ := decideOwnerBegin(rec, ownerTypeHub, same); !skip {
+		t.Fatal("完全同 identity(含 instanceEpoch)应跳过(幂等 no-op)")
+	}
+	newEpoch := data.OwnerTargetView{PodName: "hub-1", InstanceUID: "uid-1", InstanceEpoch: 4}
+	if skip, expect := decideOwnerBegin(rec, ownerTypeHub, newEpoch); skip || expect != 5 {
+		t.Fatalf("instance epoch 变化(灾备接管)不得跳过,应以当前 epoch=5 为 CAS 期望;得 skip=%v expect=%d", skip, expect)
+	}
+}
+
 // 复审 P1-3:owner 记录漂移(不指向本实例)但归属镜像仍指向本实例 → census 补弱
 // Begin 自愈;下一轮 Admit 收敛。归属指向他处/缺失 → 不干预。
 func TestOwnerAdmitCensus_HealsDriftedRecordViaResolver(t *testing.T) {

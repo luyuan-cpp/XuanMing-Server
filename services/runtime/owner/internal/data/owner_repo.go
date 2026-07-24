@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 )
 
 // OwnerType 取值(对齐 owner.proto OwnerType)。
@@ -236,6 +237,11 @@ func (r *MySQLOwnerRepo) BeginTransition(ctx context.Context, playerID, expectEp
 
 	if rec.OwnerEpoch != expectEpoch {
 		// CAS 期望不符:附当前记录返回,调用方重查再决策(禁盲重试推进 epoch)。
+		// 单次冲突是 §9.23 query-first 正常竞争(故 INFO);同一 player 高频冲突 = 两个调用方
+		// 在抢 owner 迁移,靠此可观测频率与双方 epoch(否则 in-band 业务码被 access log 记 DEBUG)。
+		plog.With(ctx).Infow("msg", "owner_epoch_conflict",
+			"player_id", playerID, "expect_epoch", expectEpoch, "current_epoch", rec.OwnerEpoch,
+			"operation_id", operationID)
 		return rec, errcode.New(errcode.ErrOwnerEpochConflict,
 			"epoch conflict player=%d expect=%d current=%d", playerID, expectEpoch, rec.OwnerEpoch)
 	}
@@ -304,6 +310,12 @@ func (r *MySQLOwnerRepo) Admit(ctx context.Context, playerID, ownerEpoch uint64,
 	if !found || rec.OwnerEpoch != ownerEpoch || rec.OperationID != operationID ||
 		rec.OwnerType == OwnerTypeNone || !rec.Target.Equal(target) {
 		// fail-closed:任何一项不匹配都拒(旧 epoch / 换代实例 / 伪造 operation 都进不来)。
+		// owner fencing 的核心拒绝点(§9.22),恰是要能查到的脑裂 / stale writer 信号 → WARN。
+		plog.With(ctx).Warnw("msg", "owner_admit_identity_mismatch",
+			"player_id", playerID, "found", found,
+			"req_epoch", ownerEpoch, "current_epoch", rec.OwnerEpoch,
+			"req_op", operationID, "current_op", rec.OperationID,
+			"target_match", rec.Target.Equal(target), "owner_type", rec.OwnerType)
 		return rec, 0, errcode.New(errcode.ErrOwnerIdentityMismatch,
 			"admit identity mismatch player=%d epoch=%d op=%s", playerID, ownerEpoch, operationID)
 	}
@@ -317,6 +329,9 @@ func (r *MySQLOwnerRepo) Admit(ctx context.Context, playerID, ownerEpoch uint64,
 	now := nowUnixMs()
 	if now < rec.AdmitNotBeforeMs {
 		// 屏障未开:WAIT 语义(§9.23),带剩余毫秒退避重试;安全优先但不永久卡(watchdog 驱动)。
+		// 调用方按 wait_ms 轮询,故 DEBUG 避免刷屏;LOG_LEVEL=debug 时可观测迁移是否卡在屏障。
+		plog.With(ctx).Debugw("msg", "owner_admit_barrier_wait",
+			"player_id", playerID, "owner_epoch", ownerEpoch, "wait_ms", rec.AdmitNotBeforeMs-now)
 		return rec, rec.AdmitNotBeforeMs - now, errcode.New(errcode.ErrOwnerBarrierNotOpen,
 			"admit barrier not open player=%d wait_ms=%d", playerID, rec.AdmitNotBeforeMs-now)
 	}
@@ -373,6 +388,11 @@ VALUES (?, ?, ?, ?, ?, ?)`
 		// 请求 0 = 调用方无纪元语义(hub 凭据不携带实例纪元,uid 全局唯一已足);
 		// 存量 0 且请求非零 → 首次补齐纪元(battle 侧续租升级旧行)。
 		if storedEpoch != 0 && target.InstanceEpoch != 0 && storedEpoch != target.InstanceEpoch {
+			// 换代实例试图续旧租约行的 fencing 拒绝(§8):可能是 Pod 复用 uid 或 epoch 回退。
+			// 续租链断裂本只能靠玩家掉线反推,这里显式 WARN 留证。
+			plog.With(ctx).Warnw("msg", "owner_lease_epoch_regressed",
+				"instance_uid", target.InstanceUID, "pod", target.PodName,
+				"stored_epoch", storedEpoch, "req_epoch", target.InstanceEpoch)
 			return 0, errcode.New(errcode.ErrOwnerLeaseRegressed,
 				"instance epoch mismatch uid=%s stored=%d req=%d", target.InstanceUID, storedEpoch, target.InstanceEpoch)
 		}

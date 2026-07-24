@@ -46,6 +46,24 @@ func (s *BattleResultService) SetBattleCredentialStateChecker(checker BattleCred
 	s.battleCredentialChecker = checker
 }
 
+// logDSAuthReject 记录 DS 回调链的鉴权 / fencing 拒绝(僵尸 / 伪造 / 失租 / 换 pod 的 DS 拿旧票
+// 或错 pod 上报结算 / 进度)。这些拒绝码是业务范围(ErrUnauthorized / 状态机 / 终态门),
+// 经 in-band Code + nil transport error 返回,access-log 中间件按 rpc_ok(DEBUG)记录,线上
+// info 级静默——但它们正是 §9.6 / §9.22 要能查到的安全信号,故在拒绝点显式打 WARN 留证。
+func logDSAuthReject(ctx context.Context, rpc, stage string, matchID uint64, reportedPod, credentialPod string, err error) {
+	kv := []any{"msg", "ds_auth_rejected", "rpc", rpc, "stage", stage, "match_id", matchID}
+	if reportedPod != "" {
+		kv = append(kv, "reported_pod", reportedPod)
+	}
+	if credentialPod != "" {
+		kv = append(kv, "credential_pod", credentialPod)
+	}
+	if err != nil {
+		kv = append(kv, "code", int32(toProtoCode(err)), "err", err.Error())
+	}
+	plog.With(ctx).Warnw(kv...)
+}
+
 // ReportResult 同步上报一场对局结算(幂等)。
 func (s *BattleResultService) ReportResult(ctx context.Context, req *battlev1.ReportResultRequest) (*battlev1.ReportResultResponse, error) {
 	if req.GetResult() == nil || req.GetResult().GetMatchId() == 0 {
@@ -56,15 +74,22 @@ func (s *BattleResultService) ReportResult(ctx context.Context, req *battlev1.Re
 	// RequireToken:纯 DS 回调,enforce 下无令牌直连一律拒(堵绕过 Envoy 的东西向旁路,审核 P1)。
 	_, credential, err := s.dsGuard.CheckBattleCredential(ctx, middleware.DSScope{Type: auth.DSTypeBattle, MatchID: req.GetResult().GetMatchId(), RequireToken: true})
 	if err != nil {
+		logDSAuthReject(ctx, "ReportResult", "check_credential", req.GetResult().GetMatchId(), req.GetResult().GetDsPodName(), "", err)
 		return &battlev1.ReportResultResponse{Code: toProtoCode(err)}, nil
 	}
 	var terminalRelease *data.TerminalReleaseRecord
 	if s.battleCredentialChecker != nil {
 		if credential == nil || req.GetResult().GetDsPodName() == "" || req.GetResult().GetDsPodName() != credential.Pod {
+			credPod := ""
+			if credential != nil {
+				credPod = credential.Pod
+			}
+			logDSAuthReject(ctx, "ReportResult", "pod_mismatch", req.GetResult().GetMatchId(), req.GetResult().GetDsPodName(), credPod, nil)
 			return &battlev1.ReportResultResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 		}
 		proof, err := s.battleCredentialChecker.AuthorizeResult(ctx, req.GetResult().GetMatchId(), credential)
 		if err != nil {
+			logDSAuthReject(ctx, "ReportResult", "authorize_result", req.GetResult().GetMatchId(), req.GetResult().GetDsPodName(), credential.Pod, err)
 			return &battlev1.ReportResultResponse{Code: toProtoCode(err)}, nil
 		}
 		terminalRelease = &proof
@@ -102,6 +127,7 @@ func (s *BattleResultService) ReportProgress(ctx context.Context, req *battlev1.
 	}
 	_, credential, err := s.dsGuard.CheckBattleCredential(ctx, middleware.DSScope{Type: auth.DSTypeBattle, MatchID: req.GetMatchId(), RequireToken: true})
 	if err != nil {
+		logDSAuthReject(ctx, "ReportProgress", "check_credential", req.GetMatchId(), "", "", err)
 		return &battlev1.ReportProgressResponse{Code: toProtoCode(err)}, nil
 	}
 	// roster:Redis active 校验副产物(canonical BattleStorageRecord),biz 用它拒绝
@@ -109,10 +135,12 @@ func (s *BattleResultService) ReportProgress(ctx context.Context, req *battlev1.
 	var roster []uint64
 	if s.battleCredentialChecker != nil {
 		if credential == nil {
+			logDSAuthReject(ctx, "ReportProgress", "credential_nil", req.GetMatchId(), "", "", nil)
 			return &battlev1.ReportProgressResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 		}
 		proof, aerr := s.battleCredentialChecker.AuthorizeResult(ctx, req.GetMatchId(), credential)
 		if aerr != nil {
+			logDSAuthReject(ctx, "ReportProgress", "authorize_result", req.GetMatchId(), "", credential.Pod, aerr)
 			return &battlev1.ReportProgressResponse{Code: toProtoCode(aerr)}, nil
 		}
 		roster = proof.PlayerIDs

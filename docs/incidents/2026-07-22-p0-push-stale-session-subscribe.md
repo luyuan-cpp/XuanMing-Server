@@ -388,6 +388,13 @@ R9 只读复审（HEAD `4b5f9adb`）判定 7 条 P0 阻断面，结论"没有修
 **诚实边界（R9 轮）：**
 
 - P0-7 未解决，是当前唯一 OPEN 的 P0；关闭需要实现 hub-allocator 继任协议。
+  > **2026-07-24 补注（后续只读复审 snapshot `86b15dbc` 超越本结论，勿据 R9 判定对外声称"只剩一个 P0"）**：
+  > 上一行"唯一 OPEN 的 P0"是 R9 轮（07-23）判定，后续复审重新判定多条 P0 仍开放 / 修复不足——
+  > login Redis 模糊提交仍撕裂双会话权威（原 P0-2）、writerlease 长期无主时所有 Pod 仍 Ready 且写永久
+  > Unavailable、健康 writer 存在时请求仍可能钉在非 writer Pod（连接复用）、assignment CAS 与出票无持久
+  > fencing token（旧 writer 失租通知前仍能签可兑换票）、首次 writerlease 升级仍无仓库内"不停服 + 单写"
+  > 闭环（原 P0-7）、Hub/Battle 仍先 Spawn 后复核（原 P0-4/5 残余窗口）。因此本事故涉及的 P0 面不能以
+  > "只剩一个 P0"表述；这些属于 owner authority / 发布策略级设计项，需专项设计后再落，不能凭静态复审急改。
 - UE 侧五个文件（MyTeamModel / MyFriendModel / MyMatchModel /
   PandoraDSGameModeBase / PandoraHubGameMode）仅通过静态诊断，编译由用户执行，
   本轮无编译证据。

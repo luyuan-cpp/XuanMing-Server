@@ -595,6 +595,20 @@ kind: Service
 metadata: { name: hub-allocator, namespace: pandora }
 spec: { selector: { app: hub-allocator }, ports: [ { port: 50021, targetPort: 50021 } ] }
 ---
+# P0#5:hub-allocator round_robin 客户端 LB 用的 headless Service(clusterIP:None → DNS 返回
+# 全部 **Ready** Pod IP)。login 经 dns:///hub-allocator-headless.pandora.svc.cluster.local:50021
+# + round_robin 拨号(见 login main.go / grpcclient.MustDialInsecureRoundRobin):滚动重叠
+# (maxSurge=1 双 Pod)期间对「非-writer 可重试错误」重发时每次 RPC 轮到不同副本,数次内命中
+# 当前 writer,消除「连接被 L4 钉在非-writer Pod」。上面的 ClusterIP Service 保留给单发调用方 /
+# 探针,不受影响。**LB 分发效果须在集群内冒烟验证(观察 RPC 落到多个 Pod),本机无法验证。**
+apiVersion: v1
+kind: Service
+metadata: { name: hub-allocator-headless, namespace: pandora }
+spec:
+  clusterIP: None
+  selector: { app: hub-allocator }
+  ports: [ { name: grpc, appProtocol: grpc, port: 50021, targetPort: 50021 } ]
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: battle-result, namespace: pandora, labels: { app: battle-result } }

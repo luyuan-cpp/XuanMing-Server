@@ -92,7 +92,7 @@
 ### 协议与网关
 
 - Envoy + gRPC-Web 架构已落文档,dev TLS / 生产 TLS 策略已明确。
-- UE 5.7 FHttpModule 已确认支持 HTTP/2 TLS 与流式接收,客户端可自研 gRPC-Web 解析,不引入第三方 UE gRPC 插件。
+- UE 5.8 FHttpModule 已确认支持 HTTP/2 TLS 与流式接收,客户端可自研 gRPC-Web 解析,不引入第三方 UE gRPC 插件。
 - JWT session / DS ticket 已真实化,Envoy `jwt_authn` 已接入。
 - push 服务已接 Kafka + Redis ZSET 离线 5min,订阅核心 push topics。
 

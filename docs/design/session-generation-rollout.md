@@ -126,7 +126,8 @@ Redis 条件写、fenceLoginDelivery 交付终检、Transfer 前后终检、ACK 
 1. `login.session_generation_enforce: true` → 滚动重启 login。
    **前置:§2.2 的 24h 会话窗口/主动收敛已满足**,仅票据 TTL 满不够。
 2. `login.require_ticket_sjti: true` → 滚动重启 login。
-3. `session_gate.require_ticket_sjti: true` → 重启 hub_allocator(Recreate)。
+3. `session_gate.require_ticket_sjti: true` → **滚动重启** hub_allocator(RollingUpdate;
+   单写者由 §5 writerlease 继任协议保证,**不再用 Recreate**——本行原写 Recreate 与 §5 冲突,已更正)。
 4. 每步之间观察误拒率(`ticket_missing_session_binding_rejected`、
    `session_superseded_rejected` 突增即回退该开关,回退无副作用——开关只影响门,
    不影响写入路径)。
@@ -151,7 +152,15 @@ Redis 条件写、fenceLoginDelivery 交付终检、Transfer 前后终检、ACK 
   仍有进程内窗口;窗口内交付的是"已再次被轮换"的凭据,后续任何过门请求都会被拒,
   不构成持续能力(见 login.go 注释)。
 
-## 5. hub-allocator 写者继任协议(succession lease + fencing)——**已实现,状态 CLOSED**(R9 复审 P0-7)
+## 5. hub-allocator 写者继任协议(succession lease + fencing)——**稳态已实现;首次升级仍开放**(R9 CLOSED,2026-07-24 复审重开一处)
+
+> **2026-07-24 复审补注(勿据本节旧"CLOSED"表述声称首次升级已闭合)**:writerlease 继任协议
+> 对**已运行 writerlease-aware 版本之间的滚动更新**成立(稳态不停服 + 单写)。但**从尚未包含
+> writerlease 的旧镜像首次升级到本协议版本**时,旧 Pod 不理解继任租约,与新 Pod 并存即出现无
+> fence 保护的双写窗口;而本文档他处与发布合约又要求 Recreate(会停唯一旧 Pod)。"不停服 + 单写"
+> 在这一次性迁移上仍无仓库内闭环路径,属仍开放的架构项(原 P0-7 残余),须专项设计一次性
+> writerlease 引导迁移(如:先发一个"只竞选不写、观测 token 单调"的中间版本预热继任,再切写)。
+> 稳态部分见下;首次引导迁移的方案未落地前不得对外声称本节全量 CLOSED。
 
 历史背景:`deploy/k8s/services/services.yaml` 中 hub-allocator 曾显式
 `strategy: Recreate` + replicas=1,与「不停服更新」硬约束(PROGRESS.md

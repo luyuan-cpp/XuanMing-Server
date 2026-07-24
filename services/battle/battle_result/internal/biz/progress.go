@@ -70,11 +70,15 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		return 0, err
 	}
 	if wm.Settled {
+		// 结算后仍收到进度 = 僵尸 / 分区恢复 DS 迟到上报(水位表终局标记挡住,§9.22 / §9.4 fencing);
+		// ErrInvalidState 是业务码不被 access log 当故障 → 显式 WARN 留证。
+		plog.With(ctx).Warnw("msg", "progress_rejected_settled", "match_id", matchID, "events", len(events))
 		return 0, errcode.New(errcode.ErrInvalidState, "match %d already settled, progress rejected", matchID)
 	}
 	if wm.Stopped {
 		// 停流标记持久化(审计 P1):未知事实停流后,违纪 DS 再发只含已知事实的批
 		// 也一律拒,禁止重新开流(契约:整场停流、剩余实时奖励永久丢失)。
+		plog.With(ctx).Warnw("msg", "progress_rejected_stream_stopped", "match_id", matchID, "events", len(events))
 		return 0, errcode.New(errcode.ErrInvalidState,
 			"match %d progress stream permanently stopped, rejected", matchID)
 	}
@@ -169,6 +173,9 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		}
 		if rosterSet != nil {
 			if _, ok := rosterSet[playerID]; !ok {
+				// DS 为非本场玩家上报进度事实 = 越权 / 失陷 DS 的直接信号(§9.6 owner 授权 / roster 门)。
+				plog.With(ctx).Warnw("msg", "progress_roster_reject",
+					"match_id", matchID, "player_id", playerID, "seq", seq)
 				return 0, errcode.New(errcode.ErrUnauthorized, "player %d not in match %d roster", playerID, matchID)
 			}
 		}

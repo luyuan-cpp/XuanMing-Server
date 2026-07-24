@@ -71,10 +71,10 @@
 | 项 | 决定 | 理由 |
 |---|---|---|
 | protobuf 版本 | **v35.0**(latest release) | 用最新稳定版;gencode 与运行时同版本钉死 |
-| 二进制来源 | **源码随 UE(UBT)构建**,不用预编译库下发 | UE Linux DS 用自带 clang+libc++,系统预编译 `.a` 链不进(ABI 撕裂);UBT 编译自动匹配工具链,跨平台「免费」跟着编。UE 5.7.4 源码版集成第三方源码本就容易 |
+| 二进制来源 | **源码随 UE(UBT)构建**,不用预编译库下发 | UE Linux DS 用自带 clang+libc++,系统预编译 `.a` 链不进(ABI 撕裂);UBT 编译自动匹配工具链,跨平台「免费」跟着编。UE 5.8 源码版集成第三方源码本就容易 |
 | 链接范围 | **只链 libprotobuf，不链 grpc-cpp** | gRPC-Web 经 Envoy 是普通 HTTP（客户端钉 HTTP/2 over TLS），传输层 `FPandoraGrpcWeb`+`FHttpModule` 足够；grpc-cpp 数十 MB + 跨平台坑，不引 |
 | grpc/cpp 生成插件 | **移除**(buf.gen.cpp.yaml 已删) | `*.grpc.pb.*` include grpc++ 头,UE 侧无该依赖会编不过;只留 `protocolbuffers/cpp` 生成消息 pb |
-| C++ 标准 | **C++17**(protobuf v35.0 要求) | UE 5.7 默认 ≥C++17,满足 |
+| C++ 标准 | **C++17**(protobuf v35.0 要求) | UE 5.8 默认 ≥C++17,满足 |
 
 **⚠️ 必须遵守的硬约束:**
 - **abseil-cpp 跟着进来**:protobuf v22+ 强依赖 abseil,v35.0 亦然(release notes 多处 abseil)。所以「只链 protobuf」实际也会拖入 abseil,**这正是选源码构建的另一理由**(abseil 也不必逐平台预编译)。`ThirdParty/` 要同时纳管 protobuf v35.0 + 对应 abseil tag,**版本钉死不浮动**。

@@ -3,7 +3,8 @@
 // 撮合流水线(docs/design/go-services.md §2.8):
 //
 //	StartMatch(team) → 写排队票据(MMR 入 ZSET)
-//	   后台 RunMatchLoop:matchOnce 按 MMR 窗口贪心装箱凑齐 5+5 → 建 match → 进确认期
+//	   后台 RunMatchLoop:matchOnce 按 MMR 窗口贪心装箱凑齐 need=2*teamSize(teamSize 按 map_id
+//	   读关卡表,如 1v1 / 5v5)→ 建 match → 进确认期
 //	   ConfirmMatch:全员 accept → 拉 DS → READY;任一 reject/超时 → FAILED + 其余票据退回队列
 //
 // 协议铁律(docs/design/protocol-ordering-rules.md):
@@ -228,7 +229,11 @@ func (u *MatchUsecase) validateMapID(mapID uint32) error {
 // 均按预期走全局值,不告警;tb==nil / 行不存在 已由 StartMatch 的 validateMapID 上游 fail-closed。
 // 与 validateMapID 同一 effective 兜底:map_id==0 表示用本实例默认副本 cfg.MapId。
 func (u *MatchUsecase) teamSizeForMap(mapID uint32) int {
-	fallback := u.cfg.TeamSize
+	// fallback 先钳制(复审 P1 收口):全局 YAML cfg.TeamSize 在别处未做上下界校验,而它是
+	// 所有回退分支(未启用表 / 表未加载 / 行不存在 / 行 team_size==0)的返回值,又是撮合
+	// need=2*teamSize 的输入。巨值会预分配 OOM、负值(int 型 YAML 可为负)会造成 make 负
+	// 容量 panic。配置表入口已在加载层拒绝,这里补上全局 fallback 这个未被覆盖的入口。
+	fallback := clampTeamSize(u.cfg.TeamSize)
 	if u.tables == nil {
 		return fallback
 	}
@@ -254,6 +259,19 @@ func (u *MatchUsecase) teamSizeForMap(mapID uint32) int {
 		return ts
 	}
 	return fallback
+}
+
+// clampTeamSize 把一方人数钳到 [1, configtable.MaxLevelTeamSize]。撮合按 need=2*teamSize
+// 预分配票据切片(greedyFormMatches/formMatchesInPool):负值(YAML 未校验的全局 team_size
+// 可为负)会导致 make 负容量 panic,巨值会 OOM。下界取 1(1v1 是最小可成局副本)。
+func clampTeamSize(ts int) int {
+	if ts < 1 {
+		return 1
+	}
+	if ts > configtable.MaxLevelTeamSize {
+		return configtable.MaxLevelTeamSize
+	}
+	return ts
 }
 
 // ticketRegion 解析一张票据的 owner region(以队长 captain_id 为 owner 锚点)。
@@ -2518,7 +2536,7 @@ func (u *MatchUsecase) advanceAllocationsOnce(ctx context.Context) error {
 	return joined
 }
 
-// matchOnce 扫描一次队列,尽可能多地凑出 match(5+5)。
+// matchOnce 扫描一次队列,尽可能多地凑出 match(每局 need=2*teamSize 人,teamSize 按 map_id 读关卡表)。
 //
 // 算法:按 avg_mmr 升序取票据,贪心累积进一个组,当组内总人数达到 2×TeamSize 且 MMR 跨度
 // 在动态窗口内时,用 largest-first 装箱拆成两边各 TeamSize。装箱失败则前移起点重试。
@@ -2570,7 +2588,7 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 	// 按 map_id 分组:同一 game_mode 下不同副本(map_id)各自独立撮合,
 	// 避免不同副本的玩家被凑进同一局。「策划填表即用」——新增副本(新 map_id)
 	// 自然形成新组,matchmaker 无需改代码;组内仍走原 单桶 / 两级 region 撮合。
-	for _, group := range partitionTicketsByMap(tickets) {
+	for _, group := range u.partitionTicketsByMap(tickets) {
 		u.formMatchesInPool(ctx, group, now)
 	}
 	return nil
@@ -2629,7 +2647,7 @@ func (u *MatchUsecase) withinCrossRegionCap(group []*matchv1.MatchTicketStorageR
 	return u.regionPolicy.WithinCrossRegionCap(regions)
 }
 
-// greedyFormMatches 在给定票据切片(已按 MMR 升序)上做"按 MMR 窗口贪心装箱凑 5+5"撮合,
+// greedyFormMatches 在给定票据切片(已按 MMR 升序)上做"按 MMR 窗口贪心装箱凑 need=2*teamSize"撮合,
 // 成局即 formMatch 并把票据标记进 used。validate 非 nil 时,装箱成功后还须通过该守卫才成局
 // (跨 region 溢出用它做比例上限校验);validate 为 nil 表示无额外约束(单桶 / region 内)。
 //
@@ -2637,11 +2655,19 @@ func (u *MatchUsecase) withinCrossRegionCap(group []*matchv1.MatchTicketStorageR
 // 行为与抽取前完全一致(validate=nil 时)。
 // partitionTicketsByMap 按 map_id(副本编号)把票据分组,保持各组内原有的 MMR 升序。
 // 返回顺序按 map_id 升序,保证撮合确定性。同一 game_mode 下不同副本各自成局,互不串池。
-func partitionTicketsByMap(tickets []*matchv1.MatchTicketStorageRecord) [][]*matchv1.MatchTicketStorageRecord {
+//
+// 复审 P1:分组 key 用 effective map_id(0→cfg.MapId)归一化——旧客户端省略 map_id(0=用默认
+// 副本)与新客户端显式发送默认 map_id 语义相同,若按原始值分组会拆成两个池永不互相撮合。
+// 只归一化分组 key,不改票据存储的原始 map_id;成局后 teamSizeForMap / DS 分配对 0 的兜底
+// 口径一致(0 与 cfg.MapId 解析到同一副本与人数),故同池混装安全。
+func (u *MatchUsecase) partitionTicketsByMap(tickets []*matchv1.MatchTicketStorageRecord) [][]*matchv1.MatchTicketStorageRecord {
 	buckets := make(map[uint32][]*matchv1.MatchTicketStorageRecord)
 	order := make([]uint32, 0)
 	for _, t := range tickets {
 		mid := t.GetMapId()
+		if mid == 0 {
+			mid = u.cfg.MapId // 归一化:0(省略=默认副本)与显式默认 map 同池
+		}
 		if _, ok := buckets[mid]; !ok {
 			order = append(order, mid)
 		}

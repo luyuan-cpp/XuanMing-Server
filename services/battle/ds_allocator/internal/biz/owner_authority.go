@@ -11,6 +11,7 @@ package biz
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,27 @@ const (
 	ownerPhasePending  int8 = 1
 	ownerPhaseAdmitted int8 = 2
 )
+
+// ownerAdmittedStaleTTL 是 census 已准入缓存项(ownerAdmitted,key=instanceUID|playerID)的
+// 最大保鲜期。活实例每次心跳 census 对在场玩家续期 last-touch;超过本值未续期 = 其所属 Battle
+// 实例已销毁(UID 不再心跳),项由 sweepStaleOwnerAdmitted 清除,防缓存随历史实例 UID 无界增长
+// (压测前审核 P1;§9.18 客户端触发型内存容器有界)。取值远大于心跳/census 周期,活实例项绝不误清。
+//
+// 与 hub_allocator 同名机制一致(hub 复审 P1-5):Battle DS 打完即销毁、InstanceUID 永不复用,
+// admitted 项若不老化回收会随累计对局数单调增长,长压测下 OOM。
+const ownerAdmittedStaleTTL = 5 * time.Minute
+
+// sweepStaleOwnerAdmitted 删除 last-touch 早于 cutoff 的 census 准入缓存项。
+// 值意外非 time.Time(理论不达,所有写入点均写 time.Time)也删除,保证 fail-safe 有界。
+// best-effort:被清项若玩家仍在场,下一轮 census 会重新 Query→Admit 补回(至多一次多余往返)。
+func sweepStaleOwnerAdmitted(admitted *sync.Map, cutoff time.Time) {
+	admitted.Range(func(k, v any) bool {
+		if t, ok := v.(time.Time); !ok || t.Before(cutoff) {
+			admitted.Delete(k)
+		}
+		return true
+	})
+}
 
 // OwnerAuthority 是 owner 权威的 migrate 调用面(Query/Begin/Admit;弱依赖)。
 // 由 data.GrpcOwnerLeaseRenewer 实现(与租约续写共用连接);可为 nil(未启用)。
@@ -92,16 +114,46 @@ func ownerBeginPlayersWeak(ctx context.Context, auth OwnerAuthority, players []u
 // 仅当记录确实指向本实例(pod+uid 同 && 类型同 && PENDING)才 Admit,目标取记录自身字段
 // (Admit 的 exact 全等校验由 owner 侧执行;pod/uid 是本调用方独立断言的部分)。
 // 屏障未开(retryAfter>0)→ 本轮跳过,下次心跳重试;其余失败告警跳过。
+//
+// 缓存有界(压测前审核 P1,对齐 hub_allocator):
+//   - 值存 time.Time(last-touch):命中即续期(接近过期才写,降 sync.Map 写争用),活实例
+//     项恒新鲜;仅已销毁 Battle 实例(UID 不再心跳续期)的项会老化超 TTL,由后台
+//     sweepStaleOwnerAdmitted 清除,防缓存随累计对局的历史 InstanceUID 无界增长导致 OOM。
+//   - 按本实例 census 剪枝:玩家离开本实例(不再出现在 census)即删除其缓存项,与 TTL 兜底
+//     互补(TTL 清死实例项,剪枝清活实例上已离场玩家项)。
 func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sync.Map,
 	players []uint64, ownerType int8, selfPod, selfUID string, budget time.Duration) {
-	if auth == nil || len(players) == 0 {
+	if auth == nil {
 		return
+	}
+	// 先按本实例 census 剪枝:present 为本轮 census 的本实例 key 集合;删除带 selfUID| 前缀
+	// 但已不在 present 的项(该玩家已离开本实例)。只触本实例前缀,死实例项交给 TTL sweep。
+	present := make(map[string]struct{}, len(players))
+	for _, playerID := range players {
+		present[selfUID+"|"+fmt.Sprintf("%d", playerID)] = struct{}{}
+	}
+	admitted.Range(func(k, _ any) bool {
+		key, ok := k.(string)
+		if ok && strings.HasPrefix(key, selfUID+"|") {
+			if _, in := present[key]; !in {
+				admitted.Delete(key)
+			}
+		}
+		return true
+	})
+	if len(players) == 0 {
+		return // 剪枝已完成;本轮无玩家可代提交 Admit。
 	}
 	budgetCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
+	now := time.Now()
 	for _, playerID := range players {
 		key := selfUID + "|" + fmt.Sprintf("%d", playerID)
-		if _, ok := admitted.Load(key); ok {
+		if v, ok := admitted.Load(key); ok {
+			// 命中即续期(接近过期才写):活实例项恒新鲜,仅死实例项会老化被 sweep 清。
+			if t, isTime := v.(time.Time); !isTime || now.Sub(t) > ownerAdmittedStaleTTL/2 {
+				admitted.Store(key, now)
+			}
 			continue
 		}
 		if budgetCtx.Err() != nil {
@@ -116,7 +168,7 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 			continue // 记录不指向本实例(迁移中/漂移),不是本实例可断言的准入。
 		}
 		if rec.Phase == ownerPhaseAdmitted {
-			admitted.Store(key, struct{}{})
+			admitted.Store(key, now)
 			continue
 		}
 		if rec.Phase != ownerPhasePending {
@@ -129,7 +181,7 @@ func ownerAdmitCensusWeak(ctx context.Context, auth OwnerAuthority, admitted *sy
 		retryAfter, aerr := auth.Admit(budgetCtx, playerID, rec.OwnerEpoch, rec.OperationID, target)
 		switch {
 		case aerr == nil:
-			admitted.Store(key, struct{}{})
+			admitted.Store(key, now)
 		case retryAfter > 0:
 			// 屏障未开:预期中的 WAIT,下次心跳重试,不告警刷屏。
 		default:

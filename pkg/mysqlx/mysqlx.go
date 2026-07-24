@@ -72,6 +72,10 @@ func NewClient(c config.MySQLConf) (*sql.DB, error) {
 	db.SetMaxOpenConns(maxOpen)
 	db.SetMaxIdleConns(maxIdle)
 	db.SetConnMaxLifetime(maxLife)
+	// 门禁-B:opt-in 空闲连接上限,留空(0)沿用 database/sql 默认(不因空闲回收)。
+	if maxIdleTime := c.ConnMaxIdleTime.Std(); maxIdleTime > 0 {
+		db.SetConnMaxIdleTime(maxIdleTime)
+	}
 
 	pingTimeout := c.PingTimeout.Std()
 	if pingTimeout <= 0 {

@@ -305,6 +305,9 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		return nil, err
 	}
 	if banned {
+		// 封禁登录是安全审计 / 客服排查的关键事件;ErrLoginAccountBanned 是业务码,
+		// access log 只记 rpc_ok/failed 的泛化码,故在此显式 WARN 带上下文。
+		plog.With(ctx).Warnw("msg", "login_account_banned", "player_id", playerID, "device_id", deviceID)
 		return nil, errcode.New(errcode.ErrLoginAccountBanned, "account banned player_id=%d", playerID)
 	}
 

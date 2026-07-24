@@ -547,14 +547,32 @@ func (r *RedisMatchRepo) RangeQueueTickets(ctx context.Context) ([]uint64, error
 
 // --- StartMatch durable saga ---
 
+// CreateStartOperation 是 StartMatch RPC 的**唯一落库点**(commit point):它只做一件权威的事——
+// 原子写下一条 operation record,把"本次开始匹配已受理"变成持久化事实。
+//
+// 为什么不在 RPC 里同步把"写票据主体 → 逐个 claim 成员(一人一票)→ 票据入 queue"三步一次做完?
+// 因为这三步中间任何一步之后玩家断线、RPC ctx 被取消或进程重启,都会留下半成品(有的成员已被
+// claim、票据却没入队),违反"一人只在一个队列"(不变量 §1)与"不卡死 / 可恢复"(§9.19/§9.23)。
+// 所以这里把 RPC 收敛到"只提交一条 record",真正推进由服务生命周期的幂等 worker 完成:
+// worker 沿 ACCEPTED → TICKET_READY → CLAIMING → CLAIMS_READY → QUEUED 逐相推进(遇冲突则
+// COMPENSATING → FAILED 回滚)。玩家断线 / ctx 取消 / 崩溃重启都不会中断这条 saga。
+//
+// 关键权威关系:**operation record 是唯一权威**;下面两个派生索引都可由 reconciler 重建,失败不回滚 record:
+//   - player→start-op(startPlayerKey):冷启动 / 并发 Start / Resume 发现在途 saga 的索引;
+//   - due ZSET(startKey):告诉 worker "这条 op 该处理了"(score = NextAttemptAtMs)的到期索引。
+//
+// 因此本函数分三步:① 写权威 record;② best-effort 建 player claim 派生索引;③ ZADD 进 due 索引唤醒 worker。
 func (r *RedisMatchRepo) CreateStartOperation(ctx context.Context, op *matchv1.MatchStartOperationStorageRecord, ttl time.Duration) error {
 	payload, err := marshalStartOperation(op)
 	if err != nil {
 		return err
 	}
 	key := startOperationKey(op.GetTicketId())
-	// ACCEPTED is a business fact, not a cache entry. It must survive longer
-	// than ticketTTL and is deleted/expired only after an explicit terminal.
+	// ① 写权威 record。用 SetNX 且 **TTL=0(永不过期)**:ACCEPTED 是业务事实,不是缓存条目,
+	// 必须活得比 ticketTTL 久,只有推进到显式终态(QUEUED / FAILED)时才由 UpdateStartOperationWithLock
+	// 打上 retention TTL 让它自然消失。SetNX 失败(ok=false)说明该 ticket 的 record 已存在:
+	//   - 已存在的是**同一 operation_id** → 本次是重试 / 重复提交,幂等放行(继续往下补派生索引);
+	//   - 已存在的是**另一个 operation** 占了同一 ticket → 真正冲突,返回 ErrMatchConcurrent 拒绝。
 	ok, err := r.rdb.SetNX(ctx, key, payload, 0).Result()
 	if err != nil {
 		return err
@@ -569,12 +587,12 @@ func (r *RedisMatchRepo) CreateStartOperation(ctx context.Context, op *matchv1.M
 		}
 	}
 
-	// player→start-op 是 Resume/并发 Start 的派生索引。record 已先持久化，所以从这里
-	// 开始 RPC 只能是“已受理”：Redis 瞬态失败或 preflight 后发生的真实 claim 冲突都
-	// 交给 saga/reconciler。尤其不能在 canonical ACCEPTED 已提交后向 caller 返回业务
-	// 拒绝；否则若 COMPENSATING 写失败，caller 看见失败而 ACCEPTED 记录稍后仍会入队。
-	// Worker 会把冲突可靠 CAS 到 COMPENSATING，并 compare-delete 仅属于本 operation 的
-	// 派生索引；这里的 claim 仅用于尽早建立冷启动 discoverability。
+	// ② best-effort 建 player→start-op 派生索引(startPlayerKey),仅用于冷启动 / 并发 Start / Resume
+	// 尽早发现这条在途 saga。**注意:走到这里 record 已经落库,本次 RPC 就已经是"已受理",不能再
+	// 因为 claim 失败而向 caller 返回失败**——否则会出现"caller 收到失败、record 却仍被 worker 入队"
+	// 的撕裂。所以这里遇到 Redis 瞬态错误(cerr)或真实 claim 冲突(别人先占了该玩家)一律只 break
+	// 停止补索引,把冲突留给 worker:worker 会把它可靠 CAS 到 COMPENSATING,再 compare-delete 只属于
+	// 本 operation 的派生索引完成回滚。真正的"一人一票"线性化点在 worker 的 SETNX,不在这里。
 	for _, member := range op.GetMembers() {
 		existing, claimed, cerr := r.ClaimStartPlayer(ctx, member.GetPlayerId(), op.GetTicketId(), ttl)
 		if cerr != nil {
@@ -585,8 +603,10 @@ func (r *RedisMatchRepo) CreateStartOperation(ctx context.Context, op *matchv1.M
 		}
 	}
 
-	// record 已经是可恢复的 canonical 接受点。due 索引失败时不回滚 record，也不能向
-	// caller 谎报未受理；全 master reconciler 会把它补回。这里做与 CreateMatch 相同的有界重试。
+	// ③ ZADD 进 due 索引(startKey ZSET,score=下次处理时间 NextAttemptAtMs),让生命周期 worker 到点扫到它。
+	// 这步同样是派生索引:失败**不回滚 record**(record 已是可恢复的权威受理点),也**不能向 caller 谎报
+	// 未受理**——所以无论 ZADD 成功、耗尽重试还是 ctx 取消,本函数都返回 nil。真丢了这条 due 索引,全 master
+	// reconciler 扫 canonical record 时会把它补回。有界重试(次数 / 退避与 CreateMatch 一致)只为吸收 Redis 瞬时抖动。
 	z := redis.Z{Score: float64(op.GetNextAttemptAtMs()), Member: op.GetTicketId()}
 	var zerr error
 	for attempt := 0; attempt < createMatchZAddRetry; attempt++ {

@@ -262,7 +262,7 @@ message MatchTicketStorageRecord {
 message MatchStorageRecord {
   uint64                            match_id            = 1;
   MatchStage                        stage               = 2;
-  repeated MatchMemberStorageRecord members             = 3;  // 10 人(team_a 5 + team_b 5)
+  repeated MatchMemberStorageRecord members             = 3;  // 双方成员共 2*teamSize 人(teamSize 按 map_id 读关卡表,如 1v1/5v5)
   repeated uint64                   ticket_ids          = 4;  // 组成本 match 的 ticket(失败退回用)
   int64                             created_at_ms       = 5;
   int64                             confirm_deadline_ms = 6;  // 确认期截止(active ZSET score)
